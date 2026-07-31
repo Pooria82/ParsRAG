@@ -1,6 +1,8 @@
 fastapi>=0.100.0
 uvicorn>=0.23.0
 llama-index>=0.10.0
+llama-index-llms-ollama
+llama-index-embeddings-huggingface
 qdrant-client>=1.7.0
 pymupdf>=1.23.0
 chainlit>=1.0.0
