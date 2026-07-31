@@ -1,0 +1,11 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+llama-index>=0.10.0
+qdrant-client>=1.7.0
+pymupdf>=1.23.0
+chainlit>=1.0.0
+ruff>=0.1.0
+mypy>=1.7.0
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pydantic>=2.5.0

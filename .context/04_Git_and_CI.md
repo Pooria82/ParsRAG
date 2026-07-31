@@ -15,6 +15,7 @@ To maintain velocity while ensuring absolute stability for a production-grade sy
   - The CI/CD pipeline must pass 100%.
   - The PR must receive at least one code review approval.
   - Squash and Merge is mandated to keep the `main` history strictly linear and readable.
+- **Granular Committing Rule:** Work must *always* start on the `develop` branch (or a feature branch branching from it). A commit MUST be made immediately after completing each section, phase, or after making significant changes to a file or directory. Large monolithic commits are forbidden.
 
 ## 2. Commit Message Convention
 We enforce **Conventional Commits** (`type(scope): message`) to allow for automated changelog generation and semantic version bumping.

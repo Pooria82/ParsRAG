@@ -1,6 +1,7 @@
 # 1. Environment & Secrets
 .env
 .env.*
+!.env.example
 secrets.toml
 credentials.json
 
