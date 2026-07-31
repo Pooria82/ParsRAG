@@ -12,7 +12,7 @@ chroma_db/
 chroma_data/
 
 # 3. LLM Weights & HuggingFace Caches
-models/
+/models/
 .cache/
 huggingface/
 *.bin
