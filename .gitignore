@@ -1,0 +1,46 @@
+# 1. Environment & Secrets
+.env
+.env.*
+secrets.toml
+credentials.json
+
+# 2. Vector DB Storage
+qdrant_storage/
+qdrant_snapshots/
+chroma_db/
+chroma_data/
+
+# 3. LLM Weights & HuggingFace Caches
+models/
+.cache/
+huggingface/
+*.bin
+*.gguf
+*.pt
+*.safetensors
+
+# 4. Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 5. Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 6. Chainlit & UI
+.chainlit/
+.streamlit/secrets.toml
+
+# 7. OS & IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp

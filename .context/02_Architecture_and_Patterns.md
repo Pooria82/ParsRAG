@@ -1,0 +1,90 @@
+# Architecture Decision Records (ADR): System Architecture & Design Patterns
+
+## 1. Definitive Technology Stack
+To achieve FAANG-level production readiness, the initially proposed stack has been critically evaluated and upgraded. Below are the finalized technology decisions and their justifications:
+
+- **Frontend UI: Chainlit** *(Upgraded from Streamlit)*
+  - *Justification:* Streamlit executes in a top-down script rerun loop, which is suboptimal for complex conversational state management. Chainlit is purpose-built for LLM chat applications. It supports native asynchronous event handling, real-time token streaming, and isolated user sessions out-of-the-box.
+- **Backend Framework: FastAPI** *(Retained)*
+  - *Justification:* Asynchronous, high-performance web framework with native Pydantic validation and auto-generated OpenAPI docs. Ideal for serving LLMs and decoupling the backend from the UI.
+- **RAG Orchestration: LlamaIndex** *(Upgraded from LangChain)*
+  - *Justification:* While LangChain is a versatile general-purpose agent framework, LlamaIndex provides vastly superior primitives specifically for RAG. It offers native abstractions for advanced indexing, document node parsing, hierarchical chunking, and intelligent routing.
+- **Vector Database: Qdrant** *(Upgraded from ChromaDB)*
+  - *Justification:* ChromaDB is excellent for prototyping, but Qdrant is written in Rust, offering exponentially faster read/write speeds, better memory safety, and robust multi-tenant namespace filtering (crucial for isolating session-scoped vs. global documents).
+- **Text Extraction: PyMuPDF** *(Retained)*
+  - *Justification:* Proven to be the most accurate open-source library for preserving structural integrity and extracting Right-To-Left (RTL) languages like Persian from digital PDFs.
+- **Embeddings: `intfloat/multilingual-e5-base`**
+  - *Justification:* A proven multilingual embedding model that performs exceptionally well on Persian text semantics.
+- **Chunking Strategy:**
+  - *Justification:* Using LlamaIndex's `SentenceSplitter` (formerly `RecursiveCharacterTextSplitter`) tuned specifically for Persian prose (target size: 500-1000 characters, overlap: 150 characters) to maintain semantic context boundaries.
+## 2. High-Level System Architecture (Microservices)
+The system is entirely decoupled into microservices deployed via `Docker Compose`. This ensures independent scaling, clean boundaries, and isolated dependency management.
+
+### Containerization Strategy
+1. **`chainlit-ui` Container:** Serves the frontend application on port 8000.
+2. **`fastapi-backend` Container:** Hosts the core RAG logic, LlamaIndex orchestrator, and endpoints on port 8080.
+3. **`qdrant-db` Container:** Runs the official Rust-based Qdrant image.
+4. **`ollama-engine` Container:** Runs the local LLM (Qwen 2.5) with GPU-passthrough enabled for accelerated inference.
+
+### Architecture Flow Diagram
+```mermaid
+graph TD
+    Client((User)) -->|Uploads / Chats| UI[Chainlit UI Container]
+    
+    subgraph FastAPI Backend Container
+        Router[API Router]
+        QueryPipeline[Query Orchestrator / Condenser]
+        RAGRouter{Strategy: RAG Router}
+        Reranker[FlashRank Node Post-Processor]
+        Generator[LlamaIndex LLM Synthesizer]
+    end
+    
+    subgraph Infrastructure Containers
+        VectorDB[(Qdrant Vector DB)]
+        Ollama[Ollama Engine: Qwen 2.5]
+    end
+
+    UI -->|REST / WebSockets| Router
+    Router --> QueryPipeline
+    QueryPipeline --> RAGRouter
+    
+    %% Strict & Hybrid
+    RAGRouter -->|Strict/Hybrid Mode| VectorDB
+    VectorDB -->|Raw Nodes| Reranker
+    Reranker -->|Top Relevant Nodes| Generator
+    
+    %% LLM Only
+    RAGRouter -->|LLM Only Mode| Generator
+    
+    Generator -->|Streams Prompt| Ollama
+    Ollama -->|Streams Tokens| Generator
+    Generator -->|Returns Stream| Router
+    Router --> UI
+```
+
+## 3. Object-Oriented Design (OOP) & GoF Patterns
+To ensure extreme maintainability and adherence to the Open-Closed Principle (OCP), the backend core is built using strict Abstract Base Classes (ABCs) and Gang of Four (GoF) design patterns.
+
+### 3.1. Strategy Pattern (Routing the 3 Modes)
+- **Problem:** Handling Strict RAG, LLM-Only, and Hybrid RAG requires branching logic that can easily bloat into massive `if/else` chains.
+- **Solution:** Define an `AbstractQueryStrategy`. Create three concrete implementations: `StrictRAGStrategy`, `HybridRAGStrategy`, and `LLMOnlyStrategy`. The router dynamically instantiates the correct strategy at runtime based on the user's request. Adding a new mode (e.g., GraphRAG) only requires adding a new class.
+
+### 3.2. Repository Pattern (Database Decoupling)
+- **Problem:** Tying the application tightly to Qdrant makes it difficult to unit test or swap databases in the future.
+- **Solution:** Implement a `DocumentRepository` interface. The `QdrantRepository` implements this interface handling `save_nodes()`, `delete_session_nodes()`, and `similarity_search()`. The rest of the application only interacts with the interface.
+
+### 3.3. Factory Method Pattern
+- **Problem:** Constructing LlamaIndex components (VectorStoreIndex, Retrievers, LLMs) requires significant boilerplate and configuration injection.
+- **Solution:** Implement a `PipelineFactory` to abstract the instantiation of LlamaIndex objects, returning pre-configured query engines or retrievers based on the environment state.
+
+### 3.4. Dependency Injection (DI)
+- **Problem:** Hardcoding dependencies makes testing impossible.
+- **Solution:** Utilize FastAPI's native `Depends()` to inject the `DocumentRepository` and the selected `QueryStrategy` directly into the route handlers.
+
+## 4. Data Models (Domain Layer)
+All data crossing system boundaries is strictly validated using Pydantic V2 models.
+
+- **`DocumentIngestionRequest`**: Contains `file_bytes`, `filename`, and `session_id` (optional).
+- **`QueryRequest`**: Contains `prompt` (str), `chat_history` (list of messages), and `mode` (enum: strict, hybrid, llm-only).
+- **`ExtractedNode`**: Represents a chunked piece of text. Contains `text`, `metadata` (page number, source file), and `relevance_score`.
+- **`QueryResponse`**: Contains the final `answer` (str) and a list of `source_nodes` (list of `ExtractedNode`) to provide citations to the user.
