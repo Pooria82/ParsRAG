@@ -7,7 +7,7 @@ def setup_llm_and_embeddings() -> None:
     """Configures the global LlamaIndex settings for LLM and Embeddings."""
     # LLM Setup
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    model_name = os.getenv("LLM_MODEL_NAME", "qwen2.5:latest")
+    model_name = os.getenv("LLM_MODEL_NAME", "llama3.1:8b")
     
     Settings.llm = Ollama(
         model=model_name,
