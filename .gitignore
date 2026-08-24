@@ -54,3 +54,8 @@ documents/
 *.pdf
 *.txt
 *.docx
+
+# 9. Scratchpads & Temp Files
+scratch/
+tmp/
+*.tmp
