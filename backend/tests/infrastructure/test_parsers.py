@@ -1,9 +1,10 @@
-import pytest
-
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.pdf_parser import EmptyDocumentError, parse_pdf
+
 
 @patch("backend.infrastructure.parsers.pdf_parser.fitz.open")
 def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
