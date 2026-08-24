@@ -1,0 +1,47 @@
+
+from llama_index.core import Settings
+from llama_index.core.llms import ChatMessage
+from llama_index.core.prompts import PromptTemplate
+
+from backend.core.models.domain import QueryResponse
+from backend.core.strategies.base_strategy import RAGStrategy
+
+LLM_ONLY_PROMPT_TEMPLATE = """\
+You are a helpful AI assistant. Answer the user's question directly.
+
+Query: {query}
+Answer:"""
+
+
+class LLMOnlyStrategy(RAGStrategy):
+    """Executes a pure LLM strategy without any retrieval.
+
+    This strategy answers the user's question relying solely on the LLM's
+    internal knowledge and provided chat history.
+    """
+
+    def __init__(self) -> None:
+        self.prompt_template = PromptTemplate(LLM_ONLY_PROMPT_TEMPLATE)
+        self.llm = Settings.llm
+
+    def execute(
+        self,
+        query: str,
+        chat_history: list[ChatMessage],
+        session_id: str | None = None,
+    ) -> QueryResponse:
+        """Executes the LLM-only pipeline.
+
+        Args:
+            query (str): The user's input query.
+            chat_history (list[ChatMessage]): Previous chat context.
+            session_id (str | None, optional): Ignored in this strategy.
+
+        Returns:
+            QueryResponse: The LLM's raw answer.
+        """
+        # Note: In a chat scenario, you could pass the full chat history directly to self.llm.chat()
+        # but since the query is already condensed, we just pass the query.
+        prompt = self.prompt_template.format(query=query)
+        response = self.llm.complete(prompt)
+        return QueryResponse(answer=str(response).strip())
