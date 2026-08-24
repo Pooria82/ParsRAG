@@ -6,7 +6,7 @@ from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.pdf_parser import EmptyDocumentError, parse_pdf
 
 @patch("backend.infrastructure.parsers.pdf_parser.fitz.open")
-def test_parse_empty_pdf(mock_fitz_open) -> None:
+def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     # Mock a PDF document with one page but no text
     mock_doc = MagicMock()
     mock_page = MagicMock()

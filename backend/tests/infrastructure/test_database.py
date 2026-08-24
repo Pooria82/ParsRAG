@@ -6,7 +6,7 @@ from backend.infrastructure.database.qdrant_repo import QdrantRepository
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
 @patch("backend.infrastructure.database.qdrant_repo.Settings")
-def test_qdrant_save_nodes(mock_settings, mock_qdrant_client_cls):
+def test_qdrant_save_nodes(mock_settings: MagicMock, mock_qdrant_client_cls: MagicMock) -> None:
     mock_client = MagicMock()
     mock_qdrant_client_cls.return_value = mock_client
 
@@ -35,7 +35,7 @@ def test_qdrant_save_nodes(mock_settings, mock_qdrant_client_cls):
 
 @patch('backend.infrastructure.database.qdrant_repo.QdrantClient')
 @patch('backend.infrastructure.database.qdrant_repo.Settings')
-def test_qdrant_similarity_search(mock_settings, mock_qdrant_client_cls) -> None:
+def test_qdrant_similarity_search(mock_settings: MagicMock, mock_qdrant_client_cls: MagicMock) -> None:
     mock_client = MagicMock()
     mock_qdrant_client_cls.return_value = mock_client
     
@@ -64,7 +64,7 @@ def test_qdrant_similarity_search(mock_settings, mock_qdrant_client_cls) -> None
 
 
 @patch('backend.infrastructure.database.qdrant_repo.QdrantClient')
-def test_qdrant_delete_session(mock_qdrant_client_cls) -> None:
+def test_qdrant_delete_session(mock_qdrant_client_cls: MagicMock) -> None:
     mock_client = MagicMock()
     mock_qdrant_client_cls.return_value = mock_client
     

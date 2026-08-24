@@ -10,7 +10,7 @@ from backend.core.strategies.strict_rag import StrictRAGStrategy
 
 
 @patch("backend.core.condenser.Settings")
-def test_condense_question(mock_settings):
+def test_condense_question(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "پایتخت ایران کجاست؟"
     mock_settings.llm = mock_llm
@@ -30,7 +30,7 @@ def test_condense_question(mock_settings):
 
 @patch("backend.core.strategies.strict_rag.QdrantRepository")
 @patch("backend.core.strategies.strict_rag.Settings")
-def test_strict_rag_below_threshold(mock_settings, mock_repo_cls):
+def test_strict_rag_below_threshold(mock_settings: MagicMock, mock_repo_cls: MagicMock) -> None:
     mock_repo = MagicMock()
     # Return nodes with score 0.5 (below default 0.75)
     mock_repo.similarity_search.return_value = [
@@ -47,7 +47,7 @@ def test_strict_rag_below_threshold(mock_settings, mock_repo_cls):
 
 @patch("backend.core.strategies.strict_rag.QdrantRepository")
 @patch("backend.core.strategies.strict_rag.Settings")
-def test_strict_rag_above_threshold(mock_settings, mock_repo_cls):
+def test_strict_rag_above_threshold(mock_settings: MagicMock, mock_repo_cls: MagicMock) -> None:
     mock_repo = MagicMock()
     # Return nodes with score 0.9 (above default 0.75)
     mock_repo.similarity_search.return_value = [
@@ -67,7 +67,7 @@ def test_strict_rag_above_threshold(mock_settings, mock_repo_cls):
 
 
 @patch("backend.core.strategies.llm_only.Settings")
-def test_llm_only_strategy(mock_settings):
+def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "General answer"
     mock_settings.llm = mock_llm
@@ -82,7 +82,7 @@ def test_llm_only_strategy(mock_settings):
 @patch("backend.core.strategies.hybrid_rag.QdrantRepository")
 @patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
-def test_hybrid_rag_strategy(mock_settings, mock_rerank_cls, mock_repo_cls):
+def test_hybrid_rag_strategy(mock_settings: MagicMock, mock_rerank_cls: MagicMock, mock_repo_cls: MagicMock) -> None:
     mock_repo = MagicMock()
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="raw text", score=0.6)

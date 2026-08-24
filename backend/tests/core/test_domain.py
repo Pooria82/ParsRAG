@@ -11,24 +11,24 @@ from backend.core.models.domain import (
 )
 
 
-def test_query_mode_enum():
-    assert QueryMode.STRICT == "strict"
-    assert QueryMode.HYBRID == "hybrid"
-    assert QueryMode.LLM_ONLY == "llm-only"
+def test_query_mode_enum() -> None:
+    assert QueryMode.STRICT.value == "strict"
+    assert QueryMode.HYBRID.value == "hybrid"
+    assert QueryMode.LLM_ONLY.value == "llm-only"
 
 
-def test_chat_message_valid():
+def test_chat_message_valid() -> None:
     msg = ChatMessage(role="user", content="Hello")
     assert msg.role == "user"
     assert msg.content == "Hello"
 
 
-def test_chat_message_missing_fields():
+def test_chat_message_missing_fields() -> None:
     with pytest.raises(ValidationError):
-        ChatMessage(role="user")  # Missing content
+        ChatMessage(role="user")  # type: ignore[call-arg]
 
 
-def test_query_request_defaults():
+def test_query_request_defaults() -> None:
     req = QueryRequest(prompt="What is this?")
     assert req.prompt == "What is this?"
     assert req.chat_history == []
@@ -36,7 +36,7 @@ def test_query_request_defaults():
     assert req.session_id is None
 
 
-def test_query_request_custom():
+def test_query_request_custom() -> None:
     req = QueryRequest(
         prompt="Explain RAG",
         chat_history=[ChatMessage(role="user", content="Hi")],
@@ -48,7 +48,7 @@ def test_query_request_custom():
     assert len(req.chat_history) == 1
 
 
-def test_document_ingestion_request():
+def test_document_ingestion_request() -> None:
     req = DocumentIngestionRequest(
         filename="test.pdf", file_bytes=b"fakebytes", session_id="abc"
     )
@@ -57,14 +57,14 @@ def test_document_ingestion_request():
     assert req.session_id == "abc"
 
 
-def test_extracted_node():
+def test_extracted_node() -> None:
     node = ExtractedNode(text="Chunk 1", metadata={"page": 1}, score=0.95)
     assert node.text == "Chunk 1"
     assert node.metadata["page"] == 1
     assert node.score == 0.95
 
 
-def test_query_response():
+def test_query_response() -> None:
     node = ExtractedNode(text="Chunk 1")
     res = QueryResponse(answer="Here is the answer.", source_nodes=[node])
     assert res.answer == "Here is the answer."

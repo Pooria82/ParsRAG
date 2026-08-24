@@ -1,6 +1,6 @@
 import os
 
-from llama_index.core import Settings  # type: ignore
+from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # type: ignore
 from llama_index.llms.ollama import Ollama  # type: ignore
 
