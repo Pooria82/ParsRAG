@@ -1,10 +1,18 @@
 from abc import ABC, abstractmethod
+
 from backend.core.models.domain import QueryRequest, QueryResponse
 
+
 class AbstractQueryStrategy(ABC):
-    """Interface for RAG Query Strategies (Strict, Hybrid, LLM-Only)."""
+    """Abstract interface defining a RAG query strategy."""
 
     @abstractmethod
     async def execute(self, request: QueryRequest) -> QueryResponse:
-        """Executes the specific retrieval and generation logic for the strategy."""
-        pass
+        """Executes a full query request through the chosen strategy.
+
+        Args:
+            request (QueryRequest): The complete query configuration.
+
+        Returns:
+            QueryResponse: The finalized response from the RAG system.
+        """
