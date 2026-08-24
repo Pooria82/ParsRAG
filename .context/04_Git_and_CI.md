@@ -66,7 +66,15 @@ __pycache__/
 # 6. Chainlit & UI
 .chainlit/
 
-# 7. OS & IDE
+# 7. Raw Data & Uploads
+data/
+uploads/
+documents/
+*.pdf
+*.txt
+*.docx
+
+# 8. OS & IDE
 .DS_Store
 .vscode/
 .idea/

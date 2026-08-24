@@ -33,6 +33,7 @@ graph TD
     
     subgraph FastAPI Backend Container
         Router[API Router]
+        ExceptionHandler{Exception Handler}
         QueryPipeline[Query Orchestrator / Condenser]
         RAGRouter{Strategy: RAG Router}
         Reranker[FlashRank Node Post-Processor]
@@ -45,7 +46,8 @@ graph TD
     end
 
     UI -->|REST / WebSockets| Router
-    Router --> QueryPipeline
+    Router --> ExceptionHandler
+    ExceptionHandler -->|Intercepts ParsRAGErrors| QueryPipeline
     QueryPipeline --> RAGRouter
     
     %% Strict & Hybrid
@@ -71,11 +73,11 @@ To ensure extreme maintainability and adherence to the Open-Closed Principle (OC
 
 ### 3.2. Repository Pattern (Database Decoupling)
 - **Problem:** Tying the application tightly to Qdrant makes it difficult to unit test or swap databases in the future.
-- **Solution:** Implement a `DocumentRepository` interface. The `QdrantRepository` implements this interface handling `save_nodes()`, `delete_session_nodes()`, and `similarity_search()`. The rest of the application only interacts with the interface.
+- **Solution:** Implement a `AbstractDocumentRepository` interface. The `QdrantRepository` implements this interface handling `save_nodes()`, `delete_session()`, and `similarity_search()`. The rest of the application only interacts with the interface.
 
-### 3.3. Factory Method Pattern
-- **Problem:** Constructing LlamaIndex components (VectorStoreIndex, Retrievers, LLMs) requires significant boilerplate and configuration injection.
-- **Solution:** Implement a `PipelineFactory` to abstract the instantiation of LlamaIndex objects, returning pre-configured query engines or retrievers based on the environment state.
+### 3.3. Singleton / Global Configuration Pattern
+- **Problem:** Constructing LlamaIndex components (VectorStoreIndex, Retrievers, LLMs) across different strategies requires significant boilerplate and configuration injection.
+- **Solution:** Utilize LlamaIndex's global `Settings` object (acting as a Singleton/Configuration registry) to inject the chosen LLM and embedding model uniformly at startup, avoiding the need for a complex custom Factory.
 
 ### 3.4. Dependency Injection (DI)
 - **Problem:** Hardcoding dependencies makes testing impossible.
@@ -84,6 +86,7 @@ To ensure extreme maintainability and adherence to the Open-Closed Principle (OC
 ## 4. Data Models (Domain Layer)
 All data crossing system boundaries is strictly validated using Pydantic V2 models.
 
+- **`ChatMessage`**: Represents a single conversation turn (role and content), acting as the backbone for conversational memory.
 - **`DocumentIngestionRequest`**: Contains `file_bytes`, `filename`, and `session_id` (optional).
 - **`QueryRequest`**: Contains `prompt` (str), `chat_history` (list of messages), and `mode` (enum: strict, hybrid, llm-only).
 - **`ExtractedNode`**: Represents a chunked piece of text. Contains `text`, `metadata` (page number, source file), and `relevance_score`.

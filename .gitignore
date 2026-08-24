@@ -46,3 +46,11 @@ __pycache__/
 .idea/
 .agents/
 *.swp
+
+# 7. Raw Data & Uploads
+data/
+uploads/
+documents/
+*.pdf
+*.txt
+*.docx

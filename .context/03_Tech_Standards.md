@@ -28,7 +28,7 @@ Given the non-deterministic nature of LLMs, testing a RAG pipeline requires spec
 - **Framework:** `pytest` and `pytest-asyncio` for all asynchronous endpoints.
 - **Coverage Expectation:** Minimum **85% global test coverage**, with 100% coverage on core domain models, routers, and strategy classes.
 - **RAG/LLM Testing Approach:**
-  - **Unit Tests:** Mock the LLM and Qdrant responses using `unittest.mock`. Test the deterministic parts: routing logic, chunking algorithms, and prompt formatting.
+  - **Unit Tests:** Mock the LLM and Qdrant responses using `unittest.mock`. Test the deterministic parts: routing logic, chunking algorithms, and prompt formatting. Ensure assertions validate the strict Pydantic `QueryResponse` structures, not just raw strings.
   - **Integration Tests:** Use `Testcontainers` (or local docker-compose spin-ups) to test the actual FastAPI -> Qdrant connection without an LLM.
   - **LLM Evaluation:** For end-to-end RAG testing, use an evaluation framework like `Ragas` or `TruLens` in a separate staging CI pipeline to measure *Faithfulness* (no hallucination) and *Answer Relevance*.
 
@@ -43,11 +43,14 @@ ParsRAG/
 │   │   ├── dependencies.py    # FastAPI Depends() injections
 │   │   └── routes.py          # API route definitions
 │   ├── core/                  # Business Logic (Framework Agnostic)
+│   │   ├── interfaces/        # Abstract Base Classes (Strategy & Repository)
 │   │   ├── models/            # Pydantic V2 domain models
-│   │   └── strategies/        # RAG Query Strategies (Strict, Hybrid, LLM-Only)
+│   │   ├── strategies/        # RAG Query Strategies (Strict, Hybrid, LLM-Only)
+│   │   ├── condenser.py       # Conversational memory re-writer pipeline
+│   │   └── exceptions.py      # Centralized domain errors (ParsRAGError)
 │   ├── infrastructure/        # External I/O (LlamaIndex config, Qdrant, PyMuPDF)
 │   │   ├── database/          # Qdrant repository implementations
-│   │   ├── llm/               # Ollama factory and LlamaIndex prompt templates
+│   │   ├── llm/               # Ollama factory (Prompt templates are encapsulated in strategies)
 │   │   └── parsers/           # Document ingestion and PDF parsing
 │   ├── tests/                 # Backend pytest suite
 │   └── main.py                # FastAPI application entrypoint

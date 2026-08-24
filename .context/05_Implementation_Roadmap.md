@@ -10,24 +10,24 @@ This document serves as the self-executable, atomic roadmap for building the Par
 ### Task 1.1: Dependency & Environment Setup
 **Description:** Initialize the Python environment and install core dependencies.
 **Actionable Steps:**
-- [ ] Initialize the project (e.g., using `poetry init` or `requirements.txt`).
-- [ ] Install core backend libraries: `fastapi`, `uvicorn`, `llama-index`, `qdrant-client`, `pymupdf`.
-- [ ] Install frontend library: `chainlit`.
-- [ ] Install dev dependencies: `ruff`, `mypy`, `pytest`, `pytest-asyncio`.
-- [ ] Create `.env.example` defining required environment variables (e.g., `QDRANT_HOST`, `OLLAMA_BASE_URL`).
+- [x] Initialize the project (e.g., using `poetry init` or `requirements.txt`).
+- [x] Install core backend libraries: `fastapi`, `uvicorn`, `llama-index`, `qdrant-client`, `pymupdf`.
+- [x] Install frontend library: `chainlit`.
+- [x] Install dev dependencies: `ruff`, `mypy`, `pytest`, `pytest-asyncio`.
+- [x] Create `.env.example` defining required environment variables (e.g., `QDRANT_HOST`, `OLLAMA_BASE_URL`).
 
 ### Task 1.2: Directory Structure & Git Ignore
 **Description:** Scaffold the exact directory tree defined in `03_Tech_Standards.md`.
 **Actionable Steps:**
-- [ ] Create the `.gitignore` file exactly as specified in `04_Git_and_CI.md`.
-- [ ] Create `backend/api/`, `backend/core/models/`, `backend/core/strategies/`, `backend/core/interfaces/`.
-- [ ] Create `backend/infrastructure/database/`, `backend/infrastructure/llm/`, `backend/infrastructure/parsers/`.
-- [ ] Create `frontend/` and `tests/` directories.
-- [ ] Add `__init__.py` files where necessary to define Python modules.
+- [x] Create the `.gitignore` file exactly as specified in `04_Git_and_CI.md`.
+- [x] Create `backend/api/`, `backend/core/models/`, `backend/core/strategies/`, `backend/core/interfaces/`.
+- [x] Create `backend/infrastructure/database/`, `backend/infrastructure/llm/`, `backend/infrastructure/parsers/`.
+- [x] Create `frontend/` and `tests/` directories.
+- [x] Add `__init__.py` files where necessary to define Python modules.
 
 ### Checkpoint: Phase 1
-- [ ] Run `ruff check .` to ensure zero errors in the empty structure.
-- [ ] Confirm `.gitignore` protects against accidental large file commits.
+- [x] Run `ruff check .` to ensure zero errors in the empty structure.
+- [x] Confirm `.gitignore` protects against accidental large file commits and raw user data leaks (e.g. PDFs).
 
 ---
 
@@ -36,19 +36,19 @@ This document serves as the self-executable, atomic roadmap for building the Par
 ### Task 2.1: Domain Models (Pydantic)
 **Description:** Define the strict data contracts that cross system boundaries.
 **Actionable Steps:**
-- [ ] Create `backend/core/models/domain.py`.
-- [ ] Implement `DocumentIngestionRequest` (file data, session ID).
-- [ ] Implement `QueryRequest` (prompt, chat history, mode).
-- [ ] Implement `ExtractedNode` (text, metadata, score) and `QueryResponse`.
+- [x] Create `backend/core/models/domain.py`.
+- [x] Implement `DocumentIngestionRequest` (file data, session ID).
+- [x] Implement `QueryRequest` (prompt, chat history via `ChatMessage`, mode).
+- [x] Implement `ExtractedNode` (text, metadata, score) and strict `QueryResponse`.
 
 ### Task 2.2: Abstract Base Classes (ABCs)
 **Description:** Define the interfaces to adhere to the Open-Closed Principle.
 **Actionable Steps:**
-- [ ] Create `backend/core/interfaces/repository.py` and define `AbstractDocumentRepository` with `save_nodes`, `similarity_search`, `delete_session`.
-- [ ] Create `backend/core/interfaces/strategy.py` and define `AbstractQueryStrategy` with an `execute(request: QueryRequest)` method.
+- [x] Create `backend/core/interfaces/repository.py` and define `AbstractDocumentRepository` with `save_nodes`, `similarity_search`, `delete_session`.
+- [x] Create `backend/core/interfaces/strategy.py` and define `AbstractQueryStrategy` with an `execute(request: QueryRequest)` method.
 
 ### Checkpoint: Phase 2
-- [ ] Run `mypy backend/` to ensure the base schemas and interfaces are 100% type-safe.
+- [x] Run `mypy backend/` to ensure the base schemas and interfaces are 100% type-safe.
 
 ---
 
@@ -57,26 +57,26 @@ This document serves as the self-executable, atomic roadmap for building the Par
 ### Task 3.1: Qdrant Repository Implementation
 **Description:** Implement the concrete database layer.
 **Actionable Steps:**
-- [ ] Create `backend/infrastructure/database/qdrant_repo.py`.
-- [ ] Implement `QdrantRepository` inheriting from `AbstractDocumentRepository`.
-- [ ] Add logic to filter by global vs. session-scoped namespaces using Qdrant's payload filtering.
+- [x] Create `backend/infrastructure/database/qdrant_repo.py`.
+- [x] Implement `QdrantRepository` inheriting from `AbstractDocumentRepository`.
+- [x] Add logic to filter by global vs. session-scoped namespaces using Qdrant's payload filtering.
 
 ### Task 3.2: Document Parsing & Chunking
 **Description:** Build the ingestion pipeline for Persian RTL text.
 **Actionable Steps:**
-- [ ] Create `backend/infrastructure/parsers/pdf_parser.py` using `PyMuPDF`.
-- [ ] Implement logic to reject scanned PDFs if 0 selectable text is found.
-- [ ] Create `backend/infrastructure/parsers/chunker.py` using LlamaIndex `SentenceSplitter` configured for Persian (500-1000 char size, 150 overlap).
+- [x] Create `backend/infrastructure/parsers/pdf_parser.py` using `PyMuPDF`.
+- [x] Implement logic to reject scanned PDFs if 0 selectable text is found.
+- [x] Create `backend/infrastructure/parsers/chunker.py` using LlamaIndex `SentenceSplitter` configured for Persian (500-1000 char size, 150 overlap).
 
 ### Task 3.3: LLM & Embeddings Factory
-**Description:** Configure Ollama and the multilingual embedding model via LlamaIndex.
+**Description:** Configure global Settings for Ollama and the multilingual embedding model (keeping prompt templates encapsulated in strategies).
 **Actionable Steps:**
-- [ ] Create `backend/infrastructure/llm/factory.py`.
-- [ ] Instantiate the LlamaIndex `Settings.llm` pointing to the local Ollama Qwen 2.5 instance.
-- [ ] Instantiate `Settings.embed_model` pointing to `intfloat/multilingual-e5-base`.
+- [x] Create `backend/infrastructure/llm/factory.py`.
+- [x] Instantiate the LlamaIndex `Settings.llm` pointing to the local Ollama instance.
+- [x] Instantiate `Settings.embed_model` pointing to a local multilingual embedding model.
 
 ### Checkpoint: Phase 3
-- [ ] Write a basic unit test in `tests/` to mock Qdrant and verify the chunking logic outputs valid `ExtractedNode` models.
+- [x] Write a basic unit test in `tests/` to mock Qdrant and verify the chunking logic outputs valid `ExtractedNode` models.
 
 ---
 
@@ -85,15 +85,15 @@ This document serves as the self-executable, atomic roadmap for building the Par
 ### Task 4.1: Condense Question Pipeline
 **Description:** Build the conversational memory logic.
 **Actionable Steps:**
-- [ ] Create `backend/core/condenser.py`.
-- [ ] Implement logic to inject chat history and the current query into a LlamaIndex prompt to rewrite pronouns into a standalone question.
+- [x] Create `backend/core/condenser.py`.
+- [x] Implement logic to inject chat history and the current query into a LlamaIndex prompt to rewrite pronouns into a standalone question.
 
 ### Task 4.2: Concrete RAG Strategies
-**Description:** Implement the three distinct execution modes.
+**Description:** Implement the three distinct execution modes, encapsulating their specific prompt templates and returning strict `QueryResponse` objects.
 **Actionable Steps:**
-- [ ] Create `backend/core/strategies/strict_rag.py`. Implement logic to halt if retrieval similarity is too low (0% hallucination target).
-- [ ] Create `backend/core/strategies/llm_only.py`. Bypass Qdrant entirely.
-- [ ] Create `backend/core/strategies/hybrid_rag.py`. Retrieve from Qdrant, pass to FlashRank reranker, then to LLM.
+- [x] Create `backend/core/strategies/strict_rag.py`. Implement logic to halt if retrieval similarity is too low (0% hallucination target).
+- [x] Create `backend/core/strategies/llm_only.py`. Bypass Qdrant entirely.
+- [x] Create `backend/core/strategies/hybrid_rag.py`. Retrieve from Qdrant, pass to FlashRank reranker, then to LLM.
 
 ---
 
@@ -106,11 +106,11 @@ This document serves as the self-executable, atomic roadmap for building the Par
 - [ ] Provide functions `get_document_repository()` and `get_query_strategy(mode)`.
 
 ### Task 5.2: API Routes & Exception Handling
-**Description:** Expose the REST API and handle errors gracefully.
+**Description:** Expose the REST API and handle errors gracefully at the application boundary.
 **Actionable Steps:**
 - [ ] Create `backend/api/routes.py` with `/ingest` and `/query` endpoints.
 - [ ] Create `backend/main.py` initializing the FastAPI app.
-- [ ] Add a global exception handler in `main.py` to intercept timeouts and OOM errors, returning a clean 500 JSON response.
+- [ ] Add a global exception handler in `main.py` to intercept `ParsRAGError` domain exceptions (timeouts, empty docs), returning a clean 500 JSON response.
 
 ### Checkpoint: Phase 5
 - [ ] Run `pytest` to ensure all backend routing logic passes.
