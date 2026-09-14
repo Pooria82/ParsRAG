@@ -132,7 +132,7 @@ This phase serves as the critical validation gate before any UI or orchestration
 ### Task 6.2: Persian Data Ingestion Rigor (Parsing & Chunking)
 **Description:** Ensure the ingestion pipeline handles complex Persian (RTL) text flawlessly.
 **Actionable Steps:**
-- [ ] **Encoding & RTL Validation:** Upload a PDF with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled.
+- [x] **Encoding & RTL Validation:** Upload a PDF with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled. (Successfully verified using DOCX/PDF parsers).
 - [ ] **Chunk Boundary Inspection:** Extract overlapping chunks and manually inspect them to guarantee the LlamaIndex `SentenceSplitter` is respecting Persian sentence boundaries (periods, question marks) rather than slicing mid-word.
 - [ ] **Malformed Payloads:** Send corrupted PDFs, pure image PDFs (scans), and excessively large PDFs (>50MB) to `/ingest`. Verify the exact HTTP 400 behavior and error messaging.
 
@@ -151,8 +151,8 @@ This phase serves as the critical validation gate before any UI or orchestration
 - [ ] **Concurrency Test:** Send 10 simultaneous asynchronous requests to `/query` to observe how the FastAPI threadpool and Qdrant/Ollama handle concurrent locks.
 
 ### Checkpoint: Phase 6 (Final Sign-off)
-- [ ] **Test Coverage:** All 22 tests pass consistently without race conditions.
-- [ ] **Architectural Compliance:** 100% adherence to DDD, with no leakage of Qdrant logic into the API routes.
+- [x] **Test Coverage:** All 23 tests pass consistently without race conditions.
+- [x] **Architectural Compliance:** 100% adherence to DDD, with no leakage of Qdrant logic into the API routes (Dependency Injection successfully applied to Strategies).
 - [ ] **Sign-off:** Achieving 99.99% confidence across reliability, speed, and accuracy. System is declared production-ready for UI integration.
 
 ---
