@@ -6,7 +6,7 @@ from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import QueryRequest, QueryResponse
 from backend.infrastructure.parsers.chunker import chunk_text
-from backend.infrastructure.parsers.pdf_parser import parse_pdf
+from backend.infrastructure.parsers.document_parser import parse_document
 
 router = APIRouter()
 
@@ -20,8 +20,8 @@ def ingest_document(
     """Ingests a PDF document, parses it, chunks it, and saves it to the vector database."""
     file_bytes = file.file.read()
     
-    # 1. Parse PDF
-    text = parse_pdf(file_bytes)
+    # 1. Parse Document
+    text = parse_document(file_bytes, file.filename)
     
     # 2. Chunk text
     metadata = {"filename": file.filename}

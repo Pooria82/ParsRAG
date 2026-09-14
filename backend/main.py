@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.api.routes import router as api_router
-from backend.infrastructure.parsers.pdf_parser import EmptyDocumentError
+from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 
 # Configure minimal logging
 logger = logging.getLogger(__name__)

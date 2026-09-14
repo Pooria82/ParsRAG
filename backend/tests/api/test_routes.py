@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
 from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.infrastructure.parsers.pdf_parser import EmptyDocumentError
+from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -15,10 +15,10 @@ def test_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes.parse_pdf") as mock_parse_pdf,
+        patch("backend.api.routes.parse_document") as mock_parse_document,
         patch("backend.api.routes.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_pdf.return_value = "Extracted text"
+        mock_parse_document.return_value = "Extracted text"
         mock_chunk_text.return_value = [ExtractedNode(text="Extracted text", metadata={"filename": "test.pdf"})]
 
         response = client.post(
@@ -30,7 +30,7 @@ def test_ingest_success() -> None:
         assert response.status_code == 200
         assert "Successfully ingested test.pdf" in response.json()["message"]
         
-        mock_parse_pdf.assert_called_once()
+        mock_parse_document.assert_called_once()
         mock_chunk_text.assert_called_once()
         mock_repo.save_nodes.assert_called_once()
 
@@ -41,8 +41,8 @@ def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
-    with patch("backend.api.routes.parse_pdf") as mock_parse_pdf:
-        mock_parse_pdf.side_effect = EmptyDocumentError("No text found")
+    with patch("backend.api.routes.parse_document") as mock_parse_document:
+        mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
         response = client.post(
             "/ingest",
