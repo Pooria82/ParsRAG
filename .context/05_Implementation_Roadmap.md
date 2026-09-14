@@ -102,25 +102,64 @@ This document serves as the self-executable, atomic roadmap for building the Par
 ### Task 5.1: Dependency Injection Setup
 **Description:** Wire up the interfaces to concrete implementations for FastAPI.
 **Actionable Steps:**
-- [ ] Create `backend/api/dependencies.py`.
-- [ ] Provide functions `get_document_repository()` and `get_query_strategy(mode)`.
+- [x] Create `backend/api/dependencies.py`.
+- [x] Provide functions `get_document_repository()` and `get_query_strategy(mode)`.
 
 ### Task 5.2: API Routes & Exception Handling
 **Description:** Expose the REST API and handle errors gracefully at the application boundary.
 **Actionable Steps:**
-- [ ] Create `backend/api/routes.py` with `/ingest` and `/query` endpoints.
-- [ ] Create `backend/main.py` initializing the FastAPI app.
-- [ ] Add a global exception handler in `main.py` to intercept `ParsRAGError` domain exceptions (timeouts, empty docs), returning a clean 500 JSON response.
+- [x] Create `backend/api/routes.py` with `/ingest` and `/query` endpoints.
+- [x] Create `backend/main.py` initializing the FastAPI app.
+- [x] Add a global exception handler in `main.py` to intercept `ParsRAGError` domain exceptions (timeouts, empty docs), returning a clean 500 JSON response.
 
 ### Checkpoint: Phase 5
-- [ ] Run `pytest` to ensure all backend routing logic passes.
-- [ ] Spin up `uvicorn backend.main:app` locally and hit `/docs` to verify OpenAPI schema.
+- [x] Run `pytest` to ensure all backend routing logic passes.
+- [x] Spin up `uvicorn backend.main:app` locally and hit `/docs` to verify OpenAPI schema.
 
 ---
 
-## Phase 6: Frontend Integration (Chainlit)
+## Phase 6: Improvement and Refinement (99.99% Confidence Sign-off)
 
-### Task 6.1: Chainlit Application
+This phase serves as the critical validation gate before any UI or orchestration is introduced. It strictly audits the previous 5 phases for edge cases, performance bottlenecks, language-specific nuances (Persian), and architectural compliance.
+
+### Task 6.1: Infrastructure & Resource Validation (Data Layer)
+**Description:** Stress-test Qdrant and Ollama to ensure they behave predictably under load and within hardware constraints (6GB VRAM limit).
+**Actionable Steps:**
+- [ ] **VRAM Profiling:** Spin up `qwen2.5:7b` via Ollama and monitor VRAM usage during peak inference. Ensure it stays within the 6GB limit without swapping to CPU RAM.
+- [ ] **Qdrant Indexing Audit:** Verify that Qdrant collections are created with the exact correct vector dimensions (from the HuggingFace embedding model) and that the `session_id` payload index is successfully created for O(1) filtering.
+- [ ] **Connection Resilience:** Simulate a database timeout or Ollama crash during a request and verify the backend fails gracefully (intercepted by `ParsRAGError`).
+
+### Task 6.2: Persian Data Ingestion Rigor (Parsing & Chunking)
+**Description:** Ensure the ingestion pipeline handles complex Persian (RTL) text flawlessly.
+**Actionable Steps:**
+- [ ] **Encoding & RTL Validation:** Upload a PDF with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled.
+- [ ] **Chunk Boundary Inspection:** Extract overlapping chunks and manually inspect them to guarantee the LlamaIndex `SentenceSplitter` is respecting Persian sentence boundaries (periods, question marks) rather than slicing mid-word.
+- [ ] **Malformed Payloads:** Send corrupted PDFs, pure image PDFs (scans), and excessively large PDFs (>50MB) to `/ingest`. Verify the exact HTTP 400 behavior and error messaging.
+
+### Task 6.3: Retrieval & Re-ranking Precision (RAG Core)
+**Description:** Validate the mathematical boundaries of the RAG strategies.
+**Actionable Steps:**
+- [ ] **FlashRank Validation:** In `HYBRID` mode, track the node scores before and after FlashRank. Confirm that FlashRank correctly elevates the most semantically relevant Persian nodes to the top.
+- [ ] **Strict Mode Thresholding:** In `STRICT` mode, deliberately ask an out-of-domain question. Verify the vector similarity score falls below the accepted threshold and the pipeline short-circuits to prevent hallucination.
+- [ ] **Conversational Memory (Anaphora):** Test the `CondenseQuestionPipeline` with a 4-turn conversation containing complex Persian pronouns (e.g., "او چه گفت؟", "آن کجا بود؟"). Verify the LLM successfully rewrites the prompt into a standalone question.
+
+### Task 6.4: API Security, Concurrency, and Load
+**Description:** Guarantee the FastAPI layer acts as an impenetrable shield.
+**Actionable Steps:**
+- [ ] **Zero-Leakage Audit:** Deliberately trigger internal `KeyError`s and division-by-zero exceptions inside the strategy layers. Assert that the `POST /query` endpoint returns a sterile HTTP 500 JSON without leaking a single line of stack trace.
+- [ ] **Input Sanitization:** Attempt Path Traversal or NoSQL injection payloads inside the `session_id` parameter to ensure Pydantic V2 rigorously sanitizes inputs.
+- [ ] **Concurrency Test:** Send 10 simultaneous asynchronous requests to `/query` to observe how the FastAPI threadpool and Qdrant/Ollama handle concurrent locks.
+
+### Checkpoint: Phase 6 (Final Sign-off)
+- [ ] **Test Coverage:** All 22 tests pass consistently without race conditions.
+- [ ] **Architectural Compliance:** 100% adherence to DDD, with no leakage of Qdrant logic into the API routes.
+- [ ] **Sign-off:** Achieving 99.99% confidence across reliability, speed, and accuracy. System is declared production-ready for UI integration.
+
+---
+
+## Phase 7: Frontend Integration (Chainlit)
+
+### Task 7.1: Chainlit Application
 **Description:** Build the user-facing chat UI.
 **Actionable Steps:**
 - [ ] Create `frontend/app.py`.
@@ -130,15 +169,15 @@ This document serves as the self-executable, atomic roadmap for building the Par
 
 ---
 
-## Phase 7: Dockerization & Final Orchestration
+## Phase 8: Dockerization & Final Orchestration
 
-### Task 7.1: Dockerfiles
+### Task 8.1: Dockerfiles
 **Description:** Containerize the microservices.
 **Actionable Steps:**
 - [ ] Create `backend/Dockerfile` optimizing for Python (multi-stage build).
 - [ ] Create `frontend/Dockerfile` for Chainlit.
 
-### Task 7.2: Docker Compose
+### Task 8.2: Docker Compose
 **Description:** Orchestrate the entire system.
 **Actionable Steps:**
 - [ ] Create `docker-compose.yml` in the root directory.
