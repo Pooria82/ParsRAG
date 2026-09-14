@@ -28,38 +28,34 @@ def test_condense_question(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
-@patch("backend.core.strategies.strict_rag.QdrantRepository")
 @patch("backend.core.strategies.strict_rag.Settings")
-def test_strict_rag_below_threshold(mock_settings: MagicMock, mock_repo_cls: MagicMock) -> None:
+def test_strict_rag_below_threshold(mock_settings: MagicMock) -> None:
     mock_repo = MagicMock()
     # Return nodes with score 0.5 (below default 0.75)
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="Some text", score=0.5)
     ]
-    mock_repo_cls.return_value = mock_repo
 
-    strategy = StrictRAGStrategy()
+    strategy = StrictRAGStrategy(mock_repo)
     result = strategy.execute("test query", [])
 
     assert "I do not know" in result.answer or "ندارم" in result.answer
     mock_settings.llm.complete.assert_not_called()
 
 
-@patch("backend.core.strategies.strict_rag.QdrantRepository")
 @patch("backend.core.strategies.strict_rag.Settings")
-def test_strict_rag_above_threshold(mock_settings: MagicMock, mock_repo_cls: MagicMock) -> None:
+def test_strict_rag_above_threshold(mock_settings: MagicMock) -> None:
     mock_repo = MagicMock()
     # Return nodes with score 0.9 (above default 0.75)
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="High quality text", score=0.9)
     ]
-    mock_repo_cls.return_value = mock_repo
 
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "The correct answer."
     mock_settings.llm = mock_llm
 
-    strategy = StrictRAGStrategy()
+    strategy = StrictRAGStrategy(mock_repo)
     result = strategy.execute("test query", [])
 
     assert result.answer == "The correct answer."
@@ -79,15 +75,13 @@ def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
-@patch("backend.core.strategies.hybrid_rag.QdrantRepository")
 @patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
-def test_hybrid_rag_strategy(mock_settings: MagicMock, mock_rerank_cls: MagicMock, mock_repo_cls: MagicMock) -> None:
+def test_hybrid_rag_strategy(mock_settings: MagicMock, mock_rerank_cls: MagicMock) -> None:
     mock_repo = MagicMock()
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="raw text", score=0.6)
     ]
-    mock_repo_cls.return_value = mock_repo
 
     mock_rerank = MagicMock()
     # Mock reranked node structure
@@ -102,7 +96,7 @@ def test_hybrid_rag_strategy(mock_settings: MagicMock, mock_rerank_cls: MagicMoc
     mock_llm.complete.return_value = "Hybrid answer"
     mock_settings.llm = mock_llm
 
-    strategy = HybridRAGStrategy()
+    strategy = HybridRAGStrategy(mock_repo)
     result = strategy.execute("query", [])
 
     assert result.answer == "Hybrid answer"

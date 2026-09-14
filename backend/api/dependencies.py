@@ -29,12 +29,13 @@ def get_query_strategy(mode: QueryMode) -> RAGStrategy:
     Returns:
         RAGStrategy: The instantiated concrete strategy.
     """
+    repo = QdrantRepository()
     if mode == QueryMode.STRICT:
-        return StrictRAGStrategy()
+        return StrictRAGStrategy(repo)
     elif mode == QueryMode.HYBRID:
-        return HybridRAGStrategy()
+        return HybridRAGStrategy(repo)
     elif mode == QueryMode.LLM_ONLY:
         return LLMOnlyStrategy()
     else:
         # Fallback to Hybrid (though Pydantic validation should prevent this)
-        return HybridRAGStrategy()
+        return HybridRAGStrategy(repo)

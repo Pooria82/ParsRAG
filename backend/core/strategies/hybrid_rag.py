@@ -6,7 +6,7 @@ from llama_index.postprocessor.flashrank_rerank import FlashRankRerank  # type: 
 
 from backend.core.models.domain import QueryResponse
 from backend.core.strategies.base_strategy import RAGStrategy
-from backend.infrastructure.database.qdrant_repo import QdrantRepository
+from backend.core.interfaces.repository import AbstractDocumentRepository
 
 HYBRID_RAG_PROMPT_TEMPLATE = """\
 You are an intelligent AI assistant. Use the following context to answer the user's question.
@@ -29,11 +29,11 @@ class HybridRAGStrategy(RAGStrategy):
 
     def __init__(
         self,
-        collection_name: str = "parsrag_docs",
+        repo: AbstractDocumentRepository,
         top_k_retrieve: int = 10,
         top_n_rerank: int = 3,
     ):
-        self.repo = QdrantRepository(collection_name=collection_name)
+        self.repo = repo
         self.prompt_template = PromptTemplate(HYBRID_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
         self.top_k_retrieve = top_k_retrieve

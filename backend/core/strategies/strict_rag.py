@@ -6,7 +6,7 @@ from llama_index.core.prompts import PromptTemplate
 
 from backend.core.models.domain import QueryResponse
 from backend.core.strategies.base_strategy import RAGStrategy
-from backend.infrastructure.database.qdrant_repo import QdrantRepository
+from backend.core.interfaces.repository import AbstractDocumentRepository
 
 STRICT_RAG_PROMPT_TEMPLATE = """\
 You are an AI assistant that strictly answers based on the provided context.
@@ -27,8 +27,8 @@ class StrictRAGStrategy(RAGStrategy):
     If no relevant context is found, it refuses to answer.
     """
 
-    def __init__(self, collection_name: str = "parsrag_docs"):
-        self.repo = QdrantRepository(collection_name=collection_name)
+    def __init__(self, repo: AbstractDocumentRepository):
+        self.repo = repo
         self.threshold = float(os.getenv("STRICT_RAG_THRESHOLD", "0.75"))
         self.prompt_template = PromptTemplate(STRICT_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
