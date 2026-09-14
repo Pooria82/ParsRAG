@@ -62,10 +62,10 @@ This document serves as the self-executable, atomic roadmap for building the Par
 - [x] Add logic to filter by global vs. session-scoped namespaces using Qdrant's payload filtering.
 
 ### Task 3.2: Document Parsing & Chunking
-**Description:** Build the ingestion pipeline for Persian RTL text.
+**Description:** Build the ingestion pipeline for Persian RTL text (handling `.docx` and `.pptx` files).
 **Actionable Steps:**
-- [x] Create `backend/infrastructure/parsers/pdf_parser.py` using `PyMuPDF`.
-- [x] Implement logic to reject scanned PDFs if 0 selectable text is found.
+- [x] Create `backend/infrastructure/parsers/document_parser.py` using `python-docx` and `python-pptx`.
+- [x] Implement logic to extract text accurately from Word documents and PowerPoint slides.
 - [x] Create `backend/infrastructure/parsers/chunker.py` using LlamaIndex `SentenceSplitter` configured for Persian (500-1000 char size, 150 overlap).
 
 ### Task 3.3: LLM & Embeddings Factory
@@ -132,9 +132,9 @@ This phase serves as the critical validation gate before any UI or orchestration
 ### Task 6.2: Persian Data Ingestion Rigor (Parsing & Chunking)
 **Description:** Ensure the ingestion pipeline handles complex Persian (RTL) text flawlessly.
 **Actionable Steps:**
-- [x] **Encoding & RTL Validation:** Upload a PDF with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled. (Successfully verified using DOCX/PDF parsers).
+- [x] **Encoding & RTL Validation:** Upload a `.docx` or `.pptx` file with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled. (Successfully verified using DOCX/PPTX parsers).
 - [ ] **Chunk Boundary Inspection:** Extract overlapping chunks and manually inspect them to guarantee the LlamaIndex `SentenceSplitter` is respecting Persian sentence boundaries (periods, question marks) rather than slicing mid-word.
-- [ ] **Malformed Payloads:** Send corrupted PDFs, pure image PDFs (scans), and excessively large PDFs (>50MB) to `/ingest`. Verify the exact HTTP 400 behavior and error messaging.
+- [ ] **Malformed Payloads:** Send corrupted or unsupported files and verify the exact HTTP 400 behavior and error messaging.
 
 ### Task 6.3: Retrieval & Re-ranking Precision (RAG Core)
 **Description:** Validate the mathematical boundaries of the RAG strategies.
@@ -186,4 +186,11 @@ This phase serves as the critical validation gate before any UI or orchestration
 
 ### Checkpoint: Final
 - [ ] Run `docker-compose up --build`.
-- [ ] Upload a Persian PDF and ask a follow-up question. Verify response quality.
+- [ ] Upload a Persian `.docx` or `.pptx` file and ask a follow-up question. Verify response quality.
+
+### Task 8.3: Advanced Document Parsing (PDF OCR)
+**Description:** Implement robust PDF handling, specifically dealing with scanned documents via OCR (e.g., Tesseract or similar).
+**Actionable Steps:**
+- [ ] Integrate an OCR engine or robust PDF parser to extract Persian text from scanned and native PDFs.
+- [ ] Update the `document_parser.py` to handle `.pdf` file types.
+- [ ] Add rigorous testing for complex PDF layouts.

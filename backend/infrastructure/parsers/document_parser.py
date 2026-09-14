@@ -1,7 +1,7 @@
 import io
 import fitz  # type: ignore  # PyMuPDF
 from docx import Document  # type: ignore
-
+from pptx import Presentation # type: ignore
 
 class EmptyDocumentError(Exception):
     """Raised when a document contains no selectable text (e.g., scanned image)."""
@@ -25,9 +25,10 @@ def parse_document(file_bytes: bytes, filename: str) -> str:
         return _parse_pdf(file_bytes)
     elif filename.lower().endswith(".docx"):
         return _parse_docx(file_bytes)
+    elif filename.lower().endswith(".pptx"):
+        return _parse_pptx(file_bytes)
     else:
-        raise ValueError("Unsupported file format. Only PDF and DOCX are supported.")
-
+        raise ValueError("Unsupported file format. Only PDF, DOCX, and PPTX are supported.")
 
 def _parse_pdf(file_bytes: bytes) -> str:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -56,5 +57,19 @@ def _parse_docx(file_bytes: bytes) -> str:
             
     if not text.strip():
         raise EmptyDocumentError("The DOCX document contains no text.")
+        
+    return text.strip()
+
+
+def _parse_pptx(file_bytes: bytes) -> str:
+    prs = Presentation(io.BytesIO(file_bytes))
+    text = ""
+    for slide_idx, slide in enumerate(prs.slides):
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text:
+                text += shape.text + "\n"
+                
+    if not text.strip():
+        raise EmptyDocumentError("The PPTX document contains no text.")
         
     return text.strip()
