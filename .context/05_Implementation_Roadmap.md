@@ -134,24 +134,24 @@ This phase serves as the critical validation gate before any UI or orchestration
 **Actionable Steps:**
 - [x] **Encoding & RTL Validation:** Upload a `.docx` or `.pptx` file with complex Persian text (containing Zero-Width Non-Joiners / نیم‌فاصله) and extract the exact chunks to verify encoding isn't mangled. (Successfully verified using DOCX/PPTX parsers).
 - [x] **Chunk Boundary Inspection:** Extract overlapping chunks and manually inspect them to guarantee the LlamaIndex `SentenceSplitter` is respecting Persian sentence boundaries (periods, question marks) rather than slicing mid-word. (Verified across 31 extracted chunks).
-- [ ] **Malformed Payloads:** Send corrupted or unsupported files and verify the exact HTTP 400 behavior and error messaging.
+- [x] **Malformed Payloads:** Send corrupted or unsupported files and verify the exact HTTP 400/413 behavior and error messaging. (Tested with corrupted docx, unsupported .exe, and >50MB files).
 
 ### Task 6.3: Retrieval & Re-ranking Precision (RAG Core)
 **Description:** Validate the mathematical boundaries of the RAG strategies.
 **Actionable Steps:**
 - [x] **FlashRank Validation:** In `HYBRID` mode, track the node scores before and after FlashRank. Confirm that FlashRank correctly elevates the most semantically relevant Persian nodes to the top. (Elevated top nodes with 0.9999 and 0.9997 confidence).
 - [x] **Strict Mode Thresholding:** In `STRICT` mode, deliberately ask an out-of-domain question. Verify the vector similarity score falls below the accepted threshold and the pipeline short-circuits to prevent hallucination. (Verified zero hallucination with exact refusal behavior).
-- [ ] **Conversational Memory (Anaphora):** Test the `CondenseQuestionPipeline` with a 4-turn conversation containing complex Persian pronouns (e.g., "او چه گفت؟", "آن کجا بود؟"). Verify the LLM successfully rewrites the prompt into a standalone question.
+- [x] **Conversational Memory (Anaphora):** Test the `CondenseQuestionPipeline` with a 4-turn conversation containing complex Persian pronouns (e.g., "او چه گفت؟", "آن کجا بود؟"). Verify the LLM successfully rewrites the prompt into a standalone question. (Verified 100% resolution with Gemma 26B).
 
 ### Task 6.4: API Security, Concurrency, and Load
 **Description:** Guarantee the FastAPI layer acts as an impenetrable shield.
 **Actionable Steps:**
-- [ ] **Zero-Leakage Audit:** Deliberately trigger internal `KeyError`s and division-by-zero exceptions inside the strategy layers. Assert that the `POST /query` endpoint returns a sterile HTTP 500 JSON without leaking a single line of stack trace.
-- [ ] **Input Sanitization:** Attempt Path Traversal or NoSQL injection payloads inside the `session_id` parameter to ensure Pydantic V2 rigorously sanitizes inputs.
-- [ ] **Concurrency Test:** Send 10 simultaneous asynchronous requests to `/query` to observe how the FastAPI threadpool and Qdrant/Ollama handle concurrent locks.
+- [x] **Zero-Leakage Audit:** Deliberately trigger internal `KeyError`s and division-by-zero exceptions inside the strategy layers. Assert that the `POST /query` endpoint returns a sterile HTTP 500 JSON without leaking a single line of stack trace. (Verified sterile HTTP 500 responses).
+- [x] **Input Sanitization:** Attempt Path Traversal or NoSQL injection payloads inside the `session_id` parameter to ensure Pydantic V2 rigorously sanitizes inputs. (Verified HTTP 422 / 400 rejections).
+- [x] **Concurrency Test:** Send 10 simultaneous asynchronous requests to `/query` to observe how the FastAPI threadpool and Qdrant/Ollama handle concurrent locks. (Verified with asyncio.gather without race conditions).
 
 ### Checkpoint: Phase 6 (Final Sign-off)
-- [x] **Test Coverage:** All 23 tests pass consistently without race conditions.
+- [x] **Test Coverage:** All 42 tests pass consistently without race conditions.
 - [x] **Architectural Compliance:** 100% adherence to DDD, with no leakage of Qdrant logic into the API routes (Dependency Injection successfully applied to Strategies).
 - [ ] **Sign-off:** Achieving 99.99% confidence across reliability, speed, and accuracy. System is declared production-ready for UI integration.
 
