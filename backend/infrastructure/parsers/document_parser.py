@@ -1,7 +1,9 @@
 import io
+
 import fitz  # type: ignore  # PyMuPDF
 from docx import Document  # type: ignore
-from pptx import Presentation # type: ignore
+from pptx import Presentation  # type: ignore
+
 
 class EmptyDocumentError(Exception):
     """Raised when a document contains no selectable text (e.g., scanned image)."""
@@ -28,10 +30,17 @@ def parse_document(file_bytes: bytes, filename: str) -> str:
     elif filename.lower().endswith(".pptx"):
         return _parse_pptx(file_bytes)
     else:
-        raise ValueError("Unsupported file format. Only PDF, DOCX, and PPTX are supported.")
+        raise ValueError(
+            "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
+        )
+
 
 def _parse_pdf(file_bytes: bytes) -> str:
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception as e:
+        raise ValueError("Corrupted or invalid PDF document.") from e
+
     text = ""
     for page in doc:
         page_text = page.get_text("text")
@@ -49,27 +58,35 @@ def _parse_pdf(file_bytes: bytes) -> str:
 
 
 def _parse_docx(file_bytes: bytes) -> str:
-    doc = Document(io.BytesIO(file_bytes))
+    try:
+        doc = Document(io.BytesIO(file_bytes))
+    except Exception as e:
+        raise ValueError("Corrupted or invalid DOCX document.") from e
+
     text = ""
     for para in doc.paragraphs:
         if para.text:
             text += para.text + "\n"
-            
+
     if not text.strip():
         raise EmptyDocumentError("The DOCX document contains no text.")
-        
+
     return text.strip()
 
 
 def _parse_pptx(file_bytes: bytes) -> str:
-    prs = Presentation(io.BytesIO(file_bytes))
+    try:
+        prs = Presentation(io.BytesIO(file_bytes))
+    except Exception as e:
+        raise ValueError("Corrupted or invalid PPTX document.") from e
+
     text = ""
     for slide_idx, slide in enumerate(prs.slides):
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text:
                 text += shape.text + "\n"
-                
+
     if not text.strip():
         raise EmptyDocumentError("The PPTX document contains no text.")
-        
+
     return text.strip()

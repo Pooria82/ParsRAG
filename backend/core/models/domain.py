@@ -24,7 +24,10 @@ class QueryRequest(BaseModel):
         default=QueryMode.HYBRID, description="The RAG execution mode"
     )
     session_id: str | None = Field(
-        default=None, description="Optional session ID for scoped retrieval"
+        default=None,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Optional session ID for scoped retrieval (alphanumeric, dashes, underscores only)",
     )
 
 
@@ -32,7 +35,10 @@ class DocumentIngestionRequest(BaseModel):
     filename: str = Field(..., description="Name of the file being ingested")
     file_bytes: bytes = Field(..., description="Raw bytes of the file")
     session_id: str | None = Field(
-        default=None, description="Optional session ID to scope the document"
+        default=None,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Optional session ID to scope the document (alphanumeric, dashes, underscores only)",
     )
 
 
