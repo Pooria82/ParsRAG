@@ -19,17 +19,19 @@ def test_ingest_success() -> None:
         patch("backend.api.routes.chunk_text") as mock_chunk_text,
     ):
         mock_parse_document.return_value = "Extracted text"
-        mock_chunk_text.return_value = [ExtractedNode(text="Extracted text", metadata={"filename": "test.pdf"})]
+        mock_chunk_text.return_value = [
+            ExtractedNode(text="Extracted text", metadata={"filename": "test.pdf"})
+        ]
 
         response = client.post(
             "/ingest",
             files={"file": ("test.pdf", b"fake pdf bytes", "application/pdf")},
-            data={"session_id": "session-123"}
+            data={"session_id": "session-123"},
         )
 
         assert response.status_code == 200
         assert "Successfully ingested test.pdf" in response.json()["message"]
-        
+
         mock_parse_document.assert_called_once()
         mock_chunk_text.assert_called_once()
         mock_repo.save_nodes.assert_called_once()
@@ -45,8 +47,7 @@ def test_ingest_empty_document() -> None:
         mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
         response = client.post(
-            "/ingest",
-            files={"file": ("empty.pdf", b"empty bytes", "application/pdf")}
+            "/ingest", files={"file": ("empty.pdf", b"empty bytes", "application/pdf")}
         )
 
         assert response.status_code == 400
@@ -57,22 +58,20 @@ def test_ingest_empty_document() -> None:
 
 @patch("backend.api.routes.CondenseQuestionPipeline")
 @patch("backend.api.routes.get_query_strategy")
-def test_query_success(mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock) -> None:
+def test_query_success(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
     mock_condenser = MagicMock()
     mock_condenser.condense.return_value = "condensed query"
     mock_condenser_cls.return_value = mock_condenser
 
     mock_strategy = MagicMock()
     mock_strategy.execute.return_value = QueryResponse(
-        answer="This is the answer",
-        source_nodes=[]
+        answer="This is the answer", source_nodes=[]
     )
     mock_get_strategy.return_value = mock_strategy
 
-    payload = {
-        "prompt": "What is this?",
-        "mode": "hybrid"
-    }
+    payload = {"prompt": "What is this?", "mode": "hybrid"}
 
     response = client.post("/query", json=payload)
 
@@ -88,13 +87,12 @@ def test_query_success(mock_get_strategy: MagicMock, mock_condenser_cls: MagicMo
 def test_global_exception_handler(mock_condenser_cls: MagicMock) -> None:
     """Test that unexpected exceptions do not leak stack traces."""
     mock_condenser = MagicMock()
-    mock_condenser.condense.side_effect = Exception("Super secret database failure at line 42")
+    mock_condenser.condense.side_effect = Exception(
+        "Super secret database failure at line 42"
+    )
     mock_condenser_cls.return_value = mock_condenser
 
-    payload = {
-        "prompt": "Trigger crash",
-        "mode": "strict"
-    }
+    payload = {"prompt": "Trigger crash", "mode": "strict"}
 
     response = client.post("/query", json=payload)
 

@@ -1,4 +1,3 @@
-
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
@@ -19,6 +18,7 @@ class CondenseQuestionPipeline:
     Replaces pronouns or references in a user's question with the correct
     entities from the prior conversation to ensure accurate vector DB retrieval.
     """
+
     def __init__(self) -> None:
         self.llm = Settings.llm
         self.prompt_template = PromptTemplate(CONDENSE_PROMPT_TEMPLATE)

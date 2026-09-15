@@ -14,6 +14,7 @@ class QdrantRepository(AbstractDocumentRepository):
     Handles creation of collections, generating embeddings for documents,
     storing nodes, and performing cosine similarity searches.
     """
+
     def __init__(
         self,
         host: str = "localhost",

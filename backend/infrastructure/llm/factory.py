@@ -24,11 +24,13 @@ def setup_llm_and_embeddings() -> None:
             api_base="https://openrouter.ai/api/v1",
             is_chat_model=True,
             timeout=120.0,
-            max_retries=3
+            max_retries=3,
         )
     else:
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        Settings.llm = Ollama(model=model_name, base_url=base_url, request_timeout=120.0)
+        Settings.llm = Ollama(
+            model=model_name, base_url=base_url, request_timeout=120.0
+        )
 
     # Embeddings Setup (using intfloat/multilingual-e5-base)
     embed_model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")

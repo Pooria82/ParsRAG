@@ -4,9 +4,9 @@ from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
+from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import QueryResponse
 from backend.core.strategies.base_strategy import RAGStrategy
-from backend.core.interfaces.repository import AbstractDocumentRepository
 
 STRICT_RAG_PROMPT_TEMPLATE = """\
 You are an AI assistant that strictly answers based on the provided context.
@@ -54,7 +54,9 @@ class StrictRAGStrategy(RAGStrategy):
 
         # 2. Threshold Check
         if not nodes:
-            return QueryResponse(answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)")
+            return QueryResponse(
+                answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)"
+            )
 
         # Check if the highest score passes our threshold
         # Qdrant cosine similarity typically ranges from -1 to 1 or 0 to 1 depending on distance metric.
@@ -62,7 +64,9 @@ class StrictRAGStrategy(RAGStrategy):
             [n.score for n in nodes if n.score is not None], default=0.0
         )
         if highest_score < self.threshold:
-            return QueryResponse(answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)")
+            return QueryResponse(
+                answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)"
+            )
 
         # 3. Synthesize
         context_str = "\n\n".join([n.text for n in nodes])

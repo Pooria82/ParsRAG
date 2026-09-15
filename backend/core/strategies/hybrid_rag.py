@@ -4,9 +4,9 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.postprocessor.flashrank_rerank import FlashRankRerank  # type: ignore
 
+from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import QueryResponse
 from backend.core.strategies.base_strategy import RAGStrategy
-from backend.core.interfaces.repository import AbstractDocumentRepository
 
 HYBRID_RAG_PROMPT_TEMPLATE = """\
 You are an intelligent AI assistant. Use the following context to answer the user's question.
@@ -61,7 +61,9 @@ class HybridRAGStrategy(RAGStrategy):
         )
 
         if not extracted_nodes:
-            return QueryResponse(answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)")
+            return QueryResponse(
+                answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)"
+            )
 
         # 2. Map to LlamaIndex Node structures for reranking
         nodes_with_score = [

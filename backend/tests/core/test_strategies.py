@@ -77,7 +77,9 @@ def test_llm_only_strategy(mock_settings: MagicMock) -> None:
 
 @patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
-def test_hybrid_rag_strategy(mock_settings: MagicMock, mock_rerank_cls: MagicMock) -> None:
+def test_hybrid_rag_strategy(
+    mock_settings: MagicMock, mock_rerank_cls: MagicMock
+) -> None:
     mock_repo = MagicMock()
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="raw text", score=0.6)
