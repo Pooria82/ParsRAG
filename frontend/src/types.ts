@@ -26,6 +26,7 @@ export interface SessionDocument {
   size?: number;
   status: 'indexed' | 'uploading' | 'error';
   errorMessage?: string;
+  enabled?: boolean;
 }
 
 export interface Session {
@@ -36,6 +37,7 @@ export interface Session {
   documents: SessionDocument[];
   messages: Message[];
   ragMode: RAGMode;
+  draft?: string;
 }
 
 export interface AppSettings {

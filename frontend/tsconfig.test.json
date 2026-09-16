@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS", "moduleResolution": "node",
+    "allowImportingTsExtensions": false, "noEmit": false,
+    "outDir": "tests/.compiled", "rootDir": "src"
+  },
+  "include": ["src/core/**/*.ts", "src/types.ts"]
+}
