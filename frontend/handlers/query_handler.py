@@ -52,8 +52,11 @@ class QueryHandler:
 
         session_id = self.session_manager.get_session_id()
         mode = self.session_manager.get_mode()
-        top_k = self.session_manager.get_top_k()
+        lang = self.session_manager.get_language()
+        dynamic = self.session_manager.get_dynamic_top_k()
+        top_k = None if dynamic else self.session_manager.get_manual_top_k()
         chat_history = self.session_manager.get_chat_history()
+        history_window = self.session_manager.get_max_chat_history_turns()
 
         try:
             query_res = await self.client.query(
@@ -67,14 +70,16 @@ class QueryHandler:
             answer_text = str(query_res.get("answer", ""))
             source_nodes: list[dict[str, Any]] = query_res.get("source_nodes", [])
 
-            # Progressive streaming with Persian word/whitespace chunks
+            # Progressive streaming with word/whitespace chunks
             tokens = re.findall(r"\S+|\s+", answer_text)
             for token in tokens:
                 await response_msg.stream_token(token)
                 await asyncio.sleep(self.config.stream_chunk_delay_sec)
 
-            # Build and attach collapsible source citations
-            citation_elements = self.citation_builder.build_elements(source_nodes)
+            # Build and attach collapsible source citations in active language
+            citation_elements = self.citation_builder.build_elements(
+                source_nodes, lang=lang
+            )
             if citation_elements:
                 response_msg.elements = citation_elements
                 await response_msg.update()
@@ -83,10 +88,10 @@ class QueryHandler:
             self.session_manager.append_chat_turn(
                 prompt=clean_prompt,
                 answer=answer_text,
-                max_turns=self.config.max_chat_history_turns,
+                max_turns=history_window,
             )
 
         except (RuntimeError, ValueError, httpx.RequestError) as exc:
-            error_md = format_query_error(str(exc))
+            error_md = format_query_error(str(exc), lang=lang)
             await response_msg.stream_token(error_md)
             await response_msg.update()

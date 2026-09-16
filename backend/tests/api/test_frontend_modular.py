@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from chainlit.input_widget import RadioGroup
+from chainlit.input_widget import Select
 
 from frontend.config import FrontendConfig
 from frontend.handlers.query_handler import QueryHandler
@@ -26,7 +26,7 @@ def test_frontend_config_defaults() -> None:
     assert cfg.default_top_k == 15
     assert cfg.min_top_k == 5
     assert cfg.max_top_k == 30
-    assert cfg.step_top_k == 5
+    assert cfg.step_top_k == 1
 
 
 def test_upload_item_model() -> None:
@@ -136,17 +136,36 @@ def test_citation_builder() -> None:
 
 
 def test_settings_builder() -> None:
-    """Verifies SettingsBuilder creates valid ChatSettings with dynamic depth optimization."""
+    """Verifies SettingsBuilder creates valid ChatSettings with all 7 in-app configurable widgets."""
     builder = SettingsBuilder()
-    settings = builder.build()
-    assert len(settings.inputs) == 1
+    settings = builder.build(lang="fa")
+    assert len(settings.inputs) == 7
 
-    mode_widget = settings.inputs[0]
-    assert isinstance(mode_widget, RadioGroup)
-    assert mode_widget.id == "mode"
-    assert "Hybrid RAG" in mode_widget.values
-    assert "Strict RAG" in mode_widget.values
-    assert "LLM Only" in mode_widget.values
+    input_ids = [inp.id for inp in settings.inputs]
+    assert input_ids == [
+        "language",
+        "mode",
+        "strict_rag_threshold",
+        "dynamic_depth",
+        "manual_top_k",
+        "max_history_turns",
+        "backend_url",
+    ]
+
+    lang_widget = settings.inputs[0]
+    assert isinstance(lang_widget, Select)
+    assert "English" in lang_widget.values
+
+    mode_widget = settings.inputs[1]
+    assert isinstance(mode_widget, Select)
+    assert any("ترکیبی" in v for v in mode_widget.values)
+
+    # Test English build
+    settings_en = builder.build(lang="en")
+    assert len(settings_en.inputs) == 7
+    mode_widget_en = settings_en.inputs[1]
+    assert isinstance(mode_widget_en, Select)
+    assert "Hybrid RAG" in mode_widget_en.values
 
 
 def test_upload_handler_validation() -> None:

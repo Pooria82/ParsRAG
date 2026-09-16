@@ -66,12 +66,15 @@ class UploadHandler:
                 items.append(UploadItem(filename=file_name, content=file_bytes))
         return items
 
-    def validate_items(self, items: list[UploadItem], existing_count: int) -> None:
+    def validate_items(
+        self, items: list[UploadItem], existing_count: int, lang: str = "fa"
+    ) -> None:
         """Validates file count, formats, and sizes against operational rules.
 
         Args:
             items: Upload items to validate.
             existing_count: Number of files already active in the session.
+            lang: Display language ('fa' or 'en').
 
         Raises:
             ValueError: If file count, extension, or size violates constraints.
@@ -83,6 +86,7 @@ class UploadHandler:
                     current_count=existing_count,
                     new_count=len(items),
                     max_limit=self.config.max_files_per_batch,
+                    lang=lang,
                 )
             )
 
@@ -90,13 +94,21 @@ class UploadHandler:
             ext = os.path.splitext(item.filename)[1].lower()
             if ext not in self.config.supported_extensions:
                 allowed_str = ", ".join(sorted(self.config.supported_extensions))
-                raise ValueError(
-                    f"فرمت فایل '{item.filename}' مجاز نیست. فرمت‌های مجاز: {allowed_str}"
-                )
+                if lang == "en":
+                    msg = f"File format '{item.filename}' is not supported. Allowed formats: {allowed_str}"
+                else:
+                    msg = f"فرمت فایل '{item.filename}' مجاز نیست. فرمت‌های مجاز: {allowed_str}"
+                raise ValueError(msg)
             if item.size_bytes > self.config.max_file_size_bytes:
-                raise ValueError(
-                    f"حجم فایل '{item.filename}' از سقف مجاز ۵۰ مگابایت بیشتر است."
-                )
+                if lang == "en":
+                    msg = (
+                        f"File '{item.filename}' exceeds maximum allowed size of 50 MB."
+                    )
+                else:
+                    msg = (
+                        f"حجم فایل '{item.filename}' از سقف مجاز ۵۰ مگابایت بیشتر است."
+                    )
+                raise ValueError(msg)
 
     async def handle_uploads(self, elements: list[Any]) -> bool:
         """Coordinates file extraction, validation, and Qdrant ingestion.
@@ -115,14 +127,15 @@ class UploadHandler:
             return False
 
         existing_files = self.session_manager.get_uploaded_files()
+        lang = self.session_manager.get_language()
 
         try:
-            self.validate_items(items, existing_count=len(existing_files))
+            self.validate_items(items, existing_count=len(existing_files), lang=lang)
         except ValueError as val_err:
             await cl.Message(content=str(val_err)).send()
             return True
 
-        ingest_msg = cl.Message(content=format_ingest_progress(len(items)))
+        ingest_msg = cl.Message(content=format_ingest_progress(len(items), lang=lang))
         await ingest_msg.send()
 
         session_id = self.session_manager.get_session_id()
@@ -136,10 +149,11 @@ class UploadHandler:
             ingest_msg.content = format_ingest_success(
                 backend_message=res.get("message", ""),
                 active_files=updated_files,
+                lang=lang,
             )
             await ingest_msg.update()
         except (ValueError, RuntimeError, httpx.RequestError) as exc:
-            ingest_msg.content = format_ingest_error(str(exc))
+            ingest_msg.content = format_ingest_error(str(exc), lang=lang)
             await ingest_msg.update()
 
         return True

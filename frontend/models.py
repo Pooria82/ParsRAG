@@ -54,12 +54,30 @@ class SessionState(BaseModel):
     """
 
     session_id: str = Field(..., description="Unique session identifier")
+    language: str = Field(
+        default="fa", description="Active session language ('fa' or 'en')"
+    )
     mode: str = Field(default="hybrid", description="Selected RAG mode")
+    strict_rag_threshold: float = Field(
+        default=0.80, ge=0.0, le=1.0, description="Strict RAG similarity threshold"
+    )
+    dynamic_top_k: bool = Field(
+        default=True, description="Whether retrieval depth is automated dynamically"
+    )
+    manual_top_k: int = Field(
+        default=15, ge=1, le=50, description="Manual retrieval depth override"
+    )
     top_k: int | None = Field(
         default=None,
         ge=1,
         le=50,
-        description="Retrieval depth override (None = dynamic automated depth)",
+        description="Effective retrieval depth passed to backend (None = dynamic)",
+    )
+    max_chat_history_turns: int = Field(
+        default=10, ge=2, le=30, description="Conversational history memory limit"
+    )
+    backend_url: str = Field(
+        default="http://localhost:8000", description="FastAPI backend service URL"
     )
     chat_history: list[dict[str, str]] = Field(
         default_factory=list, description="Past conversation turns"

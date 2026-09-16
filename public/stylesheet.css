@@ -1,39 +1,87 @@
 /* ==========================================================================
-   ParsRAG Custom Stylesheet - Persian RTL & Modern Dark Mode Aesthetics
+   ParsRAG Production Stylesheet
+   - Bilingual (Persian RTL / English LTR) Design System
+   - Adaptive Chatbot Bottom Bar & Mode Selection Dropdown (Claude / ChatGPT style)
+   - Refined Dark Aesthetics adhering to frontend-ui-engineering standards
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
     --font-persian: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Tahoma, Arial, sans-serif;
+    --font-latin: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     --font-mono: 'JetBrains Mono', Consolas, Monaco, monospace;
+    
+    /* Semantic Palette */
+    --bg-base: #0b0f19;
+    --bg-surface: #1e293b;
+    --bg-surface-elevated: #243147;
+    --border-subtle: #334155;
+    --border-focus: #3b82f6;
     --brand-primary: #3b82f6;
     --brand-glow: rgba(59, 130, 246, 0.25);
-    --bg-dark: #0f172a;
-    --bg-card: #1e293b;
-    --border-card: #334155;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-accent: #38bdf8;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
 }
 
-/* Global Font & Direction */
-body, html {
+/* ==========================================================================
+   1. Global Typography & Bidirectional (RTL / LTR) Layout Rules
+   ========================================================================== */
+
+/* Persian RTL (Default) */
+html[dir="rtl"],
+body[data-lang="fa"],
+.parsrag-rtl {
     font-family: var(--font-persian) !important;
     direction: rtl !important;
     text-align: right !important;
-    scroll-behavior: smooth;
 }
 
-/* Chat Messages RTL alignment */
-.cl-message, 
+/* English LTR */
+html[dir="ltr"],
+body[data-lang="en"],
+.parsrag-ltr {
+    font-family: var(--font-latin) !important;
+    direction: ltr !important;
+    text-align: left !important;
+}
+
+/* Smooth scrolling and base background */
+body, html {
+    background-color: var(--bg-base) !important;
+    color: var(--text-primary) !important;
+    scroll-behavior: smooth;
+    margin: 0;
+    padding: 0;
+}
+
+/* Chat Messages */
+.cl-message,
 [data-testid="chat-message"],
 .step,
 .cl-step {
-    font-family: var(--font-persian) !important;
-    direction: rtl !important;
-    text-align: right !important;
     line-height: 1.8 !important;
 }
 
-/* Latin, Code Blocks and Inline Code stays LTR */
+html[dir="rtl"] .cl-message,
+html[dir="rtl"] [data-testid="chat-message"] {
+    font-family: var(--font-persian) !important;
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+html[dir="ltr"] .cl-message,
+html[dir="ltr"] [data-testid="chat-message"] {
+    font-family: var(--font-latin) !important;
+    direction: ltr !important;
+    text-align: left !important;
+}
+
+/* Code Blocks always stay LTR in both languages */
 pre, code, kbd, samp, .hljs {
     font-family: var(--font-mono) !important;
     direction: ltr !important;
@@ -42,40 +90,258 @@ pre, code, kbd, samp, .hljs {
     border-radius: 8px !important;
 }
 
-/* Inline code tags */
 :not(pre) > code {
     padding: 0.15rem 0.4rem !important;
     background-color: rgba(148, 163, 184, 0.15) !important;
-    color: #38bdf8 !important;
+    color: var(--text-accent) !important;
     border-radius: 4px !important;
     direction: ltr !important;
     display: inline-block !important;
 }
 
-/* Headers typography */
-h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-persian) !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.02em !important;
-    margin-top: 1rem !important;
-    margin-bottom: 0.5rem !important;
-}
-
-/* Markdown Lists in RTL */
-ul, ol {
+/* Markdown Lists Directional Padding */
+html[dir="rtl"] ul,
+html[dir="rtl"] ol {
     padding-right: 1.5rem !important;
     padding-left: 0 !important;
     margin-right: 0 !important;
 }
 
-/* Citations & Source Document Elements */
+html[dir="ltr"] ul,
+html[dir="ltr"] ol {
+    padding-left: 1.5rem !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+}
+
+/* ==========================================================================
+   2. Popular Chatbot Bottom Bar & Mode Selector Pill
+   ========================================================================== */
+
+.parsrag-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 840px;
+    margin: 0 auto 8px auto;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    z-index: 100;
+}
+
+.parsrag-selector-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.parsrag-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background-color: rgba(30, 41, 59, 0.85);
+    border: 1px solid var(--border-subtle);
+    border-radius: 20px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    user-select: none;
+}
+
+.parsrag-pill-btn:hover {
+    border-color: var(--brand-primary);
+    background-color: var(--bg-surface-elevated);
+    box-shadow: 0 4px 16px var(--brand-glow);
+    transform: translateY(-1px);
+}
+
+.parsrag-pill-btn:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+
+.parsrag-chevron {
+    transition: transform 0.2s ease;
+    opacity: 0.8;
+}
+
+.parsrag-pill-btn[aria-expanded="true"] .parsrag-chevron {
+    transform: rotate(180deg);
+}
+
+/* Fast Language Switcher Pill */
+.parsrag-lang-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: rgba(30, 41, 59, 0.65);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+}
+
+.parsrag-lang-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--brand-primary);
+    background-color: var(--bg-surface);
+}
+
+/* ==========================================================================
+   3. Adaptive Upward / Downward Dropdown Menu
+   ========================================================================== */
+
+.parsrag-dropdown-menu {
+    display: none;
+    position: absolute;
+    min-width: 320px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    z-index: 99999;
+    box-sizing: border-box;
+}
+
+html[dir="rtl"] .parsrag-dropdown-menu {
+    right: 0;
+    left: auto;
+}
+
+html[dir="ltr"] .parsrag-dropdown-menu {
+    left: 0;
+    right: auto;
+}
+
+.parsrag-dropdown-menu.show {
+    display: block;
+}
+
+/* Upward Dropdown Animation (when composer is docked at bottom) */
+.parsrag-dropdown-menu.open-up {
+    bottom: calc(100% + 8px) !important;
+    top: auto !important;
+    transform-origin: bottom center !important;
+    animation: dropdownPopUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes dropdownPopUp {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Downward Dropdown Animation (when composer is in middle of screen) */
+.parsrag-dropdown-menu.open-down {
+    top: calc(100% + 8px) !important;
+    bottom: auto !important;
+    transform-origin: top center !important;
+    animation: dropdownPopDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes dropdownPopDown {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.parsrag-dropdown-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    font-weight: 600;
+}
+
+.parsrag-mode-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.parsrag-mode-item:hover,
+.parsrag-mode-item:focus-visible {
+    background-color: var(--bg-surface-elevated);
+    outline: none;
+}
+
+.parsrag-mode-item.active {
+    background-color: rgba(59, 130, 246, 0.15);
+}
+
+.parsrag-mode-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.parsrag-item-icon {
+    font-size: 1.25rem;
+}
+
+.parsrag-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.parsrag-item-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.parsrag-item-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.parsrag-check-icon {
+    color: var(--brand-primary);
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+/* ==========================================================================
+   4. Citations & Collapsible Source Cards
+   ========================================================================== */
+
 .element-link,
 [data-testid="inline-element"],
 .cl-element {
-    border: 1px solid var(--border-card) !important;
-    background-color: var(--bg-card) !important;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out !important;
+    border: 1px solid var(--border-subtle) !important;
+    background-color: var(--bg-surface) !important;
+    border-radius: 12px !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
     margin-top: 0.5rem !important;
     overflow: hidden !important;
 }
@@ -83,27 +349,27 @@ ul, ol {
 .element-link:hover,
 [data-testid="inline-element"]:hover {
     border-color: var(--brand-primary) !important;
-    box-shadow: 0 4px 14px var(--brand-glow) !important;
+    box-shadow: 0 6px 20px var(--brand-glow) !important;
+    transform: translateY(-1px) !important;
 }
 
-/* Message Composer & Input */
-textarea, input[type="text"] {
-    font-family: var(--font-persian) !important;
-    direction: rtl !important;
-    text-align: right !important;
-}
+/* ==========================================================================
+   5. Settings Modal & Controls
+   ========================================================================== */
 
-/* Settings sidebar and dropdowns */
 .cl-chat-settings,
 [role="radiogroup"],
 .MuiRadio-root,
 .MuiSlider-root {
-    direction: rtl !important;
-    font-family: var(--font-persian) !important;
+    transition: all 0.2s ease;
 }
 
-/* Badges and Tags */
-.cl-tag {
-    font-family: var(--font-persian) !important;
-    border-radius: 6px !important;
+html[dir="rtl"] .cl-chat-settings {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+html[dir="ltr"] .cl-chat-settings {
+    direction: ltr !important;
+    text-align: left !important;
 }
