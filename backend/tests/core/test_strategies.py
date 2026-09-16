@@ -182,5 +182,6 @@ def test_hybrid_rag_expanded_candidate_pool(
 
     assert result.answer == "Aggregated Hybrid Response"
     assert len(result.source_nodes) == 15
-    # For top_k=15, retrieve_k = max(15*2, 25) = 30
-    mock_repo.similarity_search.assert_called_with("query", top_k=30, session_id=None)
+    mock_repo.similarity_search.assert_called_with(
+        "query", top_k=30, session_id=None, file_filter=None
+    )

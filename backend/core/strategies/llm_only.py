@@ -29,6 +29,7 @@ class LLMOnlyStrategy(RAGStrategy):
         chat_history: list[ChatMessage],
         session_id: str | None = None,
         top_k: int | None = None,
+        file_filter: list[str] | None = None,
     ) -> QueryResponse:
         """Executes the LLM-only pipeline.
 
@@ -37,6 +38,7 @@ class LLMOnlyStrategy(RAGStrategy):
             chat_history (list[ChatMessage]): Previous chat context.
             session_id (str | None, optional): Ignored in this strategy.
             top_k (int | None, optional): Ignored in this strategy.
+            file_filter (list[str] | None, optional): Ignored in this strategy.
 
         Returns:
             QueryResponse: The LLM's raw answer.

@@ -13,16 +13,18 @@ from backend.infrastructure.parsers.document_parser import parse_document
 router = APIRouter()
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_FILES_PER_BATCH = 5
 SESSION_ID_REGEX = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 @router.post("/ingest")
 def ingest_document(
-    file: UploadFile = File(...),  # noqa: B008
+    file: UploadFile | None = File(None),  # noqa: B008
+    files: list[UploadFile] | None = File(None),  # noqa: B008
     session_id: str | None = Form(None),
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
-    """Ingests a document, parses it, chunks it, and saves it to the vector database."""
+    """Ingests 1 to 5 documents, parses them, chunks them, and saves them to Qdrant."""
     # 1. Validate session_id
     if session_id is not None and not SESSION_ID_REGEX.match(session_id):
         raise HTTPException(
@@ -30,34 +32,62 @@ def ingest_document(
             detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",
         )
 
-    # 2. Read and validate file size
-    file_bytes = file.file.read()
-    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail="File size exceeds the 50MB limit.",
-        )
+    # 2. Collect files from either single 'file' or multiple 'files' parameters
+    upload_list: list[UploadFile] = []
+    if files:
+        upload_list.extend(files)
+    if file:
+        upload_list.append(file)
 
-    if not file.filename:
+    if not upload_list:
         raise HTTPException(
             status_code=400,
-            detail="Missing filename.",
+            detail="No file provided.",
         )
 
-    # 3. Parse Document
-    try:
-        text = parse_document(file_bytes, file.filename)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    if len(upload_list) > MAX_FILES_PER_BATCH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A maximum of {MAX_FILES_PER_BATCH} files can be uploaded per request.",
+        )
 
-    # 4. Chunk text
-    metadata = {"filename": file.filename}
-    nodes = chunk_text(text, metadata=metadata)
+    total_chunks = 0
+    ingested_names: list[str] = []
 
-    # 5. Save to repository
-    repo.save_nodes(nodes, session_id=session_id)
+    # 3. Parse, chunk, and save each file
+    for upload_item in upload_list:
+        if not upload_item.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing filename.",
+            )
 
-    return {"message": f"Successfully ingested {file.filename} ({len(nodes)} chunks)."}
+        file_bytes = upload_item.file.read()
+        if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File '{upload_item.filename}' exceeds the 50MB limit.",
+            )
+
+        try:
+            text = parse_document(file_bytes, upload_item.filename)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        metadata = {"filename": upload_item.filename}
+        nodes = chunk_text(text, metadata=metadata)
+        repo.save_nodes(nodes, session_id=session_id)
+        total_chunks += len(nodes)
+        ingested_names.append(upload_item.filename)
+
+    if len(ingested_names) == 1:
+        return {
+            "message": f"Successfully ingested {ingested_names[0]} ({total_chunks} chunks)."
+        }
+
+    return {
+        "message": f"Successfully ingested {len(ingested_names)} file(s): {', '.join(ingested_names)} ({total_chunks} chunks total)."
+    }
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -65,7 +95,7 @@ def query_rag(
     request: QueryRequest,
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> QueryResponse:
-    """Processes a query using the specified RAG mode."""
+    """Processes a query using the specified RAG mode and multi-file options."""
     # Map chat messages for LlamaIndex compatibility
     llama_chat_history = [
         LlamaChatMessage(role=msg.role, content=msg.content)
@@ -85,6 +115,7 @@ def query_rag(
         chat_history=llama_chat_history,
         session_id=request.session_id,
         top_k=request.top_k,
+        file_filter=request.file_filter,
     )
 
     return response

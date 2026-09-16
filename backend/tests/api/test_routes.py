@@ -79,7 +79,11 @@ def test_query_success(
     assert response.json()["answer"] == "This is the answer"
     mock_condenser.condense.assert_called_once_with("What is this?", [])
     mock_strategy.execute.assert_called_once_with(
-        query="condensed query", chat_history=[], session_id=None, top_k=None
+        query="condensed query",
+        chat_history=[],
+        session_id=None,
+        top_k=None,
+        file_filter=None,
     )
 
 
@@ -105,7 +109,11 @@ def test_query_with_custom_top_k(
     assert response.status_code == 200
     assert response.json()["answer"] == "Custom top_k answer"
     mock_strategy.execute.assert_called_once_with(
-        query="condensed query", chat_history=[], session_id=None, top_k=20
+        query="condensed query",
+        chat_history=[],
+        session_id=None,
+        top_k=20,
+        file_filter=None,
     )
 
 

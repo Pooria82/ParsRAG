@@ -15,6 +15,7 @@ class RAGStrategy(ABC):
         chat_history: list[ChatMessage],
         session_id: str | None = None,
         top_k: int | None = None,
+        file_filter: list[str] | None = None,
     ) -> QueryResponse:
         """Executes the specific strategy pipeline.
 
@@ -23,6 +24,7 @@ class RAGStrategy(ABC):
             chat_history (list[ChatMessage]): Previous chat context.
             session_id (str | None, optional): The session ID for context filtering.
             top_k (int | None, optional): Optional override for retrieval depth.
+            file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
 
         Returns:
             QueryResponse: The generated answer.

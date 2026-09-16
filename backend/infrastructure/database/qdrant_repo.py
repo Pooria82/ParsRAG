@@ -39,16 +39,23 @@ class QdrantRepository(AbstractDocumentRepository):
                         distance=qmodels.Distance.COSINE,
                     ),
                 )
-                # Ensure payload index on session_id for optimized filtering
-                self.client.create_payload_index(
-                    collection_name=self.collection_name,
-                    field_name="session_id",
-                    field_schema=qmodels.PayloadSchemaType.KEYWORD,
-                )
+            # Ensure payload indices on session_id and filename
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="session_id",
+                field_schema=qmodels.PayloadSchemaType.KEYWORD,
+            )
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="filename",
+                field_schema=qmodels.PayloadSchemaType.KEYWORD,
+            )
         except Exception as exc:
-            raise VectorDBConnectionError(
-                f"Failed to connect to or initialize Qdrant collection: {exc}"
-            ) from exc
+            # If payload indices already exist or connection succeeds, ignore index re-creation errors
+            if "already exists" not in str(exc).lower():
+                raise VectorDBConnectionError(
+                    f"Failed to connect to or initialize Qdrant collection: {exc}"
+                ) from exc
 
     def save_nodes(
         self, nodes: list[ExtractedNode], session_id: str | None = None
@@ -86,14 +93,19 @@ class QdrantRepository(AbstractDocumentRepository):
             ) from exc
 
     def similarity_search(
-        self, query: str, top_k: int = 5, session_id: str | None = None
+        self,
+        query: str,
+        top_k: int = 15,
+        session_id: str | None = None,
+        file_filter: list[str] | None = None,
     ) -> list[ExtractedNode]:
         """Searches for the most similar nodes to the given query.
 
         Args:
             query (str): The search text.
-            top_k (int, optional): Number of results to return. Defaults to 5.
+            top_k (int, optional): Number of results to return. Defaults to 15.
             session_id (str | None, optional): The session ID to restrict search.
+            file_filter (list[str] | None, optional): Optional list of filenames to filter by.
 
         Returns:
             list[ExtractedNode]: The retrieved document nodes.
@@ -114,7 +126,21 @@ class QdrantRepository(AbstractDocumentRepository):
                     )
                 )
 
-            filter_query = qmodels.Filter(should=should_conditions)
+            must_conditions: list[qmodels.Condition] = [
+                qmodels.Filter(should=should_conditions)
+            ]
+
+            # Filter by filename(s) if provided
+            if file_filter:
+                file_conditions: list[qmodels.Condition] = [
+                    qmodels.FieldCondition(
+                        key="filename", match=qmodels.MatchValue(value=fn)
+                    )
+                    for fn in file_filter
+                ]
+                must_conditions.append(qmodels.Filter(should=file_conditions))
+
+            filter_query = qmodels.Filter(must=must_conditions)
 
             search_result = self.client.query_points(
                 collection_name=self.collection_name,
@@ -136,6 +162,40 @@ class QdrantRepository(AbstractDocumentRepository):
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to perform similarity search in Qdrant: {exc}"
+            ) from exc
+
+    def get_session_files(self, session_id: str) -> list[str]:
+        """Returns the list of distinct filenames indexed in the given session.
+
+        Args:
+            session_id (str): The session ID to inspect.
+
+        Returns:
+            list[str]: Distinct filenames in the session.
+        """
+        try:
+            scroll_filter = qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="session_id", match=qmodels.MatchValue(value=session_id)
+                    )
+                ]
+            )
+            results, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=scroll_filter,
+                limit=1000,
+                with_payload=["filename"],
+                with_vectors=False,
+            )
+            filenames: set[str] = set()
+            for point in results:
+                if point.payload and "filename" in point.payload:
+                    filenames.add(str(point.payload["filename"]))
+            return sorted(filenames)
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to retrieve session files in Qdrant: {exc}"
             ) from exc
 
     def delete_session(self, session_id: str) -> None:

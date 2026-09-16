@@ -44,6 +44,11 @@ class QueryRequest(BaseModel):
         le=50,
         description="Optional retrieval depth override (1 to 50)",
     )
+    file_filter: list[str] | None = Field(
+        default=None,
+        max_length=5,
+        description="Optional list of filenames to restrict the query to (up to 5)",
+    )
 
 
 class DocumentIngestionRequest(BaseModel):
