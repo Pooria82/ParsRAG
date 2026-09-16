@@ -303,8 +303,35 @@ html[dir="ltr"] .parsrag-dropdown-menu {
     gap: 12px;
 }
 
+.parsrag-svg-icon {
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+    color: currentColor;
+}
+
+.parsrag-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-accent);
+}
+
 .parsrag-item-icon {
-    font-size: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-accent);
+    flex-shrink: 0;
+}
+
+.parsrag-mode-item.active .parsrag-item-icon {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: var(--brand-primary);
 }
 
 .parsrag-item-text {
@@ -326,9 +353,10 @@ html[dir="ltr"] .parsrag-dropdown-menu {
 }
 
 .parsrag-check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--brand-primary);
-    font-weight: bold;
-    font-size: 1rem;
 }
 
 /* ==========================================================================

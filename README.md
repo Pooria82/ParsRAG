@@ -1,4 +1,4 @@
-# ParsRAG 🇮🇷
+# ParsRAG
 
 **An Offline, Privacy-First, RTL-Optimized Persian AI Assistant.**
 
@@ -6,7 +6,7 @@ ParsRAG is an enterprise-grade Retrieval-Augmented Generation (RAG) system built
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **3 Intelligent RAG Modes:**
   * **Strict RAG:** Answers solely based on ingested documents to prevent hallucination.
@@ -16,7 +16,7 @@ ParsRAG is an enterprise-grade Retrieval-Augmented Generation (RAG) system built
 * **Conversational Memory:** Employs a fast "Condense Question" pipeline to accurately resolve pronouns in follow-up queries.
 * **100% Air-gapped & Offline:** Powered by Ollama (Qwen 2.5) running locally. No external APIs or cloud services required.
 
-## 🛠 Technology Stack
+## Technology Stack
 
 ParsRAG is built using a modern, loosely-coupled microservices architecture:
 
@@ -28,7 +28,7 @@ ParsRAG is built using a modern, loosely-coupled microservices architecture:
 * **Parser:** PyMuPDF
 * **Infrastructure:** Docker & Docker Compose
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 ParsRAG/
@@ -39,7 +39,7 @@ ParsRAG/
 └── docker-compose.yml         # Container orchestration
 ```
 
-## ⚙️ Quick Start (Coming Soon)
+## Quick Start (Coming Soon)
 
 *(Note: The project is currently entering the implementation phase. The following instructions are a blueprint for deployment.)*
 
@@ -59,10 +59,10 @@ ParsRAG/
 4. **Access the UI:**
    Open your browser and navigate to `http://localhost:8000`.
 
-## 📖 Architecture & ADRs
+## Architecture & ADRs
 
 All foundational decisions, Domain-Driven Design (DDD) specifications, and GoF patterns (Strategy, Factory, Repository) are strictly documented in the `.context/` directory. If you are contributing to this project, please review these files carefully before submitting a PR.
 
-## 🤝 Contributing
+## Contributing
 
 We follow a strict **GitHub Flow** strategy and enforce **Conventional Commits**. Please refer to `.context/04_Git_and_CI.md` for branch naming rules, CI/CD pipeline requirements, and PR guidelines.

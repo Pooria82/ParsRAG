@@ -46,7 +46,7 @@ def test_format_citation_with_score() -> None:
         "score": 0.8923,
     }
     title, body = format_citation(node, index=1)
-    assert "📄 منبع 1: test_doc.docx" in title
+    assert "منبع 1: test_doc.docx" in title
     assert "`test_doc.docx`" in body
     assert "0.892" in body
     assert "این یک متن آزمایشی است." in body
@@ -58,7 +58,7 @@ def test_format_citation_without_score() -> None:
         "text": "نمونه بدون امتیاز",
     }
     title, body = format_citation(node, index=2)
-    assert "📄 منبع 2: سند نامشخص" in title
+    assert "منبع 2: سند نامشخص" in title
     assert "بدون امتیاز عددی" in body
     assert "نمونه بدون امتیاز" in body
 

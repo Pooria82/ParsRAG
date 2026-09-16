@@ -43,7 +43,7 @@ def test_citation_item_model() -> None:
         filename="report.pdf",
         score=0.912,
         text="Sample extracted text",
-        title="📄 منبع 1: report.pdf",
+        title="منبع 1: report.pdf",
         body="Excerpt markdown",
     )
     assert cit.index == 1

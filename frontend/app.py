@@ -129,9 +129,9 @@ async def on_message(message: cl.Message) -> None:
         session_manager.set_mode(target_mode)
         lang = session_manager.get_language()
         confirm_text = (
-            f"🎯 Mode switched to `{target_mode}`."
+            f"Mode switched to `{target_mode}`."
             if lang == "en"
-            else f"🎯 حالت کاری به `{target_mode}` تغییر یافت."
+            else f"حالت کاری به `{target_mode}` تغییر یافت."
         )
         await cl.Message(content=confirm_text).send()
         return

@@ -61,10 +61,10 @@ def test_bilingual_mode_options() -> None:
 def test_bilingual_citation_formatting() -> None:
     """Citations generate proper localized headers and score chips."""
     title_fa = format_citation_title(LANG_FA, 1, "test.docx")
-    assert title_fa == "📄 منبع 1: test.docx"
+    assert title_fa == "منبع 1: test.docx"
 
     title_en = format_citation_title(LANG_EN, 1, "test.docx")
-    assert title_en == "📄 Source 1: test.docx"
+    assert title_en == "Source 1: test.docx"
 
     body_fa = format_citation_body(
         LANG_FA, text="نمونه", score=0.891, filename="test.docx"
@@ -89,11 +89,11 @@ def test_citation_builder_with_language() -> None:
     }
 
     item_en: CitationItem = builder.parse_node(raw_node, index=1, lang=LANG_EN)
-    assert item_en.title == "📄 Source 1: annual.pdf"
+    assert item_en.title == "Source 1: annual.pdf"
     assert "Similarity Score" in item_en.body
 
     item_fa: CitationItem = builder.parse_node(raw_node, index=2, lang=LANG_FA)
-    assert item_fa.title == "📄 منبع 2: annual.pdf"
+    assert item_fa.title == "منبع 2: annual.pdf"
     assert "امتیاز شباهت" in item_fa.body
 
 
