@@ -5,10 +5,14 @@ from typing import Any
 
 import httpx
 
-DEFAULT_BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
-SUPPORTED_EXTENSIONS: set[str] = {".docx", ".pptx", ".pdf"}
-MAX_FILES_PER_BATCH: int = 5
-MAX_FILE_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB
+from frontend.config import FrontendConfig
+from frontend.ui.citation_builder import CitationBuilder
+
+_CONFIG = FrontendConfig()
+DEFAULT_BACKEND_URL: str = _CONFIG.backend_url
+SUPPORTED_EXTENSIONS: set[str] = set(_CONFIG.supported_extensions)
+MAX_FILES_PER_BATCH: int = _CONFIG.max_files_per_batch
+MAX_FILE_SIZE_BYTES: int = _CONFIG.max_file_size_bytes
 
 MODE_MAP: dict[str, str] = {
     "Strict RAG": "strict",
@@ -38,6 +42,8 @@ def parse_mode(mode_label: str) -> str:
 def format_citation(node: dict[str, Any], index: int) -> tuple[str, str]:
     """Formats a retrieved source node into a title and markdown content.
 
+    Backwards-compatible helper delegating to CitationBuilder.
+
     Args:
         node: Extracted node dictionary containing 'text', 'metadata', and optional 'score'.
         index: The 1-based index number of the citation.
@@ -45,24 +51,8 @@ def format_citation(node: dict[str, Any], index: int) -> tuple[str, str]:
     Returns:
         tuple[str, str]: (citation_name, citation_content) suitable for Chainlit Text elements.
     """
-    metadata: dict[str, Any] = node.get("metadata") or {}
-    filename = str(metadata.get("filename", "سند نامشخص"))
-    score = node.get("score")
-
-    if isinstance(score, (int, float)):
-        score_label = f"امتیاز شباهت: {score:.3f}"
-    else:
-        score_label = "بدون امتیاز عددی"
-
-    title = f"📄 منبع {index}: {filename}"
-    body = (
-        f"### 📑 مشخصات استناد {index}\n"
-        f"- **سند منبع:** `{filename}`\n"
-        f"- **میزان تطابق:** {score_label}\n\n"
-        f"**متن استخراج‌شده:**\n"
-        f"```text\n{str(node.get('text', '')).strip()}\n```"
-    )
-    return title, body
+    item = CitationBuilder.parse_node(node, index)
+    return item.title, item.body
 
 
 class ParsRAGClient:
@@ -70,17 +60,21 @@ class ParsRAGClient:
 
     def __init__(
         self,
-        base_url: str = DEFAULT_BACKEND_URL,
-        timeout: float = 120.0,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        config: FrontendConfig | None = None,
     ) -> None:
         """Initializes the ParsRAG API client.
 
         Args:
-            base_url: The root URL of the FastAPI backend.
-            timeout: HTTP request timeout in seconds.
+            base_url: Optional root URL override of the FastAPI backend.
+            timeout: Optional HTTP request timeout in seconds override.
+            config: Optional FrontendConfig instance.
         """
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
+        cfg = config or _CONFIG
+        self.base_url = (base_url or cfg.backend_url).rstrip("/")
+        self.timeout = timeout if timeout is not None else cfg.http_timeout_sec
+        self.config = cfg
 
     async def check_health(self) -> bool:
         """Checks if the FastAPI backend is operational and reachable.
@@ -107,27 +101,28 @@ class ParsRAGClient:
             session_id: Optional session identifier for isolated indexing.
 
         Returns:
-            dict[str, str]: JSON response dictionary from the backend (e.g. {"message": "..."}).
+            dict[str, str]: JSON response dictionary from the backend.
 
         Raises:
-            ValueError: If file count or sizes violate constraints.
+            ValueError: If file count, extension, or size violates constraints.
             RuntimeError: If the backend returns an error or fails to connect.
         """
         if not files:
             raise ValueError("هیچ فایلی برای بارگذاری ارائه نشده است.")
 
-        if len(files) > MAX_FILES_PER_BATCH:
+        if len(files) > self.config.max_files_per_batch:
             raise ValueError(
-                f"حداکثر {MAX_FILES_PER_BATCH} فایل می‌تواند در یک درخواست بارگذاری شود."
+                f"حداکثر {self.config.max_files_per_batch} فایل می‌تواند در یک درخواست بارگذاری شود."
             )
 
         for fname, fbytes in files:
             ext = os.path.splitext(fname)[1].lower()
-            if ext not in SUPPORTED_EXTENSIONS:
+            if ext not in self.config.supported_extensions:
+                allowed_str = ", ".join(sorted(self.config.supported_extensions))
                 raise ValueError(
-                    f"فرمت فایل '{fname}' پشتیبانی نمی‌شود. فرمت‌های مجاز: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+                    f"فرمت فایل '{fname}' پشتیبانی نمی‌شود. فرمت‌های مجاز: {allowed_str}"
                 )
-            if len(fbytes) > MAX_FILE_SIZE_BYTES:
+            if len(fbytes) > self.config.max_file_size_bytes:
                 raise ValueError(
                     f"حجم فایل '{fname}' از سقف مجاز ۵۰ مگابایت بیشتر است."
                 )
@@ -178,7 +173,7 @@ class ParsRAGClient:
 
         Args:
             prompt: User question or instruction.
-            chat_history: List of previous conversation turns ({'role': ..., 'content': ...}).
+            chat_history: List of previous conversation turns.
             mode: Query mode ('strict', 'hybrid', or 'llm-only').
             session_id: Session identifier to retrieve scoped documents.
             top_k: Optional retrieval depth override.
