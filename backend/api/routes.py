@@ -17,6 +17,12 @@ MAX_FILES_PER_BATCH = 5
 SESSION_ID_REGEX = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
+@router.get("/health")
+def health_check() -> dict[str, str]:
+    """Health check endpoint to verify backend service readiness."""
+    return {"status": "ok"}
+
+
 @router.post("/ingest")
 def ingest_document(
     file: UploadFile | None = File(None),  # noqa: B008

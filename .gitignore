@@ -37,7 +37,8 @@ __pycache__/
 .mypy_cache/
 
 # 6. Chainlit & UI
-.chainlit/
+.chainlit/*
+!.chainlit/config.toml
 .streamlit/secrets.toml
 
 # 7. OS & IDE

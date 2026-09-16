@@ -1,0 +1,109 @@
+/* ==========================================================================
+   ParsRAG Custom Stylesheet - Persian RTL & Modern Dark Mode Aesthetics
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+    --font-persian: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Tahoma, Arial, sans-serif;
+    --font-mono: 'JetBrains Mono', Consolas, Monaco, monospace;
+    --brand-primary: #3b82f6;
+    --brand-glow: rgba(59, 130, 246, 0.25);
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --border-card: #334155;
+}
+
+/* Global Font & Direction */
+body, html {
+    font-family: var(--font-persian) !important;
+    direction: rtl !important;
+    text-align: right !important;
+    scroll-behavior: smooth;
+}
+
+/* Chat Messages RTL alignment */
+.cl-message, 
+[data-testid="chat-message"],
+.step,
+.cl-step {
+    font-family: var(--font-persian) !important;
+    direction: rtl !important;
+    text-align: right !important;
+    line-height: 1.8 !important;
+}
+
+/* Latin, Code Blocks and Inline Code stays LTR */
+pre, code, kbd, samp, .hljs {
+    font-family: var(--font-mono) !important;
+    direction: ltr !important;
+    text-align: left !important;
+    unicode-bidi: embed !important;
+    border-radius: 8px !important;
+}
+
+/* Inline code tags */
+:not(pre) > code {
+    padding: 0.15rem 0.4rem !important;
+    background-color: rgba(148, 163, 184, 0.15) !important;
+    color: #38bdf8 !important;
+    border-radius: 4px !important;
+    direction: ltr !important;
+    display: inline-block !important;
+}
+
+/* Headers typography */
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-persian) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Markdown Lists in RTL */
+ul, ol {
+    padding-right: 1.5rem !important;
+    padding-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* Citations & Source Document Elements */
+.element-link,
+[data-testid="inline-element"],
+.cl-element {
+    border: 1px solid var(--border-card) !important;
+    background-color: var(--bg-card) !important;
+    border-radius: 10px !important;
+    transition: all 0.2s ease-in-out !important;
+    margin-top: 0.5rem !important;
+    overflow: hidden !important;
+}
+
+.element-link:hover,
+[data-testid="inline-element"]:hover {
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 4px 14px var(--brand-glow) !important;
+}
+
+/* Message Composer & Input */
+textarea, input[type="text"] {
+    font-family: var(--font-persian) !important;
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+/* Settings sidebar and dropdowns */
+.cl-chat-settings,
+[role="radiogroup"],
+.MuiRadio-root,
+.MuiSlider-root {
+    direction: rtl !important;
+    font-family: var(--font-persian) !important;
+}
+
+/* Badges and Tags */
+.cl-tag {
+    font-family: var(--font-persian) !important;
+    border-radius: 6px !important;
+}
