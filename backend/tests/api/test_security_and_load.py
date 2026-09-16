@@ -189,8 +189,10 @@ async def test_concurrent_queries_no_race_condition(
     mock_condenser_cls.return_value = mock_condenser
 
     mock_strategy = MagicMock()
-    mock_strategy.execute.side_effect = lambda query, chat_history, session_id: (
-        QueryResponse(answer=f"Answer for {query}", source_nodes=[])
+    mock_strategy.execute.side_effect = (
+        lambda query, chat_history, session_id=None, **kwargs: QueryResponse(
+            answer=f"Answer for {query}", source_nodes=[]
+        )
     )
     mock_get_strategy.return_value = mock_strategy
 

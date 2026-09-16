@@ -84,6 +84,7 @@ def query_rag(
         query=condensed_query,
         chat_history=llama_chat_history,
         session_id=request.session_id,
+        top_k=request.top_k,
     )
 
     return response

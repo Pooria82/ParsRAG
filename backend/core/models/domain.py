@@ -38,6 +38,12 @@ class QueryRequest(BaseModel):
         pattern=r"^[a-zA-Z0-9_-]+$",
         description="Optional session ID for scoped retrieval (alphanumeric, dashes, underscores only)",
     )
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Optional retrieval depth override (1 to 50)",
+    )
 
 
 class DocumentIngestionRequest(BaseModel):

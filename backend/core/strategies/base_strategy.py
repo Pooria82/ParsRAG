@@ -14,6 +14,7 @@ class RAGStrategy(ABC):
         query: str,
         chat_history: list[ChatMessage],
         session_id: str | None = None,
+        top_k: int | None = None,
     ) -> QueryResponse:
         """Executes the specific strategy pipeline.
 
@@ -21,6 +22,7 @@ class RAGStrategy(ABC):
             query (str): The user's input query.
             chat_history (list[ChatMessage]): Previous chat context.
             session_id (str | None, optional): The session ID for context filtering.
+            top_k (int | None, optional): Optional override for retrieval depth.
 
         Returns:
             QueryResponse: The generated answer.

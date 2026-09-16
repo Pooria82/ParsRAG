@@ -79,7 +79,33 @@ def test_query_success(
     assert response.json()["answer"] == "This is the answer"
     mock_condenser.condense.assert_called_once_with("What is this?", [])
     mock_strategy.execute.assert_called_once_with(
-        query="condensed query", chat_history=[], session_id=None
+        query="condensed query", chat_history=[], session_id=None, top_k=None
+    )
+
+
+@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.routes.get_query_strategy")
+def test_query_with_custom_top_k(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    mock_condenser = MagicMock()
+    mock_condenser.condense.return_value = "condensed query"
+    mock_condenser_cls.return_value = mock_condenser
+
+    mock_strategy = MagicMock()
+    mock_strategy.execute.return_value = QueryResponse(
+        answer="Custom top_k answer", source_nodes=[]
+    )
+    mock_get_strategy.return_value = mock_strategy
+
+    payload = {"prompt": "Aggregate all sections", "mode": "strict", "top_k": 20}
+
+    response = client.post("/query", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Custom top_k answer"
+    mock_strategy.execute.assert_called_once_with(
+        query="condensed query", chat_history=[], session_id=None, top_k=20
     )
 
 

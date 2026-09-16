@@ -28,6 +28,7 @@ class LLMOnlyStrategy(RAGStrategy):
         query: str,
         chat_history: list[ChatMessage],
         session_id: str | None = None,
+        top_k: int | None = None,
     ) -> QueryResponse:
         """Executes the LLM-only pipeline.
 
@@ -35,6 +36,7 @@ class LLMOnlyStrategy(RAGStrategy):
             query (str): The user's input query.
             chat_history (list[ChatMessage]): Previous chat context.
             session_id (str | None, optional): Ignored in this strategy.
+            top_k (int | None, optional): Ignored in this strategy.
 
         Returns:
             QueryResponse: The LLM's raw answer.

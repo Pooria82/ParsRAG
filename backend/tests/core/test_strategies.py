@@ -102,6 +102,85 @@ def test_hybrid_rag_strategy(
     result = strategy.execute("query", [])
 
     assert result.answer == "Hybrid answer"
+    assert len(result.source_nodes) == 1
     mock_repo.similarity_search.assert_called_once()
     mock_rerank.postprocess_nodes.assert_called_once()
     mock_llm.complete.assert_called_once()
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_rag_multi_chunk_dispersed_aggregation(
+    mock_settings: MagicMock,
+) -> None:
+    """Verifies that multiple dispersed chunks across a document are aggregated without truncation."""
+    mock_repo = MagicMock()
+    # Simulate 10 dispersed sections across a 200-page document with good scores + 1 noise chunk
+    dispersed_nodes = [
+        ExtractedNode(
+            text=f"بخش {i}: اطلاعات فاز {i} پروژه.",
+            score=0.85 - (i * 0.01),
+            metadata={"filename": "large_report.docx", "section": i},
+        )
+        for i in range(1, 11)
+    ]
+    # Add a low-relevance noise chunk
+    dispersed_nodes.append(
+        ExtractedNode(text="متن کاملاً بی‌ربط", score=0.40, metadata={})
+    )
+
+    mock_repo.similarity_search.return_value = dispersed_nodes
+
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = "گزارش تجمیعی فازهای ۱ تا ۱۰."
+    mock_settings.llm = mock_llm
+
+    strategy = StrictRAGStrategy(mock_repo, default_top_k=15)
+    result = strategy.execute(
+        "اطلاعات تمام فازها را جمع‌آوری کن",
+        [],
+        top_k=15,
+    )
+
+    # All 10 valid dispersed sections should be passed, while the 0.40 noise chunk is filtered out
+    assert len(result.source_nodes) == 10
+    assert result.answer == "گزارش تجمیعی فازهای ۱ تا ۱۰."
+    mock_llm.complete.assert_called_once()
+    called_prompt = mock_llm.complete.call_args[0][0]
+    for i in range(1, 11):
+        assert f"بخش {i}: اطلاعات فاز {i} پروژه." in called_prompt
+    assert "متن کاملاً بی‌ربط" not in called_prompt
+
+
+@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
+@patch("backend.core.strategies.hybrid_rag.Settings")
+def test_hybrid_rag_expanded_candidate_pool(
+    mock_settings: MagicMock, mock_rerank_cls: MagicMock
+) -> None:
+    """Verifies that Hybrid RAG fetches an expanded candidate pool (e.g. 30) for top_k=15."""
+    from llama_index.core.schema import NodeWithScore, TextNode
+
+    mock_repo = MagicMock()
+    # Mock returning 30 candidate nodes
+    mock_repo.similarity_search.return_value = [
+        ExtractedNode(text=f"Candidate {i}", score=0.7) for i in range(30)
+    ]
+
+    mock_rerank = MagicMock()
+    # Mock reranked top 15 nodes
+    mock_rerank.postprocess_nodes.return_value = [
+        NodeWithScore(node=TextNode(text=f"Reranked {i}"), score=0.9 - i * 0.01)
+        for i in range(15)
+    ]
+    mock_rerank_cls.return_value = mock_rerank
+
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = "Aggregated Hybrid Response"
+    mock_settings.llm = mock_llm
+
+    strategy = HybridRAGStrategy(mock_repo, top_k_retrieve=25, top_n_rerank=15)
+    result = strategy.execute("query", [], top_k=15)
+
+    assert result.answer == "Aggregated Hybrid Response"
+    assert len(result.source_nodes) == 15
+    # For top_k=15, retrieve_k = max(15*2, 25) = 30
+    mock_repo.similarity_search.assert_called_with("query", top_k=30, session_id=None)
