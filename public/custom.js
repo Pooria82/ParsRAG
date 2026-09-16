@@ -16,6 +16,61 @@
         check: `<svg class="parsrag-svg-icon parsrag-check-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
     };
 
+    const DICTIONARY = {
+        "Light Theme": "قالب روشن",
+        "Dark Theme": "قالب تاریک",
+        "Follow System": "پیروی از سیستم",
+        "Create New Chat": "ایجاد گفتگوی جدید",
+        "This will clear your current chat history. Are you sure you want to continue?": "این کار تاریخچه گفتگوی فعلی شما را پاک می‌کند. آیا مطمئن هستید؟",
+        "Confirm": "تایید",
+        "Cancel": "انصراف",
+        "LLMs can make mistakes. Check important info.": "مدل‌های زبانی ممکن است اشتباه کنند. اطلاعات مهم را بررسی کنید.",
+        "Settings": "تنظیمات",
+        "Settings panel": "پنل تنظیمات",
+        "Reset": "بازنشانی",
+        "Readme": "راهنما"
+    };
+
+    function translateDOMNodes(node) {
+        if (!node) return;
+        if (node.nodeType === 3) {
+            const text = node.nodeValue.trim();
+            if (!text) return;
+            
+            // Skip elements that contain generated output (to avoid translating user's chat)
+            const parent = node.parentElement;
+            if (parent && (parent.closest('.cl-message') || parent.closest('.parsrag-dropdown-menu'))) return;
+            
+            let original = parent.getAttribute("data-original-text");
+            if (!original) {
+                // If it's the first time and we are currently rendering English text
+                if (DICTIONARY[text] || currentLang === "en") {
+                    original = text;
+                    parent.setAttribute("data-original-text", original);
+                }
+            }
+            
+            if (original) {
+                if (currentLang === "fa" && DICTIONARY[original]) {
+                    node.nodeValue = node.nodeValue.replace(text, DICTIONARY[original]);
+                } else if (currentLang === "en" && original !== text) {
+                    node.nodeValue = node.nodeValue.replace(text, original);
+                }
+            }
+        } else if (node.nodeType === 1 && node.tagName !== "SCRIPT" && node.tagName !== "STYLE") {
+            if (node.placeholder) {
+                let original = node.getAttribute("data-original-placeholder") || node.placeholder;
+                node.setAttribute("data-original-placeholder", original);
+                if (currentLang === "fa" && DICTIONARY[original]) {
+                    node.placeholder = DICTIONARY[original];
+                } else if (currentLang === "en") {
+                    node.placeholder = original;
+                }
+            }
+            node.childNodes.forEach(translateDOMNodes);
+        }
+    }
+
     const MODES = {
         hybrid: {
             id: "hybrid",
@@ -122,10 +177,6 @@
         if (pillIcon) {
             pillIcon.innerHTML = modeData.iconSvg;
         }
-        if (langBtn) {
-            langBtn.innerHTML = `${SVG_ICONS.globe}<span>${currentLang === "fa" ? "EN" : "FA"}</span>`;
-            langBtn.title = currentLang === "fa" ? "Switch to English (LTR)" : "تغییر به فارسی (RTL)";
-        }
 
         // Update active checkmarks in menu
         document.querySelectorAll(".parsrag-mode-item").forEach((item) => {
@@ -154,13 +205,12 @@
         }
 
         // Adaptive Direction Detection:
-        // Measure viewport coordinates
         const rect = triggerBtn.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
         const spaceBelow = viewportHeight - rect.bottom;
 
-        // If positioned at bottom of screen (< 270px below or rect in lower 65% of viewport), open UPWARD
-        const openUpward = spaceBelow < 270 || rect.bottom > viewportHeight * 0.65;
+        // Since it's inside the composer, open upward by default
+        const openUpward = true;
 
         if (openUpward) {
             menu.classList.remove("open-down");
@@ -197,12 +247,6 @@
 
         // Send silent control sync to session
         sendSystemCommand(`/mode ${modeId}`);
-    }
-
-    function toggleLanguage() {
-        const nextLang = currentLang === "fa" ? "en" : "fa";
-        applyDirectionAndLocale(nextLang);
-        sendSystemCommand(`/lang ${nextLang}`);
     }
 
     function buildChatbotModeBar() {
@@ -255,20 +299,16 @@
                         .join("")}
                 </div>
             </div>
-
-            <div class="parsrag-actions-wrapper">
-                <button type="button" id="parsrag-lang-toggle" class="parsrag-lang-btn" title="Toggle Language">
-                    ${SVG_ICONS.globe}<span>${currentLang === "fa" ? "EN" : "FA"}</span>
-                </button>
-            </div>
         `;
 
-        // Insert before or at the start of composer
-        composer.parentElement.insertBefore(container, composer);
+        // Insert inside the composer at the top
+        const targetContainer = composer.querySelector('textarea')?.parentElement || composer;
+        if (!targetContainer.querySelector('#parsrag-bottom-bar')) {
+            targetContainer.insertBefore(container, targetContainer.firstChild);
+        }
 
         // Bind click events
         document.getElementById("parsrag-mode-pill")?.addEventListener("click", toggleModeDropdown);
-        document.getElementById("parsrag-lang-toggle")?.addEventListener("click", toggleLanguage);
 
         document.querySelectorAll(".parsrag-mode-item").forEach((item) => {
             item.addEventListener("click", (e) => {
@@ -285,8 +325,15 @@
         });
     }
 
-    // Global document click closes dropdown
+    // Global document click closes dropdown and handles language selection
     document.addEventListener("click", (e) => {
+        const text = e.target.textContent;
+        if (text === "فارسی" || text === "Persian") {
+            applyDirectionAndLocale("fa");
+        } else if (text === "انگلیسی" || text === "English") {
+            applyDirectionAndLocale("en");
+        }
+
         const dropdown = document.getElementById("parsrag-mode-dropdown");
         const trigger = document.getElementById("parsrag-mode-pill");
         if (dropdown && trigger && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
@@ -310,20 +357,66 @@
     });
 
     // Initialize observer to mount UI components and maintain direction
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
         buildChatbotModeBar();
         updateInputPlaceholder();
+
+        // Check dynamic depth toggle to disable manual depth
+        const autoSwitch = document.querySelector('input[name="dynamic_depth"]');
+        if (autoSwitch) {
+            // Wait, chainlit renders settings with IDs based on widget id
+            const manualSlider = document.getElementById('manual_top_k');
+            if (manualSlider) {
+                const manualContainer = manualSlider.closest('.MuiBox-root') || manualSlider.parentElement;
+                if (manualContainer) {
+                    if (autoSwitch.checked) {
+                        manualContainer.style.pointerEvents = "none";
+                        manualContainer.style.opacity = "0.4";
+                    } else {
+                        manualContainer.style.pointerEvents = "auto";
+                        manualContainer.style.opacity = "1";
+                    }
+                }
+            }
+        }
+        
+        let languageChanged = false;
+        mutations.forEach(mutation => {
+            if (mutation.type === "childList") {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1) {
+                        const text = node.textContent || "";
+                        if (text.includes("Layout direction is now Left-to-Right")) {
+                            if (currentLang !== "en") applyDirectionAndLocale("en");
+                        } else if (text.includes("چیدمان صفحه راست‌به‌چپ (RTL) شد")) {
+                            if (currentLang !== "fa") applyDirectionAndLocale("fa");
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Translate nodes inside modal or other new elements if they are added
+        if (!languageChanged) {
+             mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                   if (node.nodeType === 1) translateDOMNodes(node);
+                });
+             });
+        }
     });
 
     // Start on DOM ready
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
             applyDirectionAndLocale(currentLang);
+            translateDOMNodes(document.body);
             buildChatbotModeBar();
             observer.observe(document.body, { childList: true, subtree: true });
         });
     } else {
         applyDirectionAndLocale(currentLang);
+        translateDOMNodes(document.body);
         buildChatbotModeBar();
         observer.observe(document.body, { childList: true, subtree: true });
     }

@@ -134,3 +134,40 @@ def test_global_exception_handler(mock_condenser_cls: MagicMock) -> None:
     # Ensure the secret error message is NOT in the response
     assert "Super secret database failure" not in response.text
     assert response.json()["detail"] == "An internal server error occurred."
+
+
+def test_get_session_files_success() -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_session_files.return_value = ["file1.pdf", "file2.docx"]
+    app.dependency_overrides[get_document_repository] = lambda: mock_repo
+
+    response = client.get("/sessions/test-session-123/files")
+    assert response.status_code == 200
+    assert response.json() == ["file1.pdf", "file2.docx"]
+    mock_repo.get_session_files.assert_called_once_with("test-session-123")
+
+    app.dependency_overrides.clear()
+
+
+def test_delete_session_success() -> None:
+    mock_repo = MagicMock()
+    app.dependency_overrides[get_document_repository] = lambda: mock_repo
+
+    response = client.delete("/sessions/test-session-123")
+    assert response.status_code == 200
+    assert "deleted successfully" in response.json()["message"]
+    mock_repo.delete_session.assert_called_once_with("test-session-123")
+
+    app.dependency_overrides.clear()
+
+
+def test_session_endpoints_invalid_session_id() -> None:
+    response_get = client.get("/sessions/invalid session with spaces/files")
+    assert response_get.status_code == 400
+    assert "Invalid session_id" in response_get.json()["detail"]
+
+    response_delete = client.delete("/sessions/invalid;semicolon")
+    assert response_delete.status_code == 400
+    assert "Invalid session_id" in response_delete.json()["detail"]
+
+

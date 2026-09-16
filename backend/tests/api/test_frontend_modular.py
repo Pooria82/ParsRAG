@@ -154,7 +154,8 @@ def test_settings_builder() -> None:
 
     lang_widget = settings.inputs[0]
     assert isinstance(lang_widget, Select)
-    assert "English" in lang_widget.values
+    assert "فارسی" in lang_widget.values
+    assert "انگلیسی" in lang_widget.values
 
     mode_widget = settings.inputs[1]
     assert isinstance(mode_widget, Select)

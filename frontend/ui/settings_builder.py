@@ -48,8 +48,8 @@ class SettingsBuilder:
         labels = get_settings_labels(norm_lang)
 
         # 1. Language Selection
-        lang_values = ["فارسی (Persian)", "English"]
-        lang_initial = "فارسی (Persian)" if norm_lang == LANG_FA else "English"
+        lang_values = ["فارسی", "انگلیسی"] if norm_lang == LANG_FA else ["Persian", "English"]
+        lang_initial = lang_values[0] if norm_lang == LANG_FA else lang_values[1]
         language_widget = Select(
             id="language",
             label=labels["language_label"],

@@ -64,3 +64,10 @@ tmp/
 report.md
 testData/
 data/
+
+# 10. Node / Frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.db

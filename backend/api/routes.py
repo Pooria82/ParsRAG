@@ -125,3 +125,33 @@ def query_rag(
     )
 
     return response
+
+
+@router.get("/sessions/{session_id}/files", response_model=list[str])
+def get_session_files(
+    session_id: str,
+    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> list[str]:
+    """Retrieves all distinct filenames indexed for a given session."""
+    if not SESSION_ID_REGEX.match(session_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",
+        )
+    return repo.get_session_files(session_id)
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: str,
+    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> dict[str, str]:
+    """Deletes all indexed vectors and documents for a given session."""
+    if not SESSION_ID_REGEX.match(session_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",
+        )
+    repo.delete_session(session_id)
+    return {"message": f"Session '{session_id}' deleted successfully."}
+

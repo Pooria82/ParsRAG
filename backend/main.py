@@ -1,9 +1,11 @@
 import logging
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
 from backend.core.exceptions import ParsRAGError
@@ -68,3 +70,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 app.include_router(api_router)
+
+# Mount built frontend SPA if available
+frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+

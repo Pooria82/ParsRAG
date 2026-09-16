@@ -1,18 +1,14 @@
-# به سامانه ParsRAG خوش آمدید
+# Welcome to Chainlit! 🚀🤖
 
-**سامانه پرسش‌وپاسخ هوشمند و بازیابی دقیق اسناد فارسی (Retrieval-Augmented Generation)**
+Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
 
-### قابلیت‌ها و ویژگی‌های کلیدی:
-1. **سه حالت عملیاتی RAG:**
-   - **Strict RAG (فقط اسناد):** استخراج دقیق و بدون توهم بر اساس شواهد مستقیم سند. در صورت عدم وجود شواهد در اسناد، سامانه به صراحت درخواست را رد می‌کند.
-   - **Hybrid RAG (ترکیبی - پیش‌فرض):** ترکیب شواهد اسناد با دانش عمومی مدل جهت تحلیل و جمع‌بندی جامع.
-   - **LLM Only (فقط مدل):** گفتگو و تحلیل مستقیم با مدل بدون وابستگی به پایگاه اسناد.
+## Useful Links 🔗
 
-2. **پشتیبانی از اسناد چندگانه:**
-   - بارگذاری و پردازش همزمان تا سقف **۵ سند** در هر نشست (فرمت‌های `.docx`، `.pptx`، `.pdf`).
-   - استخراج ساختاریافته جدول‌های پیچیده، سوابق ردیف‌ها و عناوین چندسطحی.
+- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
+- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
 
-3. **تنظیمات پویا و شفافیت منبع:**
-   - کنترل عمق بازیابی قطعات (`top_k` از ۵ تا ۳۰) از طریق منوی تنظیمات.
-   - ارجاع و استناد شفاف به بخش‌های دقیق اسناد همراه با امتیاز تطابق معنایی و متن شاهد.
+We can't wait to see what you create with Chainlit! Happy coding! 💻😊
 
+## Welcome screen
+
+To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.

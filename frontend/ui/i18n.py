@@ -13,17 +13,17 @@ SUPPORTED_LANGUAGES: Final[list[str]] = [LANG_FA, LANG_EN]
 
 # Mode Labels
 MODE_LABEL_HYBRID: Final[dict[str, str]] = {
-    LANG_FA: "Hybrid RAG (ترکیبی)",
+    LANG_FA: "ترکیبی (Hybrid RAG)",
     LANG_EN: "Hybrid RAG",
 }
 
 MODE_LABEL_STRICT: Final[dict[str, str]] = {
-    LANG_FA: "Strict RAG (فقط اسناد)",
+    LANG_FA: "فقط اسناد (Strict RAG)",
     LANG_EN: "Strict RAG",
 }
 
 MODE_LABEL_LLM_ONLY: Final[dict[str, str]] = {
-    LANG_FA: "LLM Only (فقط مدل)",
+    LANG_FA: "فقط مدل (LLM Only)",
     LANG_EN: "LLM Only",
 }
 
@@ -87,20 +87,20 @@ WELCOME_MARKDOWN: Final[dict[str, str]] = {
 # Settings Labels & Descriptions
 SETTINGS_LABELS: Final[dict[str, dict[str, str]]] = {
     LANG_FA: {
-        "language_label": "زبان سامانه (Interface Language)",
-        "language_desc": "انتخاب زبان واسط کاربری و جهت نوشتاری (RTL/LTR)",
-        "mode_label": "حالت کاری سامانه (RAG Execution Mode)",
+        "language_label": "زبان سامانه",
+        "language_desc": "انتخاب زبان واسط کاربری و جهت نوشتاری",
+        "mode_label": "حالت کاری سامانه",
         "mode_desc": "انتخاب نحوه پاسخ‌دهی و پردازش اسناد",
-        "threshold_label": "آستانه شباهت Strict RAG (Similarity Threshold)",
+        "threshold_label": "آستانه شباهت مقید",
         "threshold_desc": "حداقل نمره شباهت مورد نیاز برای پذیرش شواهد سند در حالت مقید",
-        "dynamic_depth_label": "بهینه‌سازی خودکار عمق بازیابی (Dynamic Depth)",
+        "dynamic_depth_label": "بهینه‌سازی خودکار عمق بازیابی",
         "dynamic_depth_desc": "محاسبه خودکار تعداد بهینه قطعات متناسب با پیچیدگی پرسش",
-        "manual_top_k_label": "عمق بازیابی دستی (Manual Top-K)",
+        "manual_top_k_label": "عمق بازیابی دستی",
         "manual_top_k_desc": "تعداد قطعات بازیابی‌شده از پایگاه برداری در صورت غیرفعال بودن عمق خودکار",
-        "history_window_label": "پنجره حافظه گفتگو (History Window Turns)",
+        "history_window_label": "پنجره حافظه گفتگو",
         "history_window_desc": "حداکثر تعداد پیام‌های قبلی نگه‌داری‌شده در حافظه تعاملی",
-        "backend_url_label": "آدرس سرویس بک‌اند (Backend Service URL)",
-        "backend_url_desc": "آدرس ریشه API سرور فست‌اِی‌پی‌آی (FastAPI)",
+        "backend_url_label": "آدرس سرویس بک‌اند",
+        "backend_url_desc": "آدرس ریشه سرویس پاسخ‌گویی",
     },
     LANG_EN: {
         "language_label": "Interface Language",
@@ -126,7 +126,7 @@ def normalize_language(lang_code: str | None) -> str:
     if not lang_code:
         return LANG_FA
     clean = lang_code.strip().lower()
-    if clean.startswith("en") or "english" in clean:
+    if clean.startswith("en") or "english" in clean or "انگلیسی" in clean:
         return LANG_EN
     return LANG_FA
 

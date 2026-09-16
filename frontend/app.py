@@ -59,7 +59,6 @@ async def on_chat_start() -> None:
         default_backend_url=config.backend_url,
     )
     await settings_builder.build(lang=initial_lang).send()
-    await cl.Message(content=get_welcome_markdown(initial_lang)).send()
 
 
 @cl.on_settings_update
@@ -104,18 +103,7 @@ async def on_settings_update(settings: dict[str, Any]) -> None:
 
     # If language changed, notify user and re-send updated settings drawer
     if new_lang != old_lang:
-        await cl.Message(content=format_language_switched(new_lang)).send()
         await settings_builder.build(lang=new_lang).send()
-
-    status_text = format_settings_updated(
-        lang=new_lang,
-        raw_mode=raw_mode,
-        normalized_mode=mode,
-        dynamic_depth=dynamic_depth,
-        top_k=effective_top_k,
-        threshold=threshold,
-    )
-    await cl.Message(content=status_text).send()
 
 
 @cl.on_message
@@ -127,19 +115,14 @@ async def on_message(message: cl.Message) -> None:
     if prompt_text.startswith("/mode "):
         target_mode = parse_mode(prompt_text.replace("/mode ", "").strip())
         session_manager.set_mode(target_mode)
+        # Update settings modal silently to reflect the new mode
         lang = session_manager.get_language()
-        confirm_text = (
-            f"Mode switched to `{target_mode}`."
-            if lang == "en"
-            else f"حالت کاری به `{target_mode}` تغییر یافت."
-        )
-        await cl.Message(content=confirm_text).send()
+        await settings_builder.build(lang=lang).send()
         return
 
     if prompt_text.startswith("/lang "):
         target_lang = normalize_language(prompt_text.replace("/lang ", "").strip())
         session_manager.set_language(target_lang)
-        await cl.Message(content=format_language_switched(target_lang)).send()
         await settings_builder.build(lang=target_lang).send()
         return
 
