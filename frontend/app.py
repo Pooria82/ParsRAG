@@ -44,7 +44,7 @@ async def on_chat_start() -> None:
     """Initializes session state, interactive settings drawer, and welcome message."""
     session_manager.initialize_session(
         default_mode="hybrid",
-        default_top_k=config.default_top_k,
+        default_top_k=None,
     )
     await settings_builder.build().send()
     await cl.Message(content=WELCOME_MARKDOWN).send()
@@ -57,7 +57,8 @@ async def on_settings_update(settings: dict[str, Any]) -> None:
     mode = parse_mode(raw_mode)
     session_manager.set_mode(mode)
 
-    top_k = int(settings.get("top_k", config.default_top_k))
+    raw_top_k = settings.get("top_k")
+    top_k = int(raw_top_k) if raw_top_k is not None else None
     session_manager.set_top_k(top_k)
 
     status_text = format_settings_updated(raw_mode, mode, top_k)

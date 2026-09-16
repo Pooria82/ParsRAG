@@ -55,7 +55,12 @@ class SessionState(BaseModel):
 
     session_id: str = Field(..., description="Unique session identifier")
     mode: str = Field(default="hybrid", description="Selected RAG mode")
-    top_k: int = Field(default=15, ge=1, le=50, description="Retrieval depth override")
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Retrieval depth override (None = dynamic automated depth)",
+    )
     chat_history: list[dict[str, str]] = Field(
         default_factory=list, description="Past conversation turns"
     )

@@ -42,14 +42,14 @@ class SessionManager:
         self,
         session_id: str | None = None,
         default_mode: str = "hybrid",
-        default_top_k: int = 15,
+        default_top_k: int | None = None,
     ) -> SessionState:
         """Initializes state for a new chat session.
 
         Args:
             session_id: Optional explicit session ID; generates one if None.
             default_mode: Initial RAG execution mode.
-            default_top_k: Initial retrieval depth.
+            default_top_k: Initial retrieval depth override (None = automated).
 
         Returns:
             SessionState: Initialized session model.
@@ -69,10 +69,12 @@ class SessionManager:
         Returns:
             SessionState: Strongly typed state snapshot.
         """
+        raw_top_k = self._get("top_k", None)
+        top_k_val = int(raw_top_k) if raw_top_k is not None else None
         return SessionState(
             session_id=str(self._get("session_id", "")),
             mode=str(self._get("mode", "hybrid")),
-            top_k=int(self._get("top_k", 15)),
+            top_k=top_k_val,
             chat_history=list(self._get("chat_history", [])),
             uploaded_files=list(self._get("uploaded_files", [])),
         )
@@ -89,12 +91,13 @@ class SessionManager:
         """Sets the active RAG mode."""
         self._set("mode", mode)
 
-    def get_top_k(self) -> int:
-        """Returns the current retrieval depth."""
-        return int(self._get("top_k", 15))
+    def get_top_k(self) -> int | None:
+        """Returns the current retrieval depth override (None if automated)."""
+        val = self._get("top_k", None)
+        return int(val) if val is not None else None
 
-    def set_top_k(self, top_k: int) -> None:
-        """Sets the retrieval depth."""
+    def set_top_k(self, top_k: int | None) -> None:
+        """Sets the retrieval depth override (None for dynamic automated depth)."""
         self._set("top_k", top_k)
 
     def get_uploaded_files(self) -> list[str]:

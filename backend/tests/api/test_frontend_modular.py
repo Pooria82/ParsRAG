@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from chainlit.input_widget import RadioGroup, Slider
+from chainlit.input_widget import RadioGroup
 
 from frontend.config import FrontendConfig
 from frontend.handlers.query_handler import QueryHandler
@@ -56,13 +56,14 @@ def test_session_state_model() -> None:
     state = SessionState(session_id="session_abc123")
     assert state.session_id == "session_abc123"
     assert state.mode == "hybrid"
-    assert state.top_k == 15
+    assert state.top_k is None
     assert state.chat_history == []
     assert state.uploaded_files == []
 
     d = state.to_dict()
     assert d["session_id"] == "session_abc123"
     assert d["mode"] == "hybrid"
+    assert d["top_k"] is None
 
 
 def test_session_manager_isolated_store() -> None:
@@ -70,7 +71,7 @@ def test_session_manager_isolated_store() -> None:
     mock_store: dict[str, Any] = {}
     manager = SessionManager(store=mock_store)
 
-    # 1. Initialize
+    # 1. Initialize with explicit top_k
     state = manager.initialize_session(
         session_id="test_sess_42", default_mode="strict", default_top_k=20
     )
@@ -82,9 +83,11 @@ def test_session_manager_isolated_store() -> None:
     manager.set_mode("llm-only")
     assert manager.get_mode() == "llm-only"
 
-    # 3. Top_k mutation
+    # 3. Top_k mutation (including None for dynamic optimization)
     manager.set_top_k(25)
     assert manager.get_top_k() == 25
+    manager.set_top_k(None)
+    assert manager.get_top_k() is None
 
     # 4. Uploaded files tracking
     added = manager.add_uploaded_files(["doc1.docx", "doc2.pdf"])
@@ -133,10 +136,10 @@ def test_citation_builder() -> None:
 
 
 def test_settings_builder() -> None:
-    """Verifies SettingsBuilder creates valid ChatSettings with RadioGroup and Slider."""
+    """Verifies SettingsBuilder creates valid ChatSettings with dynamic depth optimization."""
     builder = SettingsBuilder()
     settings = builder.build()
-    assert len(settings.inputs) == 2
+    assert len(settings.inputs) == 1
 
     mode_widget = settings.inputs[0]
     assert isinstance(mode_widget, RadioGroup)
@@ -144,13 +147,6 @@ def test_settings_builder() -> None:
     assert "Hybrid RAG" in mode_widget.values
     assert "Strict RAG" in mode_widget.values
     assert "LLM Only" in mode_widget.values
-
-    top_k_widget = settings.inputs[1]
-    assert isinstance(top_k_widget, Slider)
-    assert top_k_widget.id == "top_k"
-    assert top_k_widget.min == 5
-    assert top_k_widget.max == 30
-    assert top_k_widget.step == 5
 
 
 def test_upload_handler_validation() -> None:

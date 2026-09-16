@@ -9,8 +9,9 @@ WELCOME_MARKDOWN: str = (
     "- **LLM Only (فقط مدل):** گفتگو و تحلیل مستقیم با مدل بدون مراجعه به اسناد.\n\n"
     "### 📁 نحوه کار با اسناد:\n"
     "- می‌توانید فایل‌های خود را با فرمت‌های **PDF**، **Word (DOCX)** یا **PowerPoint (PPTX)** با دکمه سنجاق پایین پیوست کنید (حداکثر ۵ فایل در هر نشست).\n"
-    "- ساختار جدول‌های پیچیده و عناوین تو در تو به صورت خودکار شناسایی و ذخیره می‌شوند.\n"
-    "- می‌توانید حالت یا عمق بازیابی را از منوی تنظیمات (⚙️ در گوشه کادر پیام) تغییر دهید.\n\n"
+    "- ساختار جدول‌های پیچیده، سوابق ردیف‌ها و عناوین چندسطحی به صورت ساختاریافته ذخیره می‌شوند.\n"
+    "- **عمق بازیابی و تجمیع قطعات (Top-K):** به صورت کاملاً خودکار و پویا (Dynamic Optimization) متناسب با نوع پرسش محاسبه می‌شود.\n"
+    "- می‌توانید حالت کاری را از منوی تنظیمات (⚙️ در گوشه کادر پیام) انتخاب فرمایید.\n\n"
     "💬 *سند خود را بارگذاری کنید یا پرسش خود را مستقیماً بنویسید.*"
 )
 
@@ -18,10 +19,6 @@ WELCOME_MARKDOWN: str = (
 SETTINGS_MODE_LABEL: str = "🎯 حالت کاری سامانه (RAG Execution Mode)"
 SETTINGS_MODE_DESC: str = (
     "Strict: فقط اسناد | Hybrid: تلفیق اسناد و مدل | LLM Only: بدون مراجعه به اسناد"
-)
-SETTINGS_TOP_K_LABEL: str = "📊 عمق بازیابی قطعات (Retrieval Depth / Top-K)"
-SETTINGS_TOP_K_DESC: str = (
-    "تعداد قطعات متنی و ردیف‌های واکشی‌شده از پایگاه‌داده برداری Qdrant"
 )
 
 MODE_OPTION_HYBRID: str = "Hybrid RAG"
@@ -35,12 +32,17 @@ AVAILABLE_MODE_OPTIONS: list[str] = [
 
 
 # Notifications & Status Templates
-def format_settings_updated(raw_mode: str, normalized_mode: str, top_k: int) -> str:
+def format_settings_updated(
+    raw_mode: str, normalized_mode: str, top_k: int | None = None
+) -> str:
     """Formats the confirmation message when chat settings change."""
+    depth_label = (
+        f"{top_k} (سفارشی)" if top_k is not None else "محاسبه خودکار و پویا (Dynamic)"
+    )
     return (
         f"⚙️ **تنظیمات به‌روزرسانی شد:**\n"
         f"- **حالت فعال:** `{raw_mode}` (`{normalized_mode}`)\n"
-        f"- **عمق بازیابی (Top-K):** `{top_k}`"
+        f"- **عمق بازیابی:** `{depth_label}`"
     )
 
 

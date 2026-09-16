@@ -1,7 +1,7 @@
 """Builder for Chainlit interactive chat settings."""
 
 import chainlit as cl
-from chainlit.input_widget import RadioGroup, Slider
+from chainlit.input_widget import InputWidget, RadioGroup
 
 from frontend.config import FrontendConfig
 from frontend.ui.strings import (
@@ -9,8 +9,6 @@ from frontend.ui.strings import (
     MODE_OPTION_HYBRID,
     SETTINGS_MODE_DESC,
     SETTINGS_MODE_LABEL,
-    SETTINGS_TOP_K_DESC,
-    SETTINGS_TOP_K_LABEL,
 )
 
 
@@ -25,12 +23,15 @@ class SettingsBuilder:
         """Initializes the builder with frontend configuration.
 
         Args:
-            config: Optional configuration instance.
+            config: Optional frontend configuration instance.
         """
         self.config = config or FrontendConfig()
 
     def build(self) -> cl.ChatSettings:
-        """Builds the ChatSettings component with Mode and Top-K widgets.
+        """Builds the ChatSettings component with the Mode selection widget.
+
+        Retrieval and multi-chunk aggregation depth is dynamically determined
+        and optimized by the backend per query.
 
         Returns:
             cl.ChatSettings: Configured settings drawer for Chainlit.
@@ -43,14 +44,5 @@ class SettingsBuilder:
             description=SETTINGS_MODE_DESC,
         )
 
-        top_k_widget = Slider(
-            id="top_k",
-            label=SETTINGS_TOP_K_LABEL,
-            min=self.config.min_top_k,
-            max=self.config.max_top_k,
-            step=self.config.step_top_k,
-            initial=self.config.default_top_k,
-            description=SETTINGS_TOP_K_DESC,
-        )
-
-        return cl.ChatSettings([mode_widget, top_k_widget])
+        inputs: list[InputWidget] = [mode_widget]
+        return cl.ChatSettings(inputs)

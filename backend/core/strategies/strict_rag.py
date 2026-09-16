@@ -7,6 +7,7 @@ from llama_index.core.prompts import PromptTemplate
 from backend.core.exceptions import VectorDBConnectionError
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.base_strategy import RAGStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
@@ -69,8 +70,6 @@ class StrictRAGStrategy(RAGStrategy):
         Returns:
             QueryResponse: The generated answer or a refusal if context is insufficient.
         """
-        fetch_k = top_k if top_k is not None else self.default_top_k
-
         # 1. Discover session files to determine single-file vs multi-file path
         available_files: list[str] = []
         if session_id:
@@ -81,6 +80,13 @@ class StrictRAGStrategy(RAGStrategy):
 
         effective_filter = resolve_target_files(
             query, available_files, explicit_filter=file_filter
+        )
+
+        # 2. Determine Optimal Retrieval Depth (Dynamic Optimizer)
+        fetch_k = (
+            top_k
+            if top_k is not None
+            else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
         )
 
         # 2. Retrieve Nodes (Balanced Multi-File vs. Single-File Search)
