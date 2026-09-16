@@ -1,468 +1,104 @@
-import React, { useState } from 'react';
-import { Plus, MessageSquare, Trash2, Edit2, Check, X, Settings, ShieldCheck, Globe, Sun, Moon } from 'lucide-react';
-import { Session, Language, Theme } from '../types';
+import { useMemo, useState } from 'react';
+import { Check, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
+import type { Language, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
+import { BrandMark } from './BrandMark';
+import { Dialog } from './Dialog';
 
 interface SidebarProps {
-  sessions: Session[];
-  activeSessionId: string;
-  onSelectSession: (id: string) => void;
-  onNewChat: () => void;
-  onDeleteSession: (id: string) => void;
-  onRenameSession: (id: string, newTitle: string) => void;
-  language: Language;
-  onToggleLanguage: () => void;
-  theme: Theme;
-  onToggleTheme: () => void;
-  onOpenSettings: () => void;
-  isOpen: boolean;
-  onClose: () => void;
-  isBackendOnline: boolean;
+  sessions: Session[]; activeSessionId: string; generatingSessionId?: string;
+  onSelectSession: (id: string) => void; onNewChat: () => void;
+  onDeleteSession: (id: string) => Promise<boolean>; onRenameSession: (id: string, title: string) => void;
+  language: Language; theme: Theme; onToggleTheme: () => void;
+  onOpenSettings: () => void; isOpen: boolean; isMobile: boolean; onClose: () => void;
+  connection: 'checking' | 'online' | 'offline'; onRetryConnection: () => void;
+  uploadingSessionId?: string;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  sessions,
-  activeSessionId,
-  onSelectSession,
-  onNewChat,
-  onDeleteSession,
-  onRenameSession,
-  language,
-  onToggleLanguage,
-  theme,
-  onToggleTheme,
-  onOpenSettings,
-  isOpen,
-  onClose,
-  isBackendOnline,
-}) => {
+export function Sidebar(props: SidebarProps) {
+  const { sessions, activeSessionId, onSelectSession, onNewChat, language, theme, isOpen, isMobile } = props;
   const t = translations[language];
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState('');
+  const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState<{ session: Session; action: 'rename' | 'delete' } | null>(null);
+  const [title, setTitle] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const groups = useMemo(() => {
+    const midnight = new Date().setHours(0, 0, 0, 0);
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(0, 0, 0, 0);
+    const filtered = sessions.filter(s => s.messages.length > 0 || s.documents.length > 0)
+      .filter(s => (s.title + ' ' + s.messages.map(m => m.content).join(' ')).toLocaleLowerCase().includes(search.toLocaleLowerCase()))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return [
+      { label: t.today, items: filtered.filter(s => s.updatedAt >= midnight) },
+      { label: t.yesterday, items: filtered.filter(s => s.updatedAt >= yesterday.getTime() && s.updatedAt < midnight) },
+      { label: t.previous, items: filtered.filter(s => s.updatedAt < yesterday.getTime()) },
+    ];
+  }, [sessions, search, t]);
+  const empty = groups.every(g => !g.items.length);
+  const closeEdit = () => { if (!deleting) setEdit(null); };
 
-  const startRename = (s: Session, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingId(s.id);
-    setEditTitle(s.title);
-  };
-
-  const saveRename = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (editTitle.trim()) {
-      onRenameSession(id, editTitle.trim());
-    }
-    setEditingId(null);
-  };
-
-  const cancelRename = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingId(null);
-  };
-
-  // Group sessions by date
-  const now = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
-  const todaySessions = sessions.filter(s => now - s.createdAt < dayMs);
-  const yesterdaySessions = sessions.filter(s => now - s.createdAt >= dayMs && now - s.createdAt < 2 * dayMs);
-  const olderSessions = sessions.filter(s => now - s.createdAt >= 2 * dayMs);
-
-  const renderSessionItem = (session: Session) => {
-    const isActive = session.id === activeSessionId;
-    const isEditing = session.id === editingId;
-
-    return (
-      <div
-        key={session.id}
-        onClick={() => !isEditing && onSelectSession(session.id)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0.6rem 0.75rem',
-          borderRadius: 'var(--radius-md)',
-          cursor: isEditing ? 'default' : 'pointer',
-          backgroundColor: isActive ? 'var(--bg-active)' : 'transparent',
-          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-          border: isActive ? '1px solid var(--border-medium)' : '1px solid transparent',
-          transition: 'all var(--transition-fast)',
-          marginBottom: '0.25rem',
-          userSelect: 'none',
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive && !isEditing) {
-            e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-            e.currentTarget.style.color = 'var(--text-primary)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive && !isEditing) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = 'var(--text-secondary)';
-          }
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: 0 }}>
-          <MessageSquare size={16} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }} />
-          {isEditing ? (
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveRename(session.id, e as any);
-                if (e.key === 'Escape') setEditingId(null);
-              }}
-              autoFocus
-              style={{
-                background: 'var(--bg-base)',
-                border: '1px solid var(--accent-blue)',
-                color: 'var(--text-primary)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '0.2rem 0.4rem',
-                fontSize: '0.85rem',
-                width: '100%',
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                fontSize: '0.875rem',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontWeight: isActive ? 500 : 400,
-              }}
-              title={session.title}
-            >
-              {session.title}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
-          {isEditing ? (
-            <>
-              <button
-                onClick={(e) => saveRename(session.id, e)}
-                style={{ padding: '0.25rem', color: 'var(--accent-emerald)' }}
-                title={t.save}
-              >
-                <Check size={14} />
-              </button>
-              <button
-                onClick={cancelRename}
-                style={{ padding: '0.25rem', color: 'var(--text-muted)' }}
-                title={t.cancel}
-              >
-                <X size={14} />
-              </button>
-            </>
-          ) : (
-            <>
-              {session.documents.length > 0 && (
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '0.1rem 0.35rem',
-                    borderRadius: 'var(--radius-full)',
-                    background: 'var(--bg-card)',
-                    color: 'var(--accent-emerald)',
-                    border: '1px solid var(--border-subtle)',
-                    marginInlineEnd: '0.25rem',
-                  }}
-                  title={t.docCenterCounter(session.documents.length, 5)}
-                >
-                  {session.documents.length}
-                </span>
-              )}
-              <button
-                onClick={(e) => startRename(session, e)}
-                style={{
-                  padding: '0.25rem',
-                  color: 'var(--text-muted)',
-                  opacity: isActive ? 0.8 : 0,
-                  transition: 'opacity var(--transition-fast)',
-                }}
-                className="session-action-btn"
-                title={t.rename}
-              >
-                <Edit2 size={13} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteSession(session.id);
-                }}
-                style={{
-                  padding: '0.25rem',
-                  color: 'var(--accent-rose)',
-                  opacity: isActive ? 0.8 : 0,
-                  transition: 'opacity var(--transition-fast)',
-                }}
-                className="session-action-btn"
-                title={t.delete}
-              >
-                <Trash2 size={13} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <>
-      {/* Mobile Backdrop */}
-      {isOpen && (
-        <div
-          onClick={onClose}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.6)',
-            zIndex: 40,
-            backdropFilter: 'blur(4px)',
-          }}
-        />
-      )}
-
-      <aside
-        style={{
-          width: '280px',
-          height: '100%',
-          backgroundColor: 'var(--bg-surface)',
-          borderInlineEnd: '1px solid var(--border-subtle)',
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 50,
-          transition: 'transform var(--transition-normal)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Header Branding & New Chat Button */}
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'linear-gradient(135deg, var(--accent-emerald), var(--accent-blue))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: 'var(--shadow-sm)',
-                }}
-              >
-                <ShieldCheck size={18} />
-              </div>
-              <div>
-                <h1 style={{ fontSize: '1rem', fontWeight: 700, lineHeight: 1.2 }}>{t.appName}</h1>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Air-Gapped RAG</span>
-              </div>
-            </div>
-            
-            {/* Close button on mobile */}
-            <button
-              onClick={onClose}
-              style={{ display: 'none', padding: '0.4rem', color: 'var(--text-secondary)' }}
-              className="sidebar-close-btn"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <button
-            onClick={onNewChat}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.65rem 0.85rem',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--bg-card)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-sm)',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              transition: 'all var(--transition-fast)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-              e.currentTarget.style.borderColor = 'var(--accent-blue)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-card)';
-              e.currentTarget.style.borderColor = 'var(--border-medium)';
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Plus size={16} style={{ color: 'var(--accent-emerald)' }} />
-              <span>{t.newChat}</span>
-            </div>
-            <kbd
-              style={{
-                fontSize: '0.7rem',
-                padding: '0.1rem 0.4rem',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-base)',
-                color: 'var(--text-muted)',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              {t.newChatShortcut}
-            </kbd>
+  const content = <>
+    <div className="sidebar-brand"><BrandMark /><div><strong>{t.appName}</strong><span>{t.workspace}</span></div></div>
+    <button className="new-chat-button" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChatShortcut}>
+      <Plus size={19} /><span>{t.newChat}</span><span className="shortcut-symbol" aria-hidden="true">⌘</span>
+    </button>
+    <label className="history-search"><Search size={16} aria-hidden="true" />
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchChats} aria-label={t.searchChats} />
+    </label>
+    <nav className="history-list" aria-label={t.conversations}>
+      {empty ? <div className="history-empty"><MessageSquare size={23} />
+        <p>{search ? t.noChats : t.historyEmpty}</p>{!search && <span>{t.historyEmptyDesc}</span>}
+      </div> : groups.map(group => group.items.length > 0 && <section className="history-group" key={group.label}>
+        <h2>{group.label}</h2>
+        {group.items.map(session => <div className={'history-row ' + (session.id === activeSessionId ? 'is-active' : '')} key={session.id}>
+          <button className="history-select" onClick={() => onSelectSession(session.id)} aria-current={session.id === activeSessionId ? 'page' : undefined}>
+            {props.generatingSessionId === session.id ? <Loader2 size={15} className="spin" /> : <MessageSquare size={15} />}
+            <span>{session.title || t.untitled}</span>
           </button>
-        </div>
-
-        {/* Sessions Scrollable List */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem' }}>
-          {sessions.length === 0 ? (
-            <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {t.noChats}
+          <details className="history-menu" onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.removeAttribute('open'); e.currentTarget.querySelector('summary')?.focus(); } }}>
+            <summary aria-label={t.chatOptions + ': ' + session.title}><MoreHorizontal size={17} /></summary>
+            <div className="history-menu-popover">
+              <button onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); setTitle(session.title); setEdit({ session, action: 'rename' }); }}><Pencil size={14} />{t.rename}</button>
+              <button className="danger-text" disabled={props.uploadingSessionId === session.id} onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); setDeleteError(false); setEdit({ session, action: 'delete' }); }}><Trash2 size={14} />{t.delete}</button>
             </div>
-          ) : (
-            <>
-              {todaySessions.length > 0 && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0 0.5rem' }}>
-                    {t.today}
-                  </span>
-                  <div style={{ marginTop: '0.35rem' }}>
-                    {todaySessions.map(renderSessionItem)}
-                  </div>
-                </div>
-              )}
+          </details>
+        </div>)}
+      </section>)}
+    </nav>
+    <div className="sidebar-bottom">
+      <div className="workspace-note"><div className="workspace-note-icon"><BrandMark /></div><div><strong>{t.localWorkspace}</strong><span>{t.localStorage}</span></div></div>
+      <div className="connection-status" data-status={props.connection}>
+        <span className="status-dot" /><span>{props.connection === 'checking' ? t.backendChecking : props.connection === 'online' ? t.backendOnline : t.backendOffline}</span>
+        {props.connection === 'offline' && <button onClick={props.onRetryConnection} title={t.retryConnection} aria-label={t.retryConnection}>↻</button>}
+      </div>
+      <div className="sidebar-footer">
+        <button className="settings-button" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>
+        <button className="icon-button theme-toggle" onClick={props.onToggleTheme} aria-label={theme === 'dark' ? t.themeLight : t.themeDark} title={theme === 'dark' ? t.themeLight : t.themeDark}>
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
+    </div>
+  </>;
 
-              {yesterdaySessions.length > 0 && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0 0.5rem' }}>
-                    {t.yesterday}
-                  </span>
-                  <div style={{ marginTop: '0.35rem' }}>
-                    {yesterdaySessions.map(renderSessionItem)}
-                  </div>
-                </div>
-              )}
-
-              {olderSessions.length > 0 && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0 0.5rem' }}>
-                    {t.previous}
-                  </span>
-                  <div style={{ marginTop: '0.35rem' }}>
-                    {olderSessions.map(renderSessionItem)}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+  return <>
+    {isMobile ? <Dialog open={isOpen} onClose={props.onClose} title={t.conversations} closeLabel={t.close} className="sidebar-dialog">
+      <div id="conversation-sidebar" className="sidebar-content">{content}</div>
+    </Dialog> : <aside id="conversation-sidebar" className={'sidebar ' + (isOpen ? 'is-open' : '')} aria-hidden={!isOpen}>
+      {isOpen && <div className="sidebar-content">{content}</div>}
+    </aside>}
+    <Dialog open={Boolean(edit)} onClose={closeEdit} title={edit?.action === 'rename' ? t.rename : t.deleteConfirmTitle} closeLabel={t.close} className="confirm-dialog">
+      {edit?.action === 'rename' ? <form className="dialog-body" onSubmit={e => { e.preventDefault(); if (title.trim()) { props.onRenameSession(edit.session.id, title.trim()); setEdit(null); } }}>
+        <label className="field-label" htmlFor="chat-title">{t.chatTitle}</label>
+        <input id="chat-title" className="text-input" autoFocus value={title} onChange={e => setTitle(e.target.value)} maxLength={100} />
+        <div className="dialog-actions"><button type="button" className="button secondary" onClick={closeEdit}>{t.cancel}</button><button className="button primary" disabled={!title.trim()}><Check size={16} />{t.save}</button></div>
+      </form> : <div className="dialog-body"><p>{t.deleteConfirmDesc}</p><p className="confirm-chat-title">{edit?.session.title}</p>
+        {deleteError && <p className="inline-error" role="alert">{t.deleteFailed}</p>}
+        <div className="dialog-actions"><button className="button secondary" disabled={deleting} onClick={closeEdit}>{t.cancel}</button>
+          <button className="button danger" disabled={deleting} onClick={async () => { if (!edit) return; setDeleting(true); const deleted = await props.onDeleteSession(edit.session.id); setDeleting(false); if (deleted) setEdit(null); else setDeleteError(true); }}>{deleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}{deleting ? t.saving : t.delete}</button>
         </div>
+      </div>}
+    </Dialog>
+  </>;
+}
 
-        {/* Footer Actions */}
-        <div
-          style={{
-            padding: '0.75rem 1rem',
-            borderTop: '1px solid var(--border-subtle)',
-            backgroundColor: 'var(--bg-surface)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-          }}
-        >
-          {/* Quick status badge */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '0.75rem',
-              color: isBackendOnline ? 'var(--accent-emerald)' : 'var(--accent-rose)',
-              padding: '0.3rem 0.5rem',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--bg-base)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span
-                style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  background: isBackendOnline ? 'var(--accent-emerald)' : 'var(--accent-rose)',
-                  display: 'inline-block',
-                }}
-                className={isBackendOnline ? 'animate-pulse-subtle' : ''}
-              />
-              <span>{isBackendOnline ? t.backendOnline : t.backendOffline}</span>
-            </div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>:8000</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              {/* Language Switch */}
-              <button
-                onClick={onToggleLanguage}
-                style={{
-                  padding: '0.45rem',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  fontSize: '0.8rem',
-                  border: '1px solid var(--border-subtle)',
-                }}
-                title={language === 'fa' ? 'Switch to English' : 'تغییر به زبان فارسی'}
-              >
-                <Globe size={15} />
-                <span style={{ fontWeight: 600 }}>{language === 'fa' ? 'EN' : 'فا'}</span>
-              </button>
-
-              {/* Theme Switch */}
-              <button
-                onClick={onToggleTheme}
-                style={{
-                  padding: '0.45rem',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-                title={theme === 'dark' ? t.themeLight : t.themeDark}
-              >
-                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-              </button>
-            </div>
-
-            {/* Settings Button */}
-            <button
-              onClick={onOpenSettings}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.45rem 0.65rem',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border-subtle)',
-                fontSize: '0.8rem',
-              }}
-              title={t.settingsTitle}
-            >
-              <Settings size={15} />
-              <span>{t.settingsTitle}</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-};

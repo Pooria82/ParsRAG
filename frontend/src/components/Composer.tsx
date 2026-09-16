@@ -1,263 +1,96 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Square, ChevronUp, Zap, Shield, Brain, Check } from 'lucide-react';
-import { RAGMode, Language } from '../types';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { ArrowUp, BookOpen, Check, ChevronDown, Layers2, MessageCircle, Paperclip, Square } from 'lucide-react';
+import type { RAGMode, Language } from '../types';
 import { translations } from '../i18n/translations';
+import { MODES } from '../core/state';
 
 interface ComposerProps {
-  onSendMessage: (text: string) => void;
-  onStopGenerating?: () => void;
-  isGenerating: boolean;
-  activeMode: RAGMode;
-  onChangeMode: (mode: RAGMode) => void;
-  language: Language;
+  value: string; onChange: (value: string) => void; onSendMessage: () => void;
+  onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean;
+  activeMode: RAGMode; onChangeMode: (mode: RAGMode) => void;
+  language: Language; onOpenDocuments: () => void; documentCount: number; focusToken: number;
 }
 
-export const Composer: React.FC<ComposerProps> = ({
-  onSendMessage,
-  onStopGenerating,
-  isGenerating,
-  activeMode,
-  onChangeMode,
-  language,
-}) => {
+const modeIcons = { hybrid: Layers2, strict: BookOpen, 'llm-only': MessageCircle };
+
+export function Composer(props: ComposerProps) {
+  const { value, onChange, isGenerating, activeMode, language } = props;
   const t = translations[language];
-  const [input, setInput] = useState('');
-  const [isModeOpen, setIsModeOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const modePopupRef = useRef<HTMLDivElement>(null);
+  const [modeOpen, setModeOpen] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const ModeIcon = modeIcons[activeMode];
 
-  // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
-    }
-  }, [input]);
-
-  // Click outside to close mode popup
+    if (!inputRef.current) return;
+    inputRef.current.style.height = '0px';
+    inputRef.current.style.height = Math.min(Math.max(inputRef.current.scrollHeight, 58), 180) + 'px';
+  }, [value]);
+  useEffect(() => { if (props.focusToken) inputRef.current?.focus(); }, [props.focusToken]);
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modePopupRef.current && !modePopupRef.current.contains(e.target as Node)) {
-        setIsModeOpen(false);
-      }
+    if (!modeOpen) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node) && !triggerRef.current?.contains(event.target as Node)) setModeOpen(false);
     };
-    if (isModeOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isModeOpen]);
-
-  const handleSend = () => {
-    if (!input.trim() || isGenerating) return;
-    onSendMessage(input.trim());
-    setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [modeOpen]);
+  const send = () => { if (value.trim() && !props.isBusy) props.onSendMessage(); };
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+      event.preventDefault(); send();
     }
   };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+  const menuKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    const buttons = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])];
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'Escape') { event.preventDefault(); setModeOpen(false); triggerRef.current?.focus(); }
+    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault(); buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault(); buttons[event.key === 'Home' ? 0 : buttons.length - 1]?.focus();
+    } else if (event.key === 'Tab') setModeOpen(false);
   };
 
-  const modeIcons: Record<RAGMode, React.ReactNode> = {
-    hybrid: <Zap size={14} style={{ color: 'var(--accent-emerald)' }} />,
-    strict: <Shield size={14} style={{ color: 'var(--accent-amber)' }} />,
-    'llm-only': <Brain size={14} style={{ color: 'var(--accent-purple)' }} />,
-  };
-
-  return (
-    <div style={{ padding: '0.75rem 1rem 1.25rem 1rem', position: 'relative', width: '100%', maxWidth: '840px', margin: '0 auto' }}>
-      {/* Upward Mode Popup */}
-      {isModeOpen && (
-        <div
-          ref={modePopupRef}
-          className="animate-slide-up"
-          style={{
-            position: 'absolute',
-            bottom: 'calc(100% - 0.25rem)',
-            insetInlineStart: '1rem',
-            width: '320px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)',
-            padding: '0.5rem',
-            zIndex: 60,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.35rem',
-          }}
-        >
-          <div style={{ padding: '0.35rem 0.5rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-            {t.defaultModeLabel}
-          </div>
-
-          {(['hybrid', 'strict', 'llm-only'] as RAGMode[]).map((m) => {
-            const isSelected = activeMode === m;
-            const modeInfo = t.ragModes[m];
-
-            return (
-              <button
-                key={m}
-                onClick={() => {
-                  onChangeMode(m);
-                  setIsModeOpen(false);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.6rem',
-                  padding: '0.6rem 0.75rem',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: isSelected ? 'var(--bg-card)' : 'transparent',
-                  border: isSelected ? '1px solid var(--border-medium)' : '1px solid transparent',
-                  textAlign: 'start',
-                  transition: 'background var(--transition-fast)',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <div style={{ marginTop: '0.15rem' }}>{modeIcons[m]}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>{modeInfo.label}</span>
-                    {isSelected && <Check size={14} style={{ color: 'var(--accent-emerald)' }} />}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: 1.35 }}>
-                    {modeInfo.desc}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Main Composer Box */}
-      <div
-        style={{
-          borderRadius: 'var(--radius-lg)',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-highlight)',
-          boxShadow: 'var(--shadow-md)',
-          padding: '0.5rem 0.75rem',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'border-color var(--transition-fast)',
-        }}
-        onFocus={() => {
-          // highlight border
-        }}
-      >
-        {/* Input Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t.composerPlaceholder}
-          rows={1}
-          disabled={isGenerating}
-          style={{
-            width: '100%',
-            background: 'transparent',
-            border: 'none',
-            resize: 'none',
-            fontSize: '0.92rem',
-            lineHeight: 1.5,
-            padding: '0.35rem 0.25rem',
-            color: 'var(--text-primary)',
-            outline: 'none',
-            maxHeight: '180px',
-            minHeight: '24px',
-          }}
-        />
-
-        {/* Toolbar Bottom Row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.35rem' }}>
-          {/* Mode Selector Pill Button */}
-          <button
-            onClick={() => setIsModeOpen(!isModeOpen)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.35rem 0.65rem',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              fontSize: '0.78rem',
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              transition: 'all var(--transition-fast)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-              e.currentTarget.style.color = 'var(--text-primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-card)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
-            }}
-          >
-            {modeIcons[activeMode]}
-            <span>{t.ragModes[activeMode].short}</span>
-            <ChevronUp size={13} style={{ opacity: 0.7 }} />
+  return <div className="composer-wrap">
+    <div className="composer">
+      <textarea id="message-input" ref={inputRef} value={value} onChange={e => onChange(e.target.value)}
+        onKeyDown={onKeyDown} placeholder={t.composerPlaceholder} aria-label={t.messageLabel}
+        rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={30000} />
+      <div className="composer-toolbar">
+        <div className="composer-tools">
+          <button className="icon-button attach-button" onClick={props.onOpenDocuments} aria-label={t.attach} title={t.attach}><Paperclip size={20} />
+            {props.documentCount > 0 && <span className="attachment-dot" />}
           </button>
-
-          {/* Send / Stop Button */}
-          {isGenerating ? (
-            <button
-              onClick={onStopGenerating}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--accent-rose)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-              title={t.stop}
-            >
-              <Square size={14} fill="#fff" />
+          <span className="toolbar-divider" />
+          <div className="mode-control">
+            <button ref={triggerRef} className="mode-trigger" aria-haspopup="menu" aria-expanded={modeOpen} aria-controls="answer-mode-menu"
+              onClick={() => setModeOpen(!modeOpen)} title={t.modeLabel}>
+              <ModeIcon size={16} /><span>{t.ragModes[activeMode].short}</span><ChevronDown size={14} className={modeOpen ? 'rotate' : ''} />
             </button>
-          ) : (
-            <button
-              onClick={handleSend}
-              disabled={!input.trim()}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: input.trim() ? 'var(--accent-blue)' : 'var(--bg-card)',
-                color: input.trim() ? '#fff' : 'var(--text-muted)',
-                cursor: input.trim() ? 'pointer' : 'not-allowed',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all var(--transition-fast)',
-                boxShadow: input.trim() ? 'var(--shadow-sm)' : 'none',
-              }}
-              title={t.send}
-            >
-              <ArrowUp size={16} />
-            </button>
-          )}
+            {modeOpen && <div ref={menuRef} id="answer-mode-menu" className="mode-menu" role="menu" aria-label={t.modeLabel} onKeyDown={menuKeyboard}>
+              <p className="menu-caption">{t.modeLabel}</p>
+              {MODES.map(mode => {
+                const Icon = modeIcons[mode];
+                return <button key={mode} role="menuitemradio" aria-checked={mode === activeMode} className="mode-option"
+                  onClick={() => { props.onChangeMode(mode); setModeOpen(false); triggerRef.current?.focus(); }}>
+                  <span className="mode-icon"><Icon size={18} /></span>
+                  <span><strong>{t.ragModes[mode].label}</strong><small>{t.ragModes[mode].desc}</small></span>
+                  {mode === activeMode && <Check size={16} className="mode-check" />}
+                </button>;
+              })}
+            </div>}
+          </div>
+        </div>
+        <div className="composer-send"><span className="input-hint">{t.inputHint}</span>
+          {isGenerating ? <button className="send-button stop-button" onClick={props.onStopGenerating} aria-label={t.stop} title={t.stop}><Square size={16} fill="currentColor" /></button>
+            : <button className="send-button" disabled={!value.trim() || props.isBusy} onClick={send} aria-label={t.send} title={t.send}><ArrowUp size={20} /></button>}
         </div>
       </div>
     </div>
-  );
-};
+    <p className="composer-disclaimer">{props.isBusy && !isGenerating ? t.otherGenerating : t.disclaimer}</p>
+  </div>;
+}
+

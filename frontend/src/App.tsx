@@ -1,491 +1,286 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertCircle, FileText, X } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DocumentCenter } from './components/DocumentCenter';
 import { ChatFeed } from './components/ChatFeed';
 import { Composer } from './components/Composer';
 import { SettingsModal } from './components/SettingsModal';
-import { Session, Message, SessionDocument, AppSettings, RAGMode, Citation } from './types';
+import { Welcome } from './components/Welcome';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import type { AppSettings, Message, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
+import { buildQuery, createSession, isRecord, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, STORAGE, validateUploads } from './core/state';
 
-const STORAGE_KEY_SESSIONS = 'parsrag_sessions_v1';
-const STORAGE_KEY_ACTIVE_ID = 'parsrag_active_session_id_v1';
-const STORAGE_KEY_SETTINGS = 'parsrag_settings_v1';
+function readStorage(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
 
-const DEFAULT_SETTINGS: AppSettings = {
-  language: 'fa',
-  theme: 'dark',
-  defaultMode: 'hybrid',
-  strictThreshold: 0.80,
-  dynamicDepth: true,
-  topK: 15,
-  selectedModel: 'llama3.1:8b',
-  backendUrl: 'http://localhost:8000',
-};
-
-const createNewSessionObject = (lang: string, defaultMode: RAGMode): Session => {
-  const id = `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const title = lang === 'fa' ? 'گفتگوی جدید' : 'New Chat';
-  return {
-    id,
-    title,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    documents: [],
-    messages: [],
-    ragMode: defaultMode,
-  };
-};
-
-export const App: React.FC = () => {
-  // 1. Settings State
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
-    } catch {
-      return DEFAULT_SETTINGS;
-    }
-  });
-
-  // 2. Sessions State
+export function App() {
+  const [settings, setSettings] = useState(() => parseSettings(readStorage(STORAGE.settings), window.location.origin));
   const [sessions, setSessions] = useState<Session[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_SESSIONS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // ignore
-    }
-    return [createNewSessionObject(settings.language, settings.defaultMode)];
+    const stored = parseSessions(readStorage(STORAGE.sessions));
+    return stored.length ? stored : [createSession(settings.language, settings.defaultMode)];
   });
-
-  // 3. Active Session ID
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
-      if (stored && sessions.some(s => s.id === stored)) return stored;
-    } catch {
-      // ignore
-    }
-    return sessions[0]?.id || '';
+  const [activeId, setActiveId] = useState(() => {
+    const stored = readStorage(STORAGE.active);
+    return sessions.some(s => s.id === stored) ? stored! : sessions[0].id;
   });
-
-  // 4. Operational UI States
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isBackendOnline, setIsBackendOnline] = useState(true);
-
+  const isMobile = useMediaQuery('(max-width: 760px)');
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [generatingId, setGeneratingId] = useState<string>();
+  const [uploadingId, setUploadingId] = useState<string>();
+  const [connection, setConnection] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
+  const [storageError, setStorageError] = useState(false);
+  const [focusToken, setFocusToken] = useState(0);
+  const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
+  const uploadRef = useRef(false);
+  const healthRef = useRef<AbortController>();
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const active = sessions.find(s => s.id === activeId) ?? sessions[0];
   const t = translations[settings.language];
-  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const endpoint = settings.backendUrl.replace(/\/+$/, '');
+  const busy = Boolean(generatingId || uploadingId);
 
-  // Apply Direction and Theme to document root
+  const updateSession = useCallback((id: string, update: (session: Session) => Session) => {
+    setSessions(previous => previous.map(session => session.id === id ? update(session) : session));
+  }, []);
+
+  useEffect(() => { setSidebarOpen(!isMobile); }, [isMobile]);
   useEffect(() => {
     document.documentElement.dir = settings.language === 'fa' ? 'rtl' : 'ltr';
-    document.documentElement.setAttribute('data-theme', settings.theme);
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-  }, [settings]);
-
-  // Persist sessions
+    document.documentElement.lang = settings.language;
+    document.documentElement.dataset.theme = settings.theme;
+    document.title = settings.language === 'fa' ? 'پارس‌رگ — از پرسش، به بینش' : 'ParsRAG — A clearer perspective';
+  }, [settings.language, settings.theme]);
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
-  }, [sessions]);
-
-  // Persist active session ID
-  useEffect(() => {
-    if (activeSessionId) {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activeSessionId);
-    }
-  }, [activeSessionId]);
-
-  // Health check & session files sync
-  const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch(`${settings.backendUrl}/health`);
-      setIsBackendOnline(res.ok);
+      localStorage.setItem(STORAGE.settings, JSON.stringify(settings));
+      localStorage.setItem(STORAGE.sessions, JSON.stringify(sessions));
+      localStorage.setItem(STORAGE.active, activeId);
+      setStorageError(false);
+    } catch { setStorageError(true); }
+  }, [settings, sessions, activeId]);
+
+  const checkHealth = useCallback(async () => {
+    healthRef.current?.abort();
+    const controller = new AbortController();
+    healthRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(endpoint + '/health', { signal: controller.signal });
+      if (healthRef.current === controller) setConnection(response.ok ? 'online' : 'offline');
     } catch {
-      setIsBackendOnline(false);
-    }
-  }, [settings.backendUrl]);
+      if (healthRef.current === controller) setConnection('offline');
+    } finally { clearTimeout(timeout); }
+  }, [endpoint]);
 
   useEffect(() => {
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
+    setConnection('checking'); void checkHealth();
+    const interval = setInterval(() => void checkHealth(), 30000);
+    return () => { clearInterval(interval); healthRef.current?.abort(); healthRef.current = undefined; };
   }, [checkHealth]);
 
-  // Sync session files from backend when active session changes
+  // Cancel stale synchronization when changing conversations, endpoints, or uploading.
   useEffect(() => {
-    if (!activeSession?.id) return;
-    const syncFiles = async () => {
+    if (connection !== 'online' || uploadingId === active.id) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    void (async () => {
       try {
-        const res = await fetch(`${settings.backendUrl}/sessions/${activeSession.id}/files`);
-        if (res.ok) {
-          const remoteFiles: string[] = await res.json();
-          if (Array.isArray(remoteFiles) && remoteFiles.length > 0) {
-            setSessions(prev =>
-              prev.map(s => {
-                if (s.id !== activeSession.id) return s;
-                // Merge remote files
-                const existingNames = new Set(s.documents.map(d => d.name));
-                const mergedDocs = [...s.documents];
-                remoteFiles.forEach(rf => {
-                  if (!existingNames.has(rf)) {
-                    mergedDocs.push({ name: rf, status: 'indexed' });
-                  }
-                });
-                return { ...s, documents: mergedDocs };
-              })
-            );
-          }
-        }
-      } catch {
-        // ignore offline error
-      }
-    };
-    syncFiles();
-  }, [activeSession?.id, settings.backendUrl]);
+        const response = await fetch(endpoint + '/sessions/' + active.id + '/files', { signal: controller.signal });
+        if (!response.ok) return;
+        const remote: unknown = await response.json();
+        if (!controller.signal.aborted) updateSession(active.id, s => ({ ...s, documents: mergeRemoteDocuments(s.documents, remote) }));
+      } catch { /* Keep the last known documents when the service is unavailable. */ }
+      finally { clearTimeout(timeout); }
+    })();
+    return () => { controller.abort(); clearTimeout(timeout); };
+  }, [active.id, endpoint, connection, uploadingId, updateSession]);
+  useEffect(() => () => queryRef.current?.controller.abort(), []);
 
-  // Global Keyboard Shortcuts (Ctrl+N for new chat)
+  const newChat = useCallback(() => {
+    const blank = sessionsRef.current.find(s => !s.messages.length && !s.documents.length && !s.draft?.trim());
+    const session = blank ?? createSession(settings.language, settings.defaultMode);
+    if (!blank) setSessions(previous => [session, ...previous]);
+    setActiveId(session.id); setNotice(null); setDocumentsOpen(false);
+    if (isMobile) setSidebarOpen(false);
+    setFocusToken(value => value + 1);
+  }, [settings.language, settings.defaultMode, isMobile]);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        handleNewChat();
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'o' && !document.querySelector('dialog[open]')) {
+        event.preventDefault(); newChat();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.language, settings.defaultMode]);
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [newChat]);
 
-  // Session Handlers
-  const handleNewChat = () => {
-    const newSession = createNewSessionObject(settings.language, settings.defaultMode);
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSessionId(newSession.id);
-    setIsSidebarOpen(false);
+  const stop = () => {
+    const current = queryRef.current;
+    if (!current) return;
+    current.controller.abort('user');
+    queryRef.current = null; setGeneratingId(undefined);
+    updateSession(current.sessionId, s => ({ ...s, messages: [...s.messages, {
+      id: crypto.randomUUID(), role: 'system', content: t.stopped, timestamp: Date.now(),
+    }] }));
   };
 
-  const handleSelectSession = (id: string) => {
-    setActiveSessionId(id);
-    setIsSidebarOpen(false);
-  };
-
-  const handleDeleteSession = async (id: string) => {
-    // Delete vectors on backend
-    try {
-      await fetch(`${settings.backendUrl}/sessions/${id}`, { method: 'DELETE' });
-    } catch {
-      // ignore
+  const send = async (session: Session, prompt: string, retryId?: string) => {
+    if (!prompt.trim() || queryRef.current || uploadRef.current) return;
+    if (session.ragMode === 'strict' && !session.documents.some(d => d.status === 'indexed')) {
+      setNotice(t.uploadFirst); setDocumentsOpen(true); return;
     }
-
-    const filtered = sessions.filter(s => s.id !== id);
-    if (filtered.length === 0) {
-      const fresh = createNewSessionObject(settings.language, settings.defaultMode);
-      setSessions([fresh]);
-      setActiveSessionId(fresh.id);
-    } else {
-      setSessions(filtered);
-      if (activeSessionId === id) {
-        setActiveSessionId(filtered[0].id);
-      }
-    }
-  };
-
-  const handleRenameSession = (id: string, newTitle: string) => {
-    setSessions(prev =>
-      prev.map(s => (s.id === id ? { ...s, title: newTitle, updatedAt: Date.now() } : s))
-    );
-  };
-
-  const handleClearAllData = () => {
-    const fresh = createNewSessionObject(settings.language, settings.defaultMode);
-    setSessions([fresh]);
-    setActiveSessionId(fresh.id);
-    localStorage.removeItem(STORAGE_KEY_SESSIONS);
-    localStorage.removeItem(STORAGE_KEY_ACTIVE_ID);
-  };
-
-  // Document Upload Handlers (Decoupled from Messages)
-  const handleUploadFiles = async (files: File[]) => {
-    if (!activeSession || files.length === 0) return;
-
-    const remainingSlots = 5 - activeSession.documents.length;
-    if (remainingSlots <= 0) return;
-
-    const filesToUpload = files.slice(0, remainingSlots);
-    setIsUploading(true);
-
-    // Add optimistic uploading state
-    const optimisticDocs: SessionDocument[] = filesToUpload.map(f => ({
-      name: f.name,
-      size: f.size,
-      status: 'uploading',
+    const requestSession = retryId ? { ...session, messages: session.messages.filter(m => m.id !== retryId) } : session;
+    // A retried prompt is already present in history; do not duplicate it.
+    const historySession = retryId ? { ...requestSession, messages: requestSession.messages.slice(0, -1) } : requestSession;
+    const payload = buildQuery(historySession, settings, prompt);
+    const controller = new AbortController();
+    queryRef.current = { controller, sessionId: session.id };
+    setGeneratingId(session.id); setNotice(null);
+    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: prompt.trim(), timestamp: Date.now() };
+    updateSession(session.id, s => ({
+      ...s, messages: retryId ? s.messages.filter(m => m.id !== retryId) : [...s.messages, userMessage],
+      draft: retryId ? s.draft : '',
+      title: s.messages.length ? s.title : prompt.trim().slice(0, 48) + (prompt.trim().length > 48 ? '…' : ''),
+      updatedAt: Date.now(),
     }));
-
-    setSessions(prev =>
-      prev.map(s => (s.id === activeSession.id ? { ...s, documents: [...s.documents, ...optimisticDocs] } : s))
-    );
-
-    const formData = new FormData();
-    filesToUpload.forEach(f => {
-      formData.append('files', f);
-    });
-    formData.append('session_id', activeSession.id);
-
+    const timeout = setTimeout(() => controller.abort('timeout'), 180000);
     try {
-      const res = await fetch(`${settings.backendUrl}/ingest`, {
-        method: 'POST',
-        body: formData,
+      const response = await fetch(endpoint + '/query', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload), signal: controller.signal,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(errorData.detail || 'Failed to ingest documents');
-      }
-
-      // Mark uploaded docs as indexed
-      setSessions(prev =>
-        prev.map(s => {
-          if (s.id !== activeSession.id) return s;
-          const updatedDocs = s.documents.map(d => {
-            const isJustUploaded = filesToUpload.some(f => f.name === d.name);
-            return isJustUploaded ? { ...d, status: 'indexed' as const } : d;
-          });
-          return { ...s, documents: updatedDocs };
-        })
-      );
-    } catch (err: any) {
-      setSessions(prev =>
-        prev.map(s => {
-          if (s.id !== activeSession.id) return s;
-          const updatedDocs = s.documents.map(d => {
-            const isJustUploaded = filesToUpload.some(f => f.name === d.name);
-            return isJustUploaded ? { ...d, status: 'error' as const, errorMessage: err.message } : d;
-          });
-          return { ...s, documents: updatedDocs };
-        })
-      );
+      if (!response.ok) throw new Error('query_failed');
+      const data = parseAnswer(await response.json());
+      if (controller.signal.aborted) return;
+      updateSession(session.id, s => ({ ...s, messages: [...s.messages, {
+        id: crypto.randomUUID(), role: 'assistant', content: data.answer, citations: data.citations, timestamp: Date.now(),
+      }], updatedAt: Date.now() }));
+      setConnection('online');
+    } catch (error: unknown) {
+      if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
+      const content = controller.signal.reason === 'timeout' ? t.timeout
+        : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
+      updateSession(session.id, s => ({ ...s, messages: [...s.messages, {
+        id: crypto.randomUUID(), role: 'assistant', content, error: true, timestamp: Date.now(),
+      }], updatedAt: Date.now() }));
+      void checkHealth();
     } finally {
-      setIsUploading(false);
+      clearTimeout(timeout);
+      if (queryRef.current?.controller === controller) { queryRef.current = null; setGeneratingId(undefined); }
     }
   };
 
-  const handleRemoveDocument = (docName: string) => {
-    setSessions(prev =>
-      prev.map(s => {
-        if (s.id !== activeSession.id) return s;
-        return {
-          ...s,
-          documents: s.documents.filter(d => d.name !== docName),
-        };
-      })
-    );
-  };
-
-  // Mode Change Handler
-  const handleChangeMode = (mode: RAGMode) => {
-    setSessions(prev =>
-      prev.map(s => (s.id === activeSession.id ? { ...s, ragMode: mode } : s))
-    );
-  };
-
-  // Message Send Handler
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || !activeSession || isGenerating) return;
-
-    const userMessage: Message = {
-      id: `msg_${Date.now()}_user`,
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-    };
-
-    // Auto-generate title from first message
-    const isFirstMessage = activeSession.messages.length === 0;
-    const newTitle = isFirstMessage
-      ? text.length > 28 ? `${text.substring(0, 28)}...` : text
-      : activeSession.title;
-
-    const updatedMessages = [...activeSession.messages, userMessage];
-
-    setSessions(prev =>
-      prev.map(s =>
-        s.id === activeSession.id
-          ? { ...s, title: newTitle, messages: updatedMessages, updatedAt: Date.now() }
-          : s
-      )
-    );
-
-    setIsGenerating(true);
-
+  const upload = async (files: File[]) => {
+    if (uploadRef.current || queryRef.current) return;
+    const sessionId = active.id;
+    const validation = validateUploads(files, active.documents);
+    setUploadError(validation.rejected.length ? {
+      sessionId, text: validation.rejected.map(issue => issue.name + ': ' + t.uploadErrors[issue.reason]).join('\n'),
+    } : null);
+    if (!validation.accepted.length) return;
+    const acceptedFiles = validation.accepted.map(index => files[index]);
+    uploadRef.current = true; setUploadingId(sessionId);
+    const optimistic: SessionDocument[] = acceptedFiles.map(file => ({ name: file.name, size: file.size, status: 'uploading', enabled: true }));
+    updateSession(sessionId, s => ({ ...s, documents: [...s.documents, ...optimistic], updatedAt: Date.now() }));
     try {
-      const chatHistoryPayload = activeSession.messages.slice(-10).map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const payload = {
-        prompt: text,
-        mode: activeSession.ragMode || settings.defaultMode,
-        session_id: activeSession.id,
-        top_k: settings.dynamicDepth ? null : settings.topK,
-        chat_history: chatHistoryPayload,
-      };
-
-      const res = await fetch(`${settings.backendUrl}/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ detail: 'Failed to generate answer' }));
-        throw new Error(errData.detail || `Server error (${res.status})`);
-      }
-
-      const data = await res.json();
-
-      // Parse source nodes into citations
-      const citations: Citation[] = (data.source_nodes || []).map((node: any, idx: number) => ({
-        title: `${t.citationsTitle} ${idx + 1}`,
-        filename: node.metadata?.filename || 'Document',
-        body: node.text || '',
-        score: node.score || 0,
-      }));
-
-      const assistantMessage: Message = {
-        id: `msg_${Date.now()}_bot`,
-        role: 'assistant',
-        content: data.answer || '',
-        timestamp: Date.now(),
-        citations,
-      };
-
-      setSessions(prev =>
-        prev.map(s =>
-          s.id === activeSession.id
-            ? { ...s, messages: [...s.messages, assistantMessage], updatedAt: Date.now() }
-            : s
-        )
-      );
-    } catch (err: any) {
-      const errorMessage: Message = {
-        id: `msg_${Date.now()}_err`,
-        role: 'assistant',
-        content: `⚠️ ${err.message || 'Error occurred while contacting backend.'}`,
-        timestamp: Date.now(),
-        error: true,
-      };
-
-      setSessions(prev =>
-        prev.map(s =>
-          s.id === activeSession.id
-            ? { ...s, messages: [...s.messages, errorMessage], updatedAt: Date.now() }
-            : s
-        )
-      );
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        backgroundColor: 'var(--bg-base)',
-      }}
-    >
-      {/* Session Sidebar */}
-      <Sidebar
-        sessions={sessions}
-        activeSessionId={activeSession?.id || ''}
-        onSelectSession={handleSelectSession}
-        onNewChat={handleNewChat}
-        onDeleteSession={handleDeleteSession}
-        onRenameSession={handleRenameSession}
-        language={settings.language}
-        onToggleLanguage={() =>
-          setSettings(s => ({ ...s, language: s.language === 'fa' ? 'en' : 'fa' }))
-        }
-        theme={settings.theme}
-        onToggleTheme={() =>
-          setSettings(s => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))
-        }
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        isBackendOnline={isBackendOnline}
-      />
-
-      {/* Main Chat Workspace */}
-      <main
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden',
-          backgroundColor: 'var(--bg-base)',
-          position: 'relative',
-        }}
-      >
-        {/* Top Header */}
-        <Header
-          title={activeSession?.title || t.newChat}
-          activeMode={activeSession?.ragMode || settings.defaultMode}
-          language={settings.language}
-          onToggleLanguage={() =>
-            setSettings(s => ({ ...s, language: s.language === 'fa' ? 'en' : 'fa' }))
+      for (const file of acceptedFiles) {
+        const form = new FormData(); form.append('files', file); form.append('session_id', sessionId);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 180000);
+        try {
+          const response = await fetch(endpoint + '/ingest', { method: 'POST', body: form, signal: controller.signal });
+          if (!response.ok) {
+            const detail: unknown = await response.json().catch(() => null);
+            const text = isRecord(detail) && typeof detail.detail === 'string' ? detail.detail : '';
+            if (text.includes('Scanned PDFs')) throw new Error(settings.language === 'fa' ? 'این PDF اسکن‌شده است و متن قابل انتخاب ندارد.' : 'This PDF is scanned and has no selectable text.');
+            throw new Error(t.uploadFailed);
           }
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
+          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', errorMessage: undefined } : d) }));
+        } catch (error: unknown) {
+          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
+            ...d, status: 'error', errorMessage: error instanceof Error && error.message !== 'Failed to fetch' && error.name !== 'AbortError' ? error.message : t.uploadFailed,
+          } : d) }));
+        } finally { clearTimeout(timeout); }
+      }
+    } finally { uploadRef.current = false; setUploadingId(undefined); }
+  };
 
-        {/* Dedicated Document Center (Decoupled from Messages) */}
-        <DocumentCenter
-          documents={activeSession?.documents || []}
-          onUploadFiles={handleUploadFiles}
-          onRemoveDocument={handleRemoveDocument}
-          language={settings.language}
-          isUploading={isUploading}
-        />
+  const deleteSession = async (id: string): Promise<boolean> => {
+    if (uploadingId === id) return false;
+    const session = sessionsRef.current.find(s => s.id === id);
+    if (!session) return true;
+    try {
+      if (session.documents.length || session.messages.length) {
+        const response = await fetch(endpoint + '/sessions/' + id, { method: 'DELETE', signal: AbortSignal.timeout(15000) });
+        if (!response.ok) return false;
+      }
+      if (queryRef.current?.sessionId === id) { queryRef.current.controller.abort('deleted'); queryRef.current = null; setGeneratingId(undefined); }
+      const remaining = sessionsRef.current.filter(s => s.id !== id);
+      if (!remaining.length) remaining.push(createSession(settings.language, settings.defaultMode));
+      setSessions(remaining);
+      if (activeId === id) setActiveId(remaining[0].id);
+      return true;
+    } catch { return false; }
+  };
 
-        {/* Chat Messages Feed */}
-        <ChatFeed
-          messages={activeSession?.messages || []}
-          language={settings.language}
-          onSelectStarterPrompt={handleSendMessage}
-          isGenerating={isGenerating}
-        />
+  const updateSettings = (updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated }));
+  const selectedDocuments = active.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
+  const composer = <Composer key={active.id} value={active.draft ?? ''} onChange={draft => updateSession(active.id, s => ({ ...s, draft }))}
+    onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
+    isGenerating={generatingId === active.id} isBusy={busy} activeMode={active.ragMode}
+    onChangeMode={ragMode => updateSession(active.id, s => ({ ...s, ragMode }))}
+    language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken} />;
 
-        {/* Floating Message Composer */}
-        <Composer
-          onSendMessage={handleSendMessage}
-          onStopGenerating={() => setIsGenerating(false)}
-          isGenerating={isGenerating}
-          activeMode={activeSession?.ragMode || settings.defaultMode}
-          onChangeMode={handleChangeMode}
-          language={settings.language}
-        />
-      </main>
+  return <div className="app-shell">
+    <a href="#message-input" className="skip-link">{t.messageLabel}</a>
+    <Sidebar sessions={sessions} activeSessionId={active.id} generatingSessionId={generatingId}
+      onSelectSession={id => { setActiveId(id); setNotice(null); setDocumentsOpen(false); if (isMobile) setSidebarOpen(false); }}
+      onNewChat={newChat} onDeleteSession={deleteSession}
+      onRenameSession={(id, title) => updateSession(id, s => ({ ...s, title, updatedAt: Date.now() }))}
+      language={settings.language} theme={settings.theme}
+      onToggleTheme={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+      onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
+      connection={connection} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
+    <main className="workspace">
+      <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length}
+        documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
+      {(notice || storageError) && <div className="notice" role="status"><AlertCircle size={17} /><span>{storageError ? t.storageFailed : notice}</span>{!storageError && <button className="icon-button" onClick={() => setNotice(null)} aria-label={t.dismiss}><X size={16} /></button>}</div>}
+      {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
+        updateSession(active.id, s => ({ ...s, draft, ragMode: index === 2 ? 'llm-only' : 'hybrid' }));
+        setFocusToken(value => value + 1);
+      }} /> : <>
+        <ChatFeed key={active.id} messages={active.messages} language={settings.language} isGenerating={generatingId === active.id} activeMode={active.ragMode}
+          isBusy={busy} onRetry={messageId => {
+            const errorIndex = active.messages.findIndex(m => m.id === messageId);
+            const previous = active.messages.slice(0, errorIndex).reverse().find(m => m.role === 'user');
+            if (previous) void send(active, previous.content, messageId);
+          }} />
+        <div className="active-composer">
+          {selectedDocuments.length > 0 && active.ragMode !== 'llm-only' && <button className="active-documents" onClick={() => setDocumentsOpen(true)}><FileText size={13} />{selectedDocuments.length.toLocaleString(settings.language)} {t.selectedDocs}</button>}
+          {composer}
+        </div>
+      </>}
+    </main>
+    <DocumentCenter isOpen={documentsOpen} onClose={() => setDocumentsOpen(false)} documents={active.documents}
+      onUploadFiles={files => void upload(files)} language={settings.language} isUploading={busy} activeMode={active.ragMode}
+      error={uploadError?.sessionId === active.id ? uploadError.text : null}
+      onRemoveFailed={name => updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name || d.status !== 'error') }))}
+      onToggleDocument={name => updateSession(active.id, s => {
+        const selected = s.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
+        if (selected.length === 1 && selected[0].name === name) return s;
+        return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
+      })} />
+    {settingsOpen && <SettingsModal settings={settings} onClose={() => setSettingsOpen(false)} onUpdateSettings={updateSettings} busy={busy}
+      onClearAllData={() => { const fresh = createSession(settings.language, settings.defaultMode); setSessions([fresh]); setActiveId(fresh.id); setNotice(null); }} />}
+  </div>;
+}
 
-      {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onUpdateSettings={(updated) => setSettings(s => ({ ...s, ...updated }))}
-        onClearAllData={handleClearAllData}
-      />
-    </div>
-  );
-};
