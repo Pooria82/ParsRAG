@@ -6,6 +6,8 @@ const { ChatFeed } = require('./.compiled/components/ChatFeed.js');
 const { Composer } = require('./.compiled/components/Composer.js');
 const { DocumentCenter } = require('./.compiled/components/DocumentCenter.js');
 const { SettingsModal } = require('./.compiled/components/SettingsModal.js');
+const { BootSequence } = require('./.compiled/components/BootSequence.js');
+const { ChoiceMenu } = require('./.compiled/components/ui/ChoiceMenu.js');
 const { DEFAULT_SETTINGS } = require('./.compiled/core/state.js');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 const noop = () => {};
@@ -59,4 +61,20 @@ test('settings render labeled native choices and modal semantics in both languag
     assert.match(html, /role="tablist"/);
     assert.equal((html.match(/type="radio"/g) || []).length, 4);
   }
+});
+
+test('startup sequence exposes a quiet branded status before the workspace appears', () => {
+  const html = render(BootSequence, { language: 'fa' });
+  assert.match(html, /class="boot-sequence"/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /پارس‌رگ/);
+  assert.match(html, /boot-trace/);
+});
+
+test('settings mode selector is a keyboard-ready custom menu rather than a native select', () => {
+  const html = render(ChoiceMenu, { label: 'Answer mode', value: 'hybrid', onChange: noop,
+    options: [{ value: 'hybrid', label: 'Hybrid' }, { value: 'strict', label: 'Strict' }] });
+  assert.match(html, /aria-haspopup="menu"/);
+  assert.match(html, /class="choice-menu-trigger"/);
+  assert.doesNotMatch(html, /<select/);
 });

@@ -4,13 +4,15 @@ import type { AppSettings, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
+import { ChoiceMenu } from './ui/ChoiceMenu';
 
 interface SettingsModalProps {
+  open?: boolean;
   onClose: () => void; settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => void; busy: boolean;
 }
 
-export function SettingsModal({ onClose, settings, onUpdateSettings, onClearAllData, busy }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy }: SettingsModalProps) {
   const t = translations[settings.language];
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -18,7 +20,7 @@ export function SettingsModal({ onClose, settings, onUpdateSettings, onClearAllD
   const [invalid, setInvalid] = useState(false);
   const [saved, setSaved] = useState(false);
   const tabs = [{ id: 'general', label: t.tabGeneral, Icon: Sun }, { id: 'rag', label: t.tabRAG, Icon: SlidersHorizontal }, { id: 'connection', label: t.tabModel, Icon: Database }] as const;
-  return <Dialog open onClose={onClose} title={t.settingsTitle} subtitle={t.settingsSubtitle} closeLabel={t.close} className="settings-dialog">
+  return <Dialog open={open} onClose={onClose} title={t.settingsTitle} subtitle={t.settingsSubtitle} closeLabel={t.close} className="settings-dialog">
     <div className="settings-tabs" role="tablist" aria-label={t.settingsTitle}>
       {tabs.map(({ id, label, Icon }, index) => <button key={id} id={'tab-' + id} role="tab" aria-controls={'panel-' + id}
         aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)}
@@ -30,7 +32,7 @@ export function SettingsModal({ onClose, settings, onUpdateSettings, onClearAllD
           setTab(tabs[next].id); document.getElementById('tab-' + tabs[next].id)?.focus();
         }}><Icon size={16} />{label}</button>)}
     </div>
-    <div className="settings-body" role="tabpanel" id={'panel-' + tab} aria-labelledby={'tab-' + tab} tabIndex={0}>
+    <div key={tab} className="settings-body" role="tabpanel" id={'panel-' + tab} aria-labelledby={'tab-' + tab} tabIndex={0}>
       {tab === 'general' && <>
         <fieldset className="setting-field"><legend>{t.themeLabel}</legend><div className="theme-choices">
           {(['light', 'dark'] as const).map(theme => <label className={'theme-choice preview-' + theme + (settings.theme === theme ? ' is-selected' : '')} key={theme}>
@@ -45,10 +47,10 @@ export function SettingsModal({ onClose, settings, onUpdateSettings, onClearAllD
         </div></fieldset>
       </>}
       {tab === 'rag' && <>
-        <div className="setting-field"><label htmlFor="default-mode">{t.defaultModeLabel}</label>
-          <select id="default-mode" className="text-input" value={settings.defaultMode} onChange={e => onUpdateSettings({ defaultMode: e.target.value as RAGMode })}>
-            {MODES.map(mode => <option value={mode} key={mode}>{t.ragModes[mode].label}</option>)}
-          </select>
+        <div className="setting-field"><label>{t.defaultModeLabel}</label>
+          <ChoiceMenu<RAGMode> label={t.defaultModeLabel} value={settings.defaultMode}
+            options={MODES.map(mode => ({ value: mode, label: t.ragModes[mode].label, description: t.ragModes[mode].desc }))}
+            onChange={defaultMode => onUpdateSettings({ defaultMode })} disabled={busy} />
         </div>
         <label className="switch-setting"><span><strong>{t.dynamicDepthLabel}</strong><small>{t.dynamicDepthDesc}</small></span>
           <input type="checkbox" role="switch" checked={settings.dynamicDepth} onChange={e => onUpdateSettings({ dynamicDepth: e.target.checked })} />

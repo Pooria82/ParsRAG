@@ -9,7 +9,7 @@ interface SidebarProps {
   sessions: Session[]; activeSessionId: string; generatingSessionId?: string;
   onSelectSession: (id: string) => void; onNewChat: () => void;
   onDeleteSession: (id: string) => Promise<boolean>; onRenameSession: (id: string, title: string) => void;
-  language: Language; theme: Theme; onToggleTheme: () => void;
+  language: Language; theme: Theme; onToggleTheme: (origin: { x: number; y: number }) => void;
   onOpenSettings: () => void; isOpen: boolean; isMobile: boolean; onClose: () => void;
   connection: 'checking' | 'online' | 'offline'; onRetryConnection: () => void;
   uploadingSessionId?: string;
@@ -74,7 +74,10 @@ export function Sidebar(props: SidebarProps) {
       </div>
       <div className="sidebar-footer">
         <button className="settings-button" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>
-        <button className="icon-button theme-toggle" onClick={props.onToggleTheme} aria-label={theme === 'dark' ? t.themeLight : t.themeDark} title={theme === 'dark' ? t.themeLight : t.themeDark}>
+        <button className="icon-button theme-toggle" onClick={event => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          props.onToggleTheme({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+        }} aria-label={theme === 'dark' ? t.themeLight : t.themeDark} title={theme === 'dark' ? t.themeLight : t.themeDark}>
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>

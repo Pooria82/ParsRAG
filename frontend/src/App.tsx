@@ -7,7 +7,9 @@ import { ChatFeed } from './components/ChatFeed';
 import { Composer } from './components/Composer';
 import { SettingsModal } from './components/SettingsModal';
 import { Welcome } from './components/Welcome';
+import { BootSequence } from './components/BootSequence';
 import { useMediaQuery } from './hooks/useMediaQuery';
+import { useThemeTransition } from './hooks/useThemeTransition';
 import type { AppSettings, Message, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { buildQuery, createSession, isRecord, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, STORAGE, validateUploads } from './core/state';
@@ -232,7 +234,8 @@ export function App() {
     } catch { return false; }
   };
 
-  const updateSettings = (updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated }));
+  const updateSettings = useCallback((updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated })), []);
+  const transitionTheme = useThemeTransition(theme => updateSettings({ theme }));
   const selectedDocuments = active.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
   const composer = <Composer key={active.id} value={active.draft ?? ''} onChange={draft => updateSession(active.id, s => ({ ...s, draft }))}
     onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
@@ -241,13 +244,14 @@ export function App() {
     language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken} />;
 
   return <div className="app-shell">
+    <BootSequence language={settings.language} />
     <a href="#message-input" className="skip-link">{t.messageLabel}</a>
     <Sidebar sessions={sessions} activeSessionId={active.id} generatingSessionId={generatingId}
       onSelectSession={id => { setActiveId(id); setNotice(null); setDocumentsOpen(false); if (isMobile) setSidebarOpen(false); }}
       onNewChat={newChat} onDeleteSession={deleteSession}
       onRenameSession={(id, title) => updateSession(id, s => ({ ...s, title, updatedAt: Date.now() }))}
       language={settings.language} theme={settings.theme}
-      onToggleTheme={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+      onToggleTheme={origin => transitionTheme(settings.theme === 'dark' ? 'light' : 'dark', origin)}
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
       connection={connection} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
     <main className="workspace">
@@ -279,8 +283,12 @@ export function App() {
         if (selected.length === 1 && selected[0].name === name) return s;
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />
-    {settingsOpen && <SettingsModal settings={settings} onClose={() => setSettingsOpen(false)} onUpdateSettings={updateSettings} busy={busy}
-      onClearAllData={() => { const fresh = createSession(settings.language, settings.defaultMode); setSessions([fresh]); setActiveId(fresh.id); setNotice(null); }} />}
+    <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
+      onUpdateSettings={updated => {
+        if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);
+        else updateSettings(updated);
+      }} busy={busy}
+      onClearAllData={() => { const fresh = createSession(settings.language, settings.defaultMode); setSessions([fresh]); setActiveId(fresh.id); setNotice(null); }} />
   </div>;
 }
 

@@ -1,0 +1,105 @@
+/* Motion and high-fidelity interaction layer. Theme colors remain semantic in index.css. */
+.boot-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: var(--canvas);
+  color: var(--accent);
+  animation: boot-curtain 1.38s cubic-bezier(.76, 0, .24, 1) both;
+}
+
+.boot-lockup { display: grid; justify-items: center; gap: 9px; }
+.boot-mark { display: grid; width: 58px; height: 58px; animation: boot-mark .72s cubic-bezier(.16, 1, .3, 1) both; }
+.boot-mark .brand-mark { width: 100%; height: 100%; }
+.boot-wordmark { color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.3px; animation: boot-word .72s .12s both; }
+.boot-trace { display: flex; align-items: center; width: 82px; height: 5px; gap: 4px; }
+.boot-trace i { display: block; height: 2px; background: currentColor; border-radius: 2px; transform-origin: right; animation: boot-trace .7s var(--ease-out) both; }
+.boot-trace i:nth-child(1) { width: 43px; }
+.boot-trace i:nth-child(2) { width: 20px; animation-delay: .08s; }
+.boot-trace i:nth-child(3) { width: 11px; animation-delay: .16s; }
+
+@keyframes boot-mark { from { opacity: 0; transform: translateY(10px) rotate(-7deg) scale(.88); } to { opacity: 1; transform: none; } }
+@keyframes boot-word { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes boot-trace { from { transform: scaleX(0); opacity: .15; } to { transform: scaleX(1); opacity: .65; } }
+@keyframes boot-curtain { 0%, 67% { opacity: 1; clip-path: inset(0); } 100% { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden; } }
+
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 2; animation: theme-reveal .52s var(--ease-out); }
+::view-transition-old(root) { z-index: 1; }
+@keyframes theme-reveal {
+  from { clip-path: circle(0 at var(--theme-x) var(--theme-y)); }
+  to { clip-path: circle(150vmax at var(--theme-x) var(--theme-y)); }
+}
+
+.choice-menu { position: relative; }
+.choice-menu-trigger {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 13px;
+  text-align: start;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.choice-menu-trigger:hover, .choice-menu-trigger[aria-expanded='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.choice-menu-trigger > span, .choice-menu-popover button > span { min-width: 0; flex: 1; }
+.choice-menu-trigger strong, .choice-menu-popover strong { display: block; font-size: 12px; font-weight: 600; }
+.choice-menu-trigger small, .choice-menu-popover small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.choice-menu-trigger .rotate { transform: rotate(180deg); }
+.choice-menu-popover {
+  position: absolute;
+  z-index: 25;
+  inset: calc(100% + 7px) 0 auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  animation: menu-enter 170ms var(--ease-out) both;
+}
+.choice-menu-popover button { width: 100%; min-height: 55px; display: flex; align-items: center; gap: 12px; padding: 9px 10px; text-align: start; border-radius: 8px; }
+.choice-menu-popover button:hover, .choice-menu-popover button:focus-visible { background: var(--surface-soft); }
+.choice-menu-popover button[aria-checked='true'] { background: var(--accent-soft); color: var(--accent); }
+.choice-menu-popover button > svg { color: var(--accent); }
+@keyframes menu-enter { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.settings-body { animation: settings-panel-enter 220ms var(--ease-out) both; }
+@keyframes settings-panel-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.settings-tabs > button { position: relative; }
+.settings-tabs > button::after { content: ''; position: absolute; inset-inline: 18%; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transition: transform 220ms var(--ease-out); }
+.settings-tabs > button[aria-selected='true']::after { transform: scaleX(1); }
+.settings-tabs > button[aria-selected='true'] { border-bottom-color: transparent !important; }
+
+.theme-choice { transition: transform var(--ease), border-color var(--ease), box-shadow var(--ease); }
+.theme-choice:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.theme-choice.is-selected .theme-preview b { animation: preview-write 420ms var(--ease-out) both; }
+.theme-choice.is-selected .theme-preview b:nth-child(2) { animation-delay: 70ms; }
+@keyframes preview-write { from { transform: scaleX(.55); opacity: .45; } to { transform: scaleX(1); opacity: 1; } }
+
+.dialog[data-closing='true'] { animation: dialog-exit 150ms ease-in both !important; }
+.dialog[data-closing='true']::backdrop { animation: backdrop-exit 150ms ease-in both; }
+.documents-dialog[open]:not([data-closing='true']) { animation: drawer-enter 260ms var(--ease-out); }
+[dir='rtl'] .documents-dialog[open]:not([data-closing='true']) { animation-name: drawer-enter-rtl; }
+@keyframes dialog-exit { to { opacity: 0; transform: translateY(5px) scale(.985); } }
+@keyframes backdrop-exit { to { opacity: 0; } }
+@keyframes drawer-enter { from { transform: translateX(28px); opacity: .65; } }
+@keyframes drawer-enter-rtl { from { transform: translateX(-28px); opacity: .65; } }
+
+.send-button, .new-chat-button, .button, .starter-card, .settings-button, .documents-button { transition-duration: 180ms; transition-timing-function: var(--ease-out); }
+.send-button:active:not(:disabled), .button:active:not(:disabled), .icon-button:active:not(:disabled) { transform: scale(.94); }
+.starter-card:active { transform: scale(.985); }
+.theme-toggle > svg { transition: transform 320ms var(--ease-out); }
+.theme-toggle:hover > svg { transform: rotate(16deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-sequence { animation: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

@@ -8,6 +8,13 @@
     <title>پارس‌رگ — از پرسش، به بینش</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <script>
+      try {
+        const value = JSON.parse(localStorage.getItem('parsrag_settings_v1') || '{}');
+        if (value.theme === 'dark' || value.theme === 'light') document.documentElement.dataset.theme = value.theme;
+        if (value.language === 'en') { document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; }
+      } catch { /* Preferences are validated again by the application. */ }
+    </script>
   </head>
   <body>
     <div id="root"></div>
