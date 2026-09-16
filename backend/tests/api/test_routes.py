@@ -169,5 +169,3 @@ def test_session_endpoints_invalid_session_id() -> None:
     response_delete = client.delete("/sessions/invalid;semicolon")
     assert response_delete.status_code == 400
     assert "Invalid session_id" in response_delete.json()["detail"]
-
-

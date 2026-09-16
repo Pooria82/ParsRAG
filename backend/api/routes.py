@@ -154,4 +154,3 @@ def delete_session(
         )
     repo.delete_session(session_id)
     return {"message": f"Session '{session_id}' deleted successfully."}
-

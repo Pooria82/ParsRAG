@@ -74,5 +74,6 @@ app.include_router(api_router)
 # Mount built frontend SPA if available
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
-
+    app.mount(
+        "/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend"
+    )
