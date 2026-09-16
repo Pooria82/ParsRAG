@@ -8,6 +8,7 @@ const { DocumentCenter } = require('./.compiled/components/DocumentCenter.js');
 const { SettingsModal } = require('./.compiled/components/SettingsModal.js');
 const { BootSequence } = require('./.compiled/components/BootSequence.js');
 const { ChoiceMenu } = require('./.compiled/components/ui/ChoiceMenu.js');
+const { BrandMark } = require('./.compiled/components/BrandMark.js');
 const { DEFAULT_SETTINGS } = require('./.compiled/core/state.js');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 const noop = () => {};
@@ -69,6 +70,13 @@ test('startup sequence exposes a quiet branded status before the workspace appea
   assert.match(html, /role="status"/);
   assert.match(html, /پارس‌رگ/);
   assert.match(html, /boot-trace/);
+});
+
+test('brand mark is a reusable project-owned vector asset', () => {
+  const html = render(BrandMark, {});
+  assert.match(html, /data-brand="parsrag-mark"/);
+  assert.equal((html.match(/<path/g) || []).length >= 4, true);
+  assert.doesNotMatch(html, /linearGradient|radialGradient|filter=/);
 });
 
 test('settings mode selector is a keyboard-ready custom menu rather than a native select', () => {
