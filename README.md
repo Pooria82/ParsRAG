@@ -20,7 +20,7 @@ ParsRAG is an enterprise-grade Retrieval-Augmented Generation (RAG) system built
 
 ParsRAG is built using a modern, loosely-coupled microservices architecture:
 
-* **UI:** [Chainlit](https://docs.chainlit.io/) (Asynchronous, streaming chat interface)
+* **UI:** React 18, TypeScript and Vite (bilingual RTL/LTR conversation workspace)
 * **API:** [FastAPI](https://fastapi.tiangolo.com/) (Robust, typed backend)
 * **RAG Orchestrator:** [LlamaIndex](https://www.llamaindex.ai/) (Advanced chunking and semantic routing)
 * **Vector Database:** [Qdrant](https://qdrant.tech/) (High-performance, Rust-based vector search)
@@ -34,30 +34,45 @@ ParsRAG is built using a modern, loosely-coupled microservices architecture:
 ParsRAG/
 ├── .context/                  # Architecture Decision Records (ADRs) and PRDs
 ├── backend/                   # FastAPI API, LlamaIndex Core, and Infrastructure
-├── frontend/                  # Chainlit Chat UI
+├── frontend/                  # React UI, local font and brand assets
 ├── tests/                     # Pytest suite
 └── docker-compose.yml         # Container orchestration
 ```
 
-## Quick Start (Coming Soon)
+## Quick Start
 
-*(Note: The project is currently entering the implementation phase. The following instructions are a blueprint for deployment.)*
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-org/ParsRAG.git
-   cd ParsRAG
-   ```
-2. **Configure Environment:**
+1. **Configure the local environment:**
    ```bash
    cp .env.example .env
    ```
-3. **Start the Microservices:**
+2. **Install and build the frontend:**
    ```bash
-   docker-compose up --build
+   cd frontend
+   npm install
+   npm run build
    ```
-4. **Access the UI:**
-   Open your browser and navigate to `http://localhost:8000`.
+3. **Start FastAPI from the repository root:**
+   ```bash
+   .venv/Scripts/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+   ```
+4. Open `http://127.0.0.1:8000`. FastAPI serves the production frontend build and the API from the same local origin.
+
+For frontend hot reload, run `npm run dev` inside `frontend`. The interface validates persisted state, keeps conversations in the browser, and accepts only local backend endpoints.
+
+## Verification
+
+```bash
+cd frontend
+npm test
+npm run build
+
+cd ..
+.venv/Scripts/python -m pytest backend/tests -q
+.venv/Scripts/python -m ruff check backend
+.venv/Scripts/python -m mypy --strict backend
+```
+
+The visual identity, color tokens, motion rules and SVG usage are documented in [`frontend/BRAND.md`](frontend/BRAND.md).
 
 ## Architecture & ADRs
 
