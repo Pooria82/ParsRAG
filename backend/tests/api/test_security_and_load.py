@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +14,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture(autouse=True)
-def override_repo():
+def override_repo() -> Generator[MagicMock, None, None]:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
     yield mock_repo

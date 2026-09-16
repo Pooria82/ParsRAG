@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.api.routes import router as api_router
+from backend.core.exceptions import ParsRAGError
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 
 # Configure minimal logging
@@ -31,6 +32,20 @@ async def empty_document_exception_handler(
     return JSONResponse(
         status_code=400,
         content={"detail": str(exc)},
+    )
+
+
+@app.exception_handler(ParsRAGError)
+async def parsrag_exception_handler(
+    request: Request, exc: ParsRAGError
+) -> JSONResponse:
+    """Handles domain-level ParsRAG exceptions cleanly."""
+    logger.error(f"ParsRAG Domain Error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "A database or service error occurred. Please try again later."
+        },
     )
 
 

@@ -4,6 +4,7 @@ from llama_index.core import Settings
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
+from backend.core.exceptions import VectorDBConnectionError
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import ExtractedNode
 
@@ -29,20 +30,25 @@ class QdrantRepository(AbstractDocumentRepository):
         self._ensure_collection_and_indices()
 
     def _ensure_collection_and_indices(self) -> None:
-        if not self.client.collection_exists(self.collection_name):
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=qmodels.VectorParams(
-                    size=768,  # e5-base dimensions
-                    distance=qmodels.Distance.COSINE,
-                ),
-            )
-            # Ensure payload index on session_id for optimized filtering
-            self.client.create_payload_index(
-                collection_name=self.collection_name,
-                field_name="session_id",
-                field_schema=qmodels.PayloadSchemaType.KEYWORD,
-            )
+        try:
+            if not self.client.collection_exists(self.collection_name):
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=qmodels.VectorParams(
+                        size=768,  # e5-base dimensions
+                        distance=qmodels.Distance.COSINE,
+                    ),
+                )
+                # Ensure payload index on session_id for optimized filtering
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="session_id",
+                    field_schema=qmodels.PayloadSchemaType.KEYWORD,
+                )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to connect to or initialize Qdrant collection: {exc}"
+            ) from exc
 
     def save_nodes(
         self, nodes: list[ExtractedNode], session_id: str | None = None
@@ -56,21 +62,28 @@ class QdrantRepository(AbstractDocumentRepository):
         if not nodes:
             return
 
-        texts = [node.text for node in nodes]
-        embeddings = Settings.embed_model.get_text_embedding_batch(texts)
+        try:
+            texts = [node.text for node in nodes]
+            embeddings = Settings.embed_model.get_text_embedding_batch(texts)
 
-        points = []
-        for idx, (node, emb) in enumerate(zip(nodes, embeddings)):
-            payload = node.metadata.copy()
-            payload["text"] = node.text
-            payload["session_id"] = session_id or "global"
+            points = []
+            for idx, (node, emb) in enumerate(zip(nodes, embeddings)):
+                payload = node.metadata.copy()
+                payload["text"] = node.text
+                payload["session_id"] = session_id or "global"
 
-            points.append(
-                qmodels.PointStruct(id=str(uuid.uuid4()), vector=emb, payload=payload)
-            )
+                points.append(
+                    qmodels.PointStruct(
+                        id=str(uuid.uuid4()), vector=emb, payload=payload
+                    )
+                )
 
-        # Batched upserts for high throughput
-        self.client.upsert(collection_name=self.collection_name, points=points)
+            # Batched upserts for high throughput
+            self.client.upsert(collection_name=self.collection_name, points=points)
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to save nodes in Qdrant: {exc}"
+            ) from exc
 
     def similarity_search(
         self, query: str, top_k: int = 5, session_id: str | None = None
@@ -85,40 +98,45 @@ class QdrantRepository(AbstractDocumentRepository):
         Returns:
             list[ExtractedNode]: The retrieved document nodes.
         """
-        query_embedding = Settings.embed_model.get_text_embedding(query)
+        try:
+            query_embedding = Settings.embed_model.get_text_embedding(query)
 
-        # Filter by session_id OR global
-        should_conditions: list[qmodels.Condition] = [
-            qmodels.FieldCondition(
-                key="session_id", match=qmodels.MatchValue(value="global")
-            )
-        ]
-        if session_id:
-            should_conditions.append(
+            # Filter by session_id OR global
+            should_conditions: list[qmodels.Condition] = [
                 qmodels.FieldCondition(
-                    key="session_id", match=qmodels.MatchValue(value=session_id)
+                    key="session_id", match=qmodels.MatchValue(value="global")
                 )
-            )
+            ]
+            if session_id:
+                should_conditions.append(
+                    qmodels.FieldCondition(
+                        key="session_id", match=qmodels.MatchValue(value=session_id)
+                    )
+                )
 
-        filter_query = qmodels.Filter(should=should_conditions)
+            filter_query = qmodels.Filter(should=should_conditions)
 
-        search_result = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_embedding,
-            query_filter=filter_query,
-            limit=top_k,
-        ).points
+            search_result = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_embedding,
+                query_filter=filter_query,
+                limit=top_k,
+            ).points
 
-        extracted_nodes = []
-        for hit in search_result:
-            payload = hit.payload or {}
-            text = payload.pop("text", "")
-            payload.pop("session_id", None)
-            extracted_nodes.append(
-                ExtractedNode(text=text, metadata=payload, score=hit.score)
-            )
+            extracted_nodes = []
+            for hit in search_result:
+                payload = hit.payload or {}
+                text = payload.pop("text", "")
+                payload.pop("session_id", None)
+                extracted_nodes.append(
+                    ExtractedNode(text=text, metadata=payload, score=hit.score)
+                )
 
-        return extracted_nodes
+            return extracted_nodes
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to perform similarity search in Qdrant: {exc}"
+            ) from exc
 
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes associated with a specific session ID.
@@ -126,15 +144,21 @@ class QdrantRepository(AbstractDocumentRepository):
         Args:
             session_id (str): The session ID to delete.
         """
-        self.client.delete(
-            collection_name=self.collection_name,
-            points_selector=qmodels.FilterSelector(
-                filter=qmodels.Filter(
-                    must=[
-                        qmodels.FieldCondition(
-                            key="session_id", match=qmodels.MatchValue(value=session_id)
-                        )
-                    ]
-                )
-            ),
-        )
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=qmodels.FilterSelector(
+                    filter=qmodels.Filter(
+                        must=[
+                            qmodels.FieldCondition(
+                                key="session_id",
+                                match=qmodels.MatchValue(value=session_id),
+                            )
+                        ]
+                    )
+                ),
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to delete session nodes in Qdrant: {exc}"
+            ) from exc

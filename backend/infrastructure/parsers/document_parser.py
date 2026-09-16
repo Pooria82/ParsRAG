@@ -1,12 +1,12 @@
 import io
 
 import fitz  # type: ignore  # PyMuPDF
-from docx import Document  # type: ignore
-from pptx import Presentation  # type: ignore
+from docx import Document
+from pptx import Presentation
 
+from backend.core.exceptions import EmptyDocumentError
 
-class EmptyDocumentError(Exception):
-    """Raised when a document contains no selectable text (e.g., scanned image)."""
+__all__ = ["EmptyDocumentError", "parse_document"]
 
 
 def parse_document(file_bytes: bytes, filename: str) -> str:
