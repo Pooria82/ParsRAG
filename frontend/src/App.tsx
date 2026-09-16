@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, FileText, X } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -10,9 +10,10 @@ import { Welcome } from './components/Welcome';
 import { BootSequence } from './components/BootSequence';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
+import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, Message, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { buildQuery, createSession, isRecord, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, STORAGE, validateUploads } from './core/state';
+import { buildQuery, createSession, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, STORAGE, validateUploads } from './core/state';
 
 function readStorage(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -47,6 +48,7 @@ export function App() {
   const active = sessions.find(s => s.id === activeId) ?? sessions[0];
   const t = translations[settings.language];
   const endpoint = settings.backendUrl.replace(/\/+$/, '');
+  const api = useMemo(() => new ParsRagApiClient(endpoint), [endpoint]);
   const busy = Boolean(generatingId || uploadingId);
 
   const updateSession = useCallback((id: string, update: (session: Session) => Session) => {
@@ -75,12 +77,12 @@ export function App() {
     healthRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const response = await fetch(endpoint + '/health', { signal: controller.signal });
-      if (healthRef.current === controller) setConnection(response.ok ? 'online' : 'offline');
+      const online = await api.isHealthy(controller.signal);
+      if (healthRef.current === controller) setConnection(online ? 'online' : 'offline');
     } catch {
       if (healthRef.current === controller) setConnection('offline');
     } finally { clearTimeout(timeout); }
-  }, [endpoint]);
+  }, [api]);
 
   useEffect(() => {
     setConnection('checking'); void checkHealth();
@@ -95,15 +97,13 @@ export function App() {
     const timeout = setTimeout(() => controller.abort(), 10000);
     void (async () => {
       try {
-        const response = await fetch(endpoint + '/sessions/' + active.id + '/files', { signal: controller.signal });
-        if (!response.ok) return;
-        const remote: unknown = await response.json();
+        const remote = await api.files(active.id, controller.signal);
         if (!controller.signal.aborted) updateSession(active.id, s => ({ ...s, documents: mergeRemoteDocuments(s.documents, remote) }));
       } catch { /* Keep the last known documents when the service is unavailable. */ }
       finally { clearTimeout(timeout); }
     })();
     return () => { controller.abort(); clearTimeout(timeout); };
-  }, [active.id, endpoint, connection, uploadingId, updateSession]);
+  }, [active.id, api, connection, uploadingId, updateSession]);
   useEffect(() => () => queryRef.current?.controller.abort(), []);
 
   const newChat = useCallback(() => {
@@ -156,12 +156,7 @@ export function App() {
     }));
     const timeout = setTimeout(() => controller.abort('timeout'), 180000);
     try {
-      const response = await fetch(endpoint + '/query', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), signal: controller.signal,
-      });
-      if (!response.ok) throw new Error('query_failed');
-      const data = parseAnswer(await response.json());
+      const data = parseAnswer(await api.query(payload, controller.signal));
       if (controller.signal.aborted) return;
       updateSession(session.id, s => ({ ...s, messages: [...s.messages, {
         id: crypto.randomUUID(), role: 'assistant', content: data.answer, citations: data.citations, timestamp: Date.now(),
@@ -195,21 +190,16 @@ export function App() {
     updateSession(sessionId, s => ({ ...s, documents: [...s.documents, ...optimistic], updatedAt: Date.now() }));
     try {
       for (const file of acceptedFiles) {
-        const form = new FormData(); form.append('files', file); form.append('session_id', sessionId);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 180000);
         try {
-          const response = await fetch(endpoint + '/ingest', { method: 'POST', body: form, signal: controller.signal });
-          if (!response.ok) {
-            const detail: unknown = await response.json().catch(() => null);
-            const text = isRecord(detail) && typeof detail.detail === 'string' ? detail.detail : '';
-            if (text.includes('Scanned PDFs')) throw new Error(settings.language === 'fa' ? 'این PDF اسکن‌شده است و متن قابل انتخاب ندارد.' : 'This PDF is scanned and has no selectable text.');
-            throw new Error(t.uploadFailed);
-          }
+          await api.ingest(file, sessionId, controller.signal);
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', errorMessage: undefined } : d) }));
         } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
-            ...d, status: 'error', errorMessage: error instanceof Error && error.message !== 'Failed to fetch' && error.name !== 'AbortError' ? error.message : t.uploadFailed,
+            ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'scanned_pdf'
+              ? settings.language === 'fa' ? 'این PDF اسکن‌شده است و متن قابل انتخاب ندارد.' : 'This PDF is scanned and has no selectable text.'
+              : t.uploadFailed,
           } : d) }));
         } finally { clearTimeout(timeout); }
       }
@@ -222,8 +212,7 @@ export function App() {
     if (!session) return true;
     try {
       if (session.documents.length || session.messages.length) {
-        const response = await fetch(endpoint + '/sessions/' + id, { method: 'DELETE', signal: AbortSignal.timeout(15000) });
-        if (!response.ok) return false;
+        await api.deleteSession(id, AbortSignal.timeout(15000));
       }
       if (queryRef.current?.sessionId === id) { queryRef.current.controller.abort('deleted'); queryRef.current = null; setGeneratingId(undefined); }
       const remaining = sessionsRef.current.filter(s => s.id !== id);

@@ -5,5 +5,5 @@
     "allowImportingTsExtensions": false, "noEmit": false,
     "outDir": "tests/.compiled", "rootDir": "src"
   },
-  "include": ["src/core/**/*.ts", "src/types.ts", "src/components/**/*.tsx", "src/i18n/**/*.ts"]
+  "include": ["src/core/**/*.ts", "src/services/**/*.ts", "src/types.ts", "src/components/**/*.tsx", "src/i18n/**/*.ts"]
 }
