@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class QueryMode(str, Enum):
@@ -23,6 +23,15 @@ class QueryRequest(BaseModel):
     mode: QueryMode = Field(
         default=QueryMode.HYBRID, description="The RAG execution mode"
     )
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def normalize_mode(cls, v: Any) -> Any:
+        """Normalizes query mode strings allowing dashes or underscores."""
+        if isinstance(v, str):
+            return v.strip().lower().replace("_", "-")
+        return v
+
     session_id: str | None = Field(
         default=None,
         max_length=64,

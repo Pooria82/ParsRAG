@@ -20,22 +20,25 @@ def get_document_repository() -> Generator[AbstractDocumentRepository, None, Non
         pass
 
 
-def get_query_strategy(mode: QueryMode) -> RAGStrategy:
+def get_query_strategy(
+    mode: QueryMode, repo: AbstractDocumentRepository | None = None
+) -> RAGStrategy:
     """FastAPI dependency or factory that returns the appropriate RAG strategy.
 
     Args:
         mode (QueryMode): The execution mode requested by the user.
+        repo (AbstractDocumentRepository | None, optional): The injected repository.
 
     Returns:
         RAGStrategy: The instantiated concrete strategy.
     """
-    repo = QdrantRepository()
+    active_repo = repo if repo is not None else QdrantRepository()
     if mode == QueryMode.STRICT:
-        return StrictRAGStrategy(repo)
+        return StrictRAGStrategy(active_repo)
     elif mode == QueryMode.HYBRID:
-        return HybridRAGStrategy(repo)
+        return HybridRAGStrategy(active_repo)
     elif mode == QueryMode.LLM_ONLY:
         return LLMOnlyStrategy()
     else:
         # Fallback to Hybrid (though Pydantic validation should prevent this)
-        return HybridRAGStrategy(repo)
+        return HybridRAGStrategy(active_repo)

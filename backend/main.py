@@ -1,15 +1,23 @@
 import logging
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.api.routes import router as api_router
 from backend.core.exceptions import ParsRAGError
+from backend.infrastructure.llm.factory import setup_llm_and_embeddings
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
+
+# Load environment variables
+load_dotenv()
 
 # Configure minimal logging
 logger = logging.getLogger(__name__)
+
+# Initialize LLM and Embeddings globally
+setup_llm_and_embeddings()
 
 app = FastAPI(title="ParsRAG API", version="1.0.0")
 

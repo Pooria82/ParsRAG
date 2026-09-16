@@ -61,7 +61,10 @@ def ingest_document(
 
 
 @router.post("/query", response_model=QueryResponse)
-def query_rag(request: QueryRequest) -> QueryResponse:
+def query_rag(
+    request: QueryRequest,
+    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> QueryResponse:
     """Processes a query using the specified RAG mode."""
     # Map chat messages for LlamaIndex compatibility
     llama_chat_history = [
@@ -74,7 +77,7 @@ def query_rag(request: QueryRequest) -> QueryResponse:
     condensed_query = condenser.condense(request.prompt, llama_chat_history)
 
     # 2. Get the strategy based on the mode
-    strategy = get_query_strategy(request.mode)
+    strategy = get_query_strategy(request.mode, repo=repo)
 
     # 3. Execute strategy
     response = strategy.execute(

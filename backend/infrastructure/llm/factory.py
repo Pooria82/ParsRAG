@@ -1,9 +1,12 @@
 import os
 
+from dotenv import load_dotenv
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # type: ignore
 from llama_index.llms.ollama import Ollama  # type: ignore
 from llama_index.llms.openai_like import OpenAILike  # type: ignore
+
+load_dotenv()
 
 
 def setup_llm_and_embeddings() -> None:
