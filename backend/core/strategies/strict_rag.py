@@ -62,6 +62,7 @@ class StrictRAGStrategy(RAGStrategy):
         repo: AbstractDocumentRepository,
         default_top_k: int = 15,
     ) -> None:
+        """Configure the repository, evidence threshold, and active model."""
         self.repo = repo
         self.threshold = float(os.getenv("STRICT_RAG_THRESHOLD", "0.75"))
         self.default_top_k = int(

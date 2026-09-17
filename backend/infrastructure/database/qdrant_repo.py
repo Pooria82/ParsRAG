@@ -124,7 +124,7 @@ class QdrantRepository(AbstractDocumentRepository):
             embeddings = Settings.embed_model.get_text_embedding_batch(texts)
 
             points = []
-            for idx, (node, emb) in enumerate(zip(nodes, embeddings)):
+            for node, emb in zip(nodes, embeddings, strict=True):
                 payload = node.metadata.copy()
                 payload["text"] = node.text
                 payload["session_id"] = session_id

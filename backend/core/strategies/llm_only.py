@@ -27,6 +27,7 @@ class LLMOnlyStrategy(RAGStrategy):
     """
 
     def __init__(self) -> None:
+        """Bind the active language model and model-only prompt."""
         self.prompt_template = PromptTemplate(LLM_ONLY_PROMPT_TEMPLATE)
         self.llm = Settings.llm
 

@@ -1,0 +1,44 @@
+[project]
+name = "parsrag"
+version = "0.1.0"
+description = "Offline-first Persian document conversation workspace"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = ["frontend", "scratch", "testData"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "BLE", "UP", "RUF", "SIM", "C90", "D101", "D102", "D107", "D417"]
+ignore = ["RUF001"] # Persian strings intentionally contain Arabic-script confusables.
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+files = ["backend"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["backend/tests"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["backend"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+skip_covered = true
+omit = ["backend/tests/*"]

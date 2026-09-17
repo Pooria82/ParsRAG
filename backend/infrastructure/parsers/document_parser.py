@@ -70,39 +70,9 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
     if lower_name.endswith(".pdf"):
         sections = _parse_pdf_sections(file_bytes)
     elif lower_name.endswith(".docx"):
-        try:
-            document = Document(io.BytesIO(file_bytes))
-        except Exception as exc:
-            raise ValueError("Corrupted or invalid DOCX document.") from exc
-        sections = []
-        paragraph = 0
-        for section_index, child in enumerate(
-            document.element.body.iterchildren(), start=1
-        ):
-            if isinstance(child, CT_P):
-                value = Paragraph(child, document).text.strip()
-                if value:
-                    paragraph += 1
-                    sections.append(ParsedSection(value, {"paragraph": paragraph}))
-            elif isinstance(child, CT_Tbl):
-                value = _format_docx_table(Table(child, document)).strip()
-                if value:
-                    sections.append(ParsedSection(value, {"section": section_index}))
+        sections = _parse_docx_sections(file_bytes)
     elif lower_name.endswith(".pptx"):
-        try:
-            presentation = Presentation(io.BytesIO(file_bytes))
-        except Exception as exc:
-            raise ValueError("Corrupted or invalid PPTX document.") from exc
-        sections = []
-        for slide_index, slide in enumerate(presentation.slides, start=1):
-            parts: list[str] = []
-            for shape in slide.shapes:
-                if getattr(shape, "has_table", False):
-                    parts.append(_format_pptx_table(shape.table))
-                elif hasattr(shape, "text") and shape.text and shape.text.strip():
-                    parts.append(shape.text.strip())
-            if text := "\n\n".join(part for part in parts if part).strip():
-                sections.append(ParsedSection(text, {"slide": slide_index}))
+        sections = _parse_pptx_sections(file_bytes)
     else:
         raise ValueError(
             "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
@@ -111,6 +81,48 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
         if lower_name.endswith(".pdf"):
             raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
         raise EmptyDocumentError("The document contains no text.")
+    return sections
+
+
+def _parse_docx_sections(file_bytes: bytes) -> list[ParsedSection]:
+    """Extract traceable paragraphs and tables from DOCX bytes."""
+    try:
+        document = Document(io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise ValueError("Corrupted or invalid DOCX document.") from exc
+    sections: list[ParsedSection] = []
+    paragraph = 0
+    for section_index, child in enumerate(
+        document.element.body.iterchildren(), start=1
+    ):
+        if isinstance(child, CT_P):
+            value = Paragraph(child, document).text.strip()
+            if value:
+                paragraph += 1
+                sections.append(ParsedSection(value, {"paragraph": paragraph}))
+        elif isinstance(child, CT_Tbl):
+            value = _format_docx_table(Table(child, document)).strip()
+            if value:
+                sections.append(ParsedSection(value, {"section": section_index}))
+    return sections
+
+
+def _parse_pptx_sections(file_bytes: bytes) -> list[ParsedSection]:
+    """Extract traceable slide content and tables from PPTX bytes."""
+    try:
+        presentation = Presentation(io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise ValueError("Corrupted or invalid PPTX document.") from exc
+    sections: list[ParsedSection] = []
+    for slide_index, slide in enumerate(presentation.slides, start=1):
+        parts: list[str] = []
+        for shape in slide.shapes:
+            if getattr(shape, "has_table", False):
+                parts.append(_format_pptx_table(shape.table))
+            elif hasattr(shape, "text") and shape.text and shape.text.strip():
+                parts.append(shape.text.strip())
+        if text := "\n\n".join(part for part in parts if part).strip():
+            sections.append(ParsedSection(text, {"slide": slide_index}))
     return sections
 
 
@@ -167,7 +179,7 @@ def _format_table_grid(grid_rows: list[list[str]]) -> str:
         record_lines = ["\n[سوابق ردیف‌های جدول]:"]
         for r_idx, row in enumerate(grid_rows[1:], start=1):
             items = []
-            for h, val in zip(headers, row):
+            for h, val in zip(headers, row, strict=False):
                 cell_val = val if val else "-"
                 items.append(f"[{h}]: {cell_val}")
             record_lines.append(f"- سطر {r_idx}: " + " | ".join(items))

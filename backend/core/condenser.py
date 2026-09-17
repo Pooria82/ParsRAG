@@ -24,6 +24,7 @@ class CondenseQuestionPipeline:
     """
 
     def __init__(self) -> None:
+        """Bind the active language model and condensation prompt."""
         self.llm = Settings.llm
         self.prompt_template = PromptTemplate(CONDENSE_PROMPT_TEMPLATE)
 

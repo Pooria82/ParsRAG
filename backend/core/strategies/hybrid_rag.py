@@ -62,6 +62,7 @@ class HybridRAGStrategy(RAGStrategy):
         top_k_retrieve: int | None = None,
         top_n_rerank: int | None = None,
     ) -> None:
+        """Configure retrieval depth, reranking, and the active model adapter."""
         self.repo = repo
         self.prompt_template = PromptTemplate(HYBRID_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm

@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -25,11 +26,9 @@ def test_qdrant_initialization_failure_raises_vectordb_error() -> None:
         )
         mock_client_cls.return_value = mock_client
 
-        try:
+        with pytest.raises(VectorDBConnectionError) as error:
             QdrantRepository(host="invalid-host", port=9999, vector_size=768)
-            assert False, "Expected VectorDBConnectionError was not raised"
-        except VectorDBConnectionError as exc:
-            assert "Failed to connect to or initialize Qdrant" in str(exc)
+        assert "Failed to connect to or initialize Qdrant" in str(error.value)
 
 
 def test_qdrant_save_nodes_failure_raises_vectordb_error() -> None:
@@ -49,11 +48,9 @@ def test_qdrant_save_nodes_failure_raises_vectordb_error() -> None:
         repo = QdrantRepository(collection_name="test_col", vector_size=768)
         node = ExtractedNode(text="متن تستی", metadata={})
 
-        try:
+        with pytest.raises(VectorDBConnectionError) as error:
             repo.save_nodes([node], session_id="test-session")
-            assert False, "Expected VectorDBConnectionError was not raised"
-        except VectorDBConnectionError as exc:
-            assert "Failed to save nodes in Qdrant" in str(exc)
+        assert "Failed to save nodes in Qdrant" in str(error.value)
 
 
 def test_qdrant_similarity_search_failure_raises_vectordb_error() -> None:
@@ -72,11 +69,9 @@ def test_qdrant_similarity_search_failure_raises_vectordb_error() -> None:
 
         repo = QdrantRepository(collection_name="test_col", vector_size=768)
 
-        try:
+        with pytest.raises(VectorDBConnectionError) as error:
             repo.similarity_search("پرسش تستی", session_id="test-session")
-            assert False, "Expected VectorDBConnectionError was not raised"
-        except VectorDBConnectionError as exc:
-            assert "Failed to perform similarity search in Qdrant" in str(exc)
+        assert "Failed to perform similarity search in Qdrant" in str(error.value)
 
 
 def test_parsrag_domain_exception_handler_sterile_response() -> None:

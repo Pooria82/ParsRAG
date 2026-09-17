@@ -1,0 +1,22 @@
+# Direct dependency constraints tested on Python 3.12 / Windows in September 2026.
+# Install with: pip install -r requirements.txt -c requirements.lock
+fastapi==0.141.1
+uvicorn==0.52.0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+httpx==0.28.1
+llama-index-core==0.14.23
+llama-index-llms-ollama==0.10.1
+llama-index-embeddings-huggingface==0.7.0
+qdrant-client==1.18.0
+pymupdf==1.28.0
+pydantic==2.13.4
+flashrank==0.2.10
+llama-index-postprocessor-flashrank-rerank==0.2.1
+python-docx==1.2.0
+llama-index-llms-openai-like==0.8.0
+python-pptx==1.0.2
+ruff==0.16.1
+mypy==2.3.0
+pytest==9.1.1
+pytest-asyncio==1.4.0

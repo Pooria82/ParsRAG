@@ -1,16 +1,18 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class QueryMode(str, Enum):
+class QueryMode(StrEnum):
+    """Supported query-routing modes."""
+
     STRICT = "strict"
     HYBRID = "hybrid"
     LLM_ONLY = "llm-only"
 
 
-class ModelProvider(str, Enum):
+class ModelProvider(StrEnum):
     """Supported runtime model connection types."""
 
     API = "api"
@@ -103,6 +105,8 @@ class DeleteDocumentRequest(BaseModel):
 
 
 class ExtractedNode(BaseModel):
+    """One document chunk with traceability metadata and optional relevance."""
+
     text: str = Field(..., description="The chunked text content")
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Metadata like page number and source file"
@@ -113,6 +117,8 @@ class ExtractedNode(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    """Generated answer and the document chunks that supported it."""
+
     answer: str = Field(..., description="The generated response from the LLM")
     source_nodes: list[ExtractedNode] = Field(
         default_factory=list, description="Citations and source chunks used"

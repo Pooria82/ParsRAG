@@ -309,11 +309,11 @@ only when the user enables a remote API endpoint.
 ### Task 10.6: Architecture & Maintainability
 **Description:** Remove duplicate contracts and align the implementation with repository coding rules.
 **Actionable Steps:**
-- [ ] Consolidate the duplicate async/sync query strategy interfaces into one contract and remove unused domain types.
-- [ ] Split oversized frontend orchestration/state modules where responsibilities can be isolated without prop proliferation.
-- [ ] Enforce Google-style public docstrings in Ruff and resolve the existing docstring findings.
-- [ ] Add canonical `pyproject.toml` configuration for Ruff, mypy, pytest, coverage, and project metadata.
-- [ ] Add collection/schema versioning notes and architecture decisions for single-user scope and remote-model trust boundaries.
+- [x] Consolidate the duplicate async/sync query strategy interfaces into one contract and remove unused domain types.
+- [x] Split oversized frontend orchestration/state modules where responsibilities can be isolated without prop proliferation.
+- [x] Enforce Google-style public docstrings in Ruff and resolve the existing docstring findings.
+- [x] Add canonical `pyproject.toml` configuration for Ruff, mypy, pytest, coverage, and project metadata.
+- [x] Add collection/schema versioning notes and architecture decisions for single-user scope and remote-model trust boundaries.
 
 ### Task 10.7: Automated Quality & Supply-Chain Controls
 **Description:** Make the checks described by the repository enforceable on every public contribution.

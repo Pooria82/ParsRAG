@@ -3,6 +3,68 @@ import re
 
 from backend.core.models.domain import ExtractedNode
 
+_BROAD_INDICATORS = (
+    "هر سه",
+    "هر دو",
+    "همه فایل",
+    "تمام فایل",
+    "کل اسناد",
+    "همه اسناد",
+    "بین اسناد",
+    "بین فایل",
+    "خلاصه جامع",
+    "جمع‌بندی",
+    "جمع بندی",
+    "نتیجه‌گیری",
+    "نتیجه گیری",
+    "مقایسه",
+    "all files",
+    "all documents",
+    "compare",
+    "summary of all",
+)
+_GENERIC_FILENAME_WORDS = {
+    "گزارش",
+    "فایل",
+    "سند",
+    "پروژه",
+    "فاز",
+    "file",
+    "report",
+    "doc",
+}
+
+
+def _clean_filename_stem(filename: str) -> str:
+    """Normalize a filename stem for matching against natural-language queries."""
+    stem = os.path.splitext(filename)[0]
+    return re.sub(r"[_\-\(\)\.]", " ", stem).strip()
+
+
+def _match_named_files(query: str, available_files: list[str]) -> list[str]:
+    """Return files referenced by full name, clean stem, or distinct stem words."""
+    exact = [
+        filename
+        for filename in available_files
+        if filename.lower() in query
+        or (
+            len(clean_stem := _clean_filename_stem(filename)) >= 4
+            and clean_stem.lower() in query
+        )
+    ]
+    if exact:
+        return exact
+    matched: list[str] = []
+    for filename in available_files:
+        parts = {
+            part.lower()
+            for part in _clean_filename_stem(filename).split()
+            if len(part) >= 3 and part.lower() not in _GENERIC_FILENAME_WORDS
+        }
+        if any(part in query for part in parts):
+            matched.append(filename)
+    return matched
+
 
 def _location_tag(node: ExtractedNode) -> str:
     """Formats reliable parser metadata for model-visible inline citations."""
@@ -43,64 +105,10 @@ def resolve_target_files(
     if not available_files or len(available_files) <= 1:
         return None
 
-    # Check for broad cross-document intent keywords in Persian / English
-    broad_indicators = [
-        "هر سه",
-        "هر دو",
-        "همه فایل",
-        "تمام فایل",
-        "کل اسناد",
-        "همه اسناد",
-        "بین اسناد",
-        "بین فایل",
-        "خلاصه جامع",
-        "جمع‌بندی",
-        "جمع بندی",
-        "نتیجه‌گیری",
-        "نتیجه گیری",
-        "مقایسه",
-        "all files",
-        "all documents",
-        "compare",
-        "summary of all",
-    ]
     query_lower = query.lower()
-    for indicator in broad_indicators:
-        if indicator in query_lower:
-            return None
-
-    # Check if query specifically references one or more filenames
-    matched: list[str] = []
-    # 1. First priority: Exact full filename or clean stem match
-    for filename in available_files:
-        stem = os.path.splitext(filename)[0]
-        clean_stem = re.sub(r"[_\-\(\)\.]", " ", stem).strip()
-        if filename.lower() in query_lower or (
-            len(clean_stem) >= 4 and clean_stem.lower() in query_lower
-        ):
-            matched.append(filename)
-
-    if matched:
-        return matched
-
-    # 2. Second priority: Distinct non-generic keywords
-    stopwords = {"گزارش", "فایل", "سند", "پروژه", "فاز", "file", "report", "doc"}
-    for filename in available_files:
-        stem = os.path.splitext(filename)[0]
-        clean_stem = re.sub(r"[_\-\(\)\.]", " ", stem).strip()
-        stem_parts = [
-            p.strip().lower()
-            for p in clean_stem.split()
-            if len(p.strip()) >= 3 and p.strip().lower() not in stopwords
-        ]
-        matched_distinct = [p for p in stem_parts if p in query_lower]
-        if matched_distinct:
-            matched.append(filename)
-
-    if matched:
-        return matched
-
-    return None
+    if any(indicator in query_lower for indicator in _BROAD_INDICATORS):
+        return None
+    return _match_named_files(query_lower, available_files) or None
 
 
 def format_multi_doc_context(nodes: list[ExtractedNode]) -> str:

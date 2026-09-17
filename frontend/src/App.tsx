@@ -11,25 +11,14 @@ import { BootSequence } from './components/BootSequence';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
+import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, Message, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, prepareTurnRegeneration, selectResponseVariant, STORAGE, validateUploads } from './core/state';
-
-function readStorage(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
+import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectResponseVariant, validateUploads } from './core/state';
 
 export function App() {
-  const [settings, setSettings] = useState(() => parseSettings(readStorage(STORAGE.settings), window.location.origin));
-  const [sessions, setSessions] = useState<Session[]>(() => {
-    const stored = parseSessions(readStorage(STORAGE.sessions));
-    return stored.length ? stored : [createSession(settings.language, settings.defaultMode)];
-  });
-  const [activeId, setActiveId] = useState(() => {
-    const stored = readStorage(STORAGE.active);
-    return sessions.some(s => s.id === stored) ? stored! : sessions[0].id;
-  });
+  const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
   const isMobile = useMediaQuery('(max-width: 760px)');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,7 +28,6 @@ export function App() {
   const [connection, setConnection] = useState<'checking' | 'preparing' | 'online' | 'offline'>('checking');
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
-  const [storageError, setStorageError] = useState(false);
   const [focusToken, setFocusToken] = useState(0);
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
   const uploadRef = useRef(false);
@@ -63,14 +51,6 @@ export function App() {
     document.documentElement.dataset.theme = settings.theme;
     document.title = settings.language === 'fa' ? 'پارس‌رگ — از پرسش، به بینش' : 'ParsRAG — A clearer perspective';
   }, [settings.language, settings.theme]);
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE.settings, JSON.stringify(settings));
-      localStorage.setItem(STORAGE.sessions, JSON.stringify(sessions));
-      localStorage.setItem(STORAGE.active, activeId);
-      setStorageError(false);
-    } catch { setStorageError(true); }
-  }, [settings, sessions, activeId]);
 
   const checkHealth = useCallback(async () => {
     healthRef.current?.abort();
