@@ -3,10 +3,11 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
 CONDENSE_PROMPT_TEMPLATE = """\
-Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question, in Persian (Farsi).
+Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
+Match the language of the follow up input (Persian if asked in Persian, English if asked in English).
 
 CRITICAL INSTRUCTION FOR CODE & TECHNICAL QUERIES:
-If the follow-up question contains code snippets, function calls, SQL queries, commands, or technical identifiers, DO NOT alter, translate, or remove the code. Keep all code snippets and technical identifiers exactly as written, and formulate the conversational context around them.
+If the follow-up question contains code snippets, function calls, SQL queries, commands, or technical identifiers, DO NOT alter, translate, or remove the code. Keep all code snippets and technical identifiers exactly as written, and formulate the conversational context around them. Do not treat English code as a reason to translate Persian questions into English.
 
 Chat History:
 {chat_history_str}

@@ -9,8 +9,11 @@ LLM_ONLY_PROMPT_TEMPLATE = """\
 You are a helpful AI assistant. Answer the user's question directly.
 
 MANDATORY LANGUAGE RULES:
-1. Always respond in Persian (فارسی) unless the user explicitly requests another language.
-2. Under NO circumstances output in Chinese (中文) or any language other than Persian (except for technical names and code syntax).
+1. Match the natural language used by the user in their question:
+   - If the user's question is in Persian (فارسی), respond entirely in Persian.
+   - If the user's question is in English, respond in English.
+   - CRITICAL: Programming code snippets, technical commands, function names, and technical terminology are almost always in English. Do NOT consider the presence of English code or technical terms as an English query. Always determine the target language from the user's surrounding natural language sentences and intent.
+2. Under NO circumstances output in Chinese (中文) or any unintended language.
 
 Query: {query}
 Answer:"""
