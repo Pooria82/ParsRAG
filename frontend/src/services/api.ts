@@ -20,11 +20,20 @@ export class ParsRagApiClient {
   }
 
   async isHealthy(signal?: AbortSignal): Promise<boolean> {
+    return (await this.healthStatus(signal)) === 'online';
+  }
+
+  async healthStatus(signal?: AbortSignal): Promise<'online' | 'preparing' | 'offline'> {
     try {
-      const response = await fetch(this.url('/health'), { signal });
-      return response.ok;
+      const response = await fetch(this.url('/health/ready'), { signal });
+      if (response.ok) return 'online';
+      if (response.status === 503) {
+        const payload: unknown = await response.json();
+        if (typeof payload === 'object' && payload !== null && 'status' in payload && payload.status === 'preparing') return 'preparing';
+      }
+      return 'offline';
     } catch {
-      return false;
+      return 'offline';
     }
   }
 

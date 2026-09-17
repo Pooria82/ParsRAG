@@ -300,11 +300,11 @@ only when the user enables a remote API endpoint.
 ### Task 10.5: Runtime Health, Cancellation & Progress
 **Description:** Report the real service state and avoid misleading controls.
 **Actionable Steps:**
-- [ ] Split liveness and readiness endpoints; readiness must verify model initialization and Qdrant access.
-- [ ] Keep the UI available while large local embedding assets initialize and expose a clear preparing state.
+- [x] Split liveness and readiness endpoints; readiness must verify model initialization and Qdrant access.
+- [x] Keep the UI available while large local embedding assets initialize and expose a clear preparing state.
 - [x] Distinguish byte upload progress from server-side parsing, OCR, embedding, and indexing progress.
-- [ ] Propagate cancellation where the active model adapter supports it; otherwise label the action as stopping local display and prevent stale responses.
-- [ ] Add structured request logging with correlation IDs while redacting prompts, document text, and credentials.
+- [x] Propagate cancellation where the active model adapter supports it; otherwise label the action as stopping local display and prevent stale responses.
+- [x] Add structured request logging with correlation IDs while redacting prompts, document text, and credentials.
 
 ### Task 10.6: Architecture & Maintainability
 **Description:** Remove duplicate contracts and align the implementation with repository coding rules.

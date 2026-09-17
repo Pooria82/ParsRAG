@@ -7,6 +7,10 @@ class AbstractDocumentRepository(ABC):
     """Abstract interface defining the Document Repository contract."""
 
     @abstractmethod
+    def is_ready(self) -> bool:
+        """Return whether the backing store and active collection are reachable."""
+
+    @abstractmethod
     def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Saves extracted document nodes into the repository.
 

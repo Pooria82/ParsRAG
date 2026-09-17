@@ -108,8 +108,10 @@ Embeddings and Qdrant remain local in all three modes. Review the configured API
 operator's retention and training policy before sending confidential material.
 
 The first start may download the multilingual embedding model into the
-`model_cache` volume. Check the application at `http://127.0.0.1:8000/health`
-and inspect service state with `docker compose ps`.
+`model_cache` volume. `/health/live` reports that the web process is running;
+`/health/ready` returns HTTP 200 only after the model adapters and Qdrant are
+ready. The browser remains available during preparation and shows that state.
+Inspect service state with `docker compose ps`.
 `HF_HUB_DISABLE_XET=1` uses the regular HTTP download path during this bootstrap;
 set it to `0` only when the deployment has a tested Xet connection.
 
@@ -147,6 +149,14 @@ entry, expanded-size, and compression-ratio limits. `PARSRAG_INGEST_CONCURRENCY`
 and `PARSRAG_QUERY_CONCURRENCY` bound expensive work; excess requests receive
 HTTP 429 instead of exhausting workstation memory. `PARSRAG_MAX_REQUEST_BYTES`
 sets the HTTP body ceiling and defaults to 105 MiB including multipart overhead.
+Each response includes an `X-Correlation-ID`. Request logs contain that ID,
+method, path, status, and duration; prompts, document text, and credentials are
+never logged by the request middleware.
+
+The current Ollama and OpenAI-compatible adapters expose blocking generation to
+the application. “Stop receiving answer” aborts the browser request and prevents
+a late response from changing the conversation; the underlying provider may
+continue its in-flight generation until its own timeout.
 
 ## Verification
 

@@ -36,7 +36,7 @@ export function App() {
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [generatingId, setGeneratingId] = useState<string>();
   const [uploadingId, setUploadingId] = useState<string>();
-  const [connection, setConnection] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [connection, setConnection] = useState<'checking' | 'preparing' | 'online' | 'offline'>('checking');
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
   const [storageError, setStorageError] = useState(false);
@@ -78,8 +78,8 @@ export function App() {
     healthRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const online = await api.isHealthy(controller.signal);
-      if (healthRef.current === controller) setConnection(online ? 'online' : 'offline');
+      const status = await api.healthStatus(controller.signal);
+      if (healthRef.current === controller) setConnection(status);
     } catch {
       if (healthRef.current === controller) setConnection('offline');
     } finally { clearTimeout(timeout); }

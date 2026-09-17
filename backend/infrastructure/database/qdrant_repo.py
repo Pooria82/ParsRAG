@@ -102,6 +102,13 @@ class QdrantRepository(AbstractDocumentRepository):
                     f"Failed to connect to or initialize Qdrant collection: {exc}"
                 ) from exc
 
+    def is_ready(self) -> bool:
+        """Return whether Qdrant can read the active collection metadata."""
+        try:
+            return bool(self.client.collection_exists(self.collection_name))
+        except Exception:  # noqa: BLE001 - readiness must collapse adapter failures.
+            return False
+
     def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Saves a list of ExtractedNode objects into Qdrant.
 

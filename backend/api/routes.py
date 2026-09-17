@@ -6,6 +6,7 @@ from pathlib import PurePath
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
 
 from backend.api.dependencies import get_document_repository, get_query_strategy
@@ -20,6 +21,7 @@ from backend.core.models.domain import (
     QueryRequest,
     QueryResponse,
 )
+from backend.core.runtime import runtime_state
 from backend.infrastructure.llm.factory import (
     configure_model,
     get_model_configuration,
@@ -118,10 +120,30 @@ def _validate_file(upload: UploadFile, data: bytes) -> None:
     raise ValueError("Unsupported file format. Only PDF, DOCX, and PPTX are allowed.")
 
 
+def require_runtime_ready() -> None:
+    """Reject model work while adapters are preparing or unavailable."""
+    if not runtime_state.is_ready():
+        raise HTTPException(status_code=503, detail={"status": runtime_state.status()})
+
+
 @router.get("/health")
+@router.get("/health/live")
 def health_check() -> dict[str, str]:
-    """Health check endpoint to verify backend service readiness."""
+    """Report process liveness without waiting for model initialization."""
     return {"status": "ok"}
+
+
+@router.get("/health/ready", response_model=None)
+def readiness_check() -> dict[str, str] | JSONResponse:
+    """Report model initialization and live vector-store availability."""
+    status = runtime_state.status()
+    if status == "ready":
+        from backend.api.dependencies import _shared_document_repository
+
+        if _shared_document_repository().is_ready():
+            return {"status": "ready"}
+        status = "failed"
+    return JSONResponse(status_code=503, content={"status": status})
 
 
 @router.get("/models/configuration", response_model=ModelConfigurationResponse)
@@ -157,6 +179,7 @@ def read_ollama_models(base_url: str = "http://localhost:11434") -> list[OllamaM
 
 @router.post("/ingest")
 def ingest_document(
+    _ready: None = Depends(require_runtime_ready),
     file: UploadFile | None = File(None),  # noqa: B008
     files: list[UploadFile] | None = File(None),  # noqa: B008
     session_id: str = Form(...),
@@ -245,6 +268,7 @@ def _ingest_documents(
 @router.post("/query", response_model=QueryResponse)
 def query_rag(
     request: QueryRequest,
+    _ready: None = Depends(require_runtime_ready),
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""

@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import socket
+import time
+import uuid
 from collections.abc import Iterable
 from urllib.parse import urlparse
 
 from starlette.datastructures import Headers
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _SENSITIVE_READ_PREFIXES = ("/models",)
+logger = logging.getLogger("parsrag.requests")
 
 
 def configured_browser_origins() -> list[str]:
@@ -158,3 +162,41 @@ class ContentLengthLimitMiddleware:
                 await send({"type": "http.response.body", "body": response})
                 return
         await self.app(scope, receive, send)
+
+
+class RequestContextMiddleware:
+    """Attach a correlation ID and log request metadata without user content."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap an ASGI application."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Record method, path, status, duration, and a generated request ID."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        correlation_id = str(uuid.uuid4())
+        started = time.perf_counter()
+        status_code = 500
+
+        async def send_with_context(message: Message) -> None:
+            nonlocal status_code
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status", 500))
+                headers = list(message.get("headers", []))
+                headers.append((b"x-correlation-id", correlation_id.encode("ascii")))
+                message["headers"] = headers
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_context)
+        finally:
+            logger.info(
+                "request_complete correlation_id=%s method=%s path=%s status=%s duration_ms=%.2f",
+                correlation_id,
+                scope.get("method"),
+                scope.get("path"),
+                status_code,
+                (time.perf_counter() - started) * 1000,
+            )

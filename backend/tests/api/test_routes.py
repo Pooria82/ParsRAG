@@ -4,10 +4,30 @@ from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
 from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.runtime import runtime_state
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
+
+
+@patch("backend.api.dependencies._shared_document_repository")
+def test_health_endpoints_separate_liveness_and_readiness(
+    mock_repository: MagicMock,
+) -> None:
+    """Liveness stays available while readiness verifies the vector store."""
+    runtime_state.mark_failed()
+    assert client.get("/health/live").status_code == 200
+    preparing = client.get("/health/ready")
+    assert preparing.status_code == 503
+    assert preparing.json() == {"status": "failed"}
+
+    runtime_state.mark_ready()
+    mock_repository.return_value.is_ready.return_value = True
+    ready = client.get("/health/ready")
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready"}
+    assert len(ready.headers["x-correlation-id"]) == 36
 
 
 def test_ingest_success() -> None:

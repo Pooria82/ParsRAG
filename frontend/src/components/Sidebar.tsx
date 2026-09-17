@@ -11,7 +11,7 @@ interface SidebarProps {
   onDeleteSession: (id: string) => Promise<boolean>; onRenameSession: (id: string, title: string) => void;
   language: Language; theme: Theme; onToggleTheme: (origin: { x: number; y: number }) => void;
   onOpenSettings: () => void; isOpen: boolean; isMobile: boolean; onClose: () => void;
-  connection: 'checking' | 'online' | 'offline'; onRetryConnection: () => void;
+  connection: 'checking' | 'preparing' | 'online' | 'offline'; onRetryConnection: () => void;
   uploadingSessionId?: string;
 }
 
@@ -69,7 +69,7 @@ export function Sidebar(props: SidebarProps) {
     <div className="sidebar-bottom">
       <div className="workspace-note"><div className="workspace-note-icon"><BrandMark /></div><div><strong>{t.localWorkspace}</strong><span>{t.localStorage}</span></div></div>
       <div className="connection-status" data-status={props.connection}>
-        <span className="status-dot" /><span>{props.connection === 'checking' ? t.backendChecking : props.connection === 'online' ? t.backendOnline : t.backendOffline}</span>
+        <span className="status-dot" /><span>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? t.backendOnline : t.backendOffline}</span>
         {props.connection === 'offline' && <button onClick={props.onRetryConnection} title={t.retryConnection} aria-label={t.retryConnection}>↻</button>}
       </div>
       <div className="sidebar-footer">

@@ -1,6 +1,9 @@
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Thread
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -10,8 +13,10 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
 from backend.core.exceptions import ParsRAGError
+from backend.core.runtime import runtime_state
 from backend.core.security import (
     ContentLengthLimitMiddleware,
+    RequestContextMiddleware,
     TrustedOriginMiddleware,
     configured_browser_origins,
 )
@@ -24,11 +29,33 @@ load_dotenv()
 # Configure minimal logging
 logger = logging.getLogger(__name__)
 
-# Initialize LLM and Embeddings globally
-if os.getenv("PARSRAG_SKIP_MODEL_SETUP") != "1":
-    setup_llm_and_embeddings()
 
-app = FastAPI(title="ParsRAG API", version="1.0.0")
+def _initialize_runtime() -> None:
+    """Initialize heavyweight model and storage adapters in a background thread."""
+    try:
+        from backend.api.dependencies import _shared_document_repository
+
+        setup_llm_and_embeddings()
+        repository = _shared_document_repository()
+        if not repository.is_ready():
+            raise RuntimeError("Qdrant is unavailable")
+        runtime_state.mark_ready()
+    except Exception:
+        runtime_state.mark_failed()
+        logger.exception("Runtime initialization failed")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start heavyweight initialization without blocking the local interface."""
+    if os.getenv("PARSRAG_SKIP_MODEL_SETUP") == "1":
+        runtime_state.mark_ready()
+    else:
+        Thread(target=_initialize_runtime, daemon=True, name="parsrag-init").start()
+    yield
+
+
+app = FastAPI(title="ParsRAG API", version="1.0.0", lifespan=lifespan)
 
 trusted_origins = configured_browser_origins()
 app.add_middleware(
@@ -38,6 +65,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(TrustedOriginMiddleware, allowed_origins=trusted_origins)
 app.add_middleware(
     ContentLengthLimitMiddleware,

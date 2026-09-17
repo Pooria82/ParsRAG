@@ -11,7 +11,14 @@ test('API client normalizes base URLs and reports health without leaking fetch d
   global.fetch = async url => { requested = String(url); return new Response(null, { status: 200 }); };
   const client = new ParsRagApiClient('http://localhost:8000///');
   assert.equal(await client.isHealthy(), true);
-  assert.equal(requested, 'http://localhost:8000/health');
+  assert.equal(requested, 'http://localhost:8000/health/ready');
+});
+
+test('API client distinguishes model preparation from an offline service', async () => {
+  global.fetch = async () => new Response(JSON.stringify({ status: 'preparing' }), {
+    status: 503, headers: { 'Content-Type': 'application/json' },
+  });
+  assert.equal(await new ParsRagApiClient('').healthStatus(), 'preparing');
 });
 
 test('API client classifies scanned PDFs for localized UI handling', async () => {
