@@ -291,18 +291,18 @@ only when the user enables a remote API endpoint.
 ### Task 10.4: Resource & Input Hardening
 **Description:** Bound memory, CPU, parser, and inference work on personal workstations.
 **Actionable Steps:**
-- [ ] Enforce request-body and aggregate batch limits before unbounded reads; stream uploads into bounded buffers.
-- [ ] Validate file signatures in addition to extensions and reject oversized or suspicious DOCX/PPTX archives before parsing.
-- [ ] Bound prompt length, history count, history message length, filename length, and allowed chat roles with Pydantic.
-- [ ] Add configurable concurrency limits for ingestion and query work and return explicit overload responses.
-- [ ] Add deterministic tests for oversized bodies, archive expansion, forged extensions, large histories, and concurrent saturation.
+- [x] Enforce request-body and aggregate batch limits before unbounded reads; stream uploads into bounded buffers.
+- [x] Validate file signatures in addition to extensions and reject oversized or suspicious DOCX/PPTX archives before parsing.
+- [x] Bound prompt length, history count, history message length, filename length, and allowed chat roles with Pydantic.
+- [x] Add configurable concurrency limits for ingestion and query work and return explicit overload responses.
+- [x] Add deterministic tests for oversized bodies, archive expansion, forged extensions, large histories, and concurrent saturation.
 
 ### Task 10.5: Runtime Health, Cancellation & Progress
 **Description:** Report the real service state and avoid misleading controls.
 **Actionable Steps:**
 - [ ] Split liveness and readiness endpoints; readiness must verify model initialization and Qdrant access.
 - [ ] Keep the UI available while large local embedding assets initialize and expose a clear preparing state.
-- [ ] Distinguish byte upload progress from server-side parsing, OCR, embedding, and indexing progress.
+- [x] Distinguish byte upload progress from server-side parsing, OCR, embedding, and indexing progress.
 - [ ] Propagate cancellation where the active model adapter supports it; otherwise label the action as stopping local display and prevent stale responses.
 - [ ] Add structured request logging with correlation IDs while redacting prompts, document text, and credentials.
 

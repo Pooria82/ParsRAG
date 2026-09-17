@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -80,10 +80,12 @@ class QueryRequest(BaseModel):
         le=50,
         description="Optional retrieval depth override (1 to 50)",
     )
-    file_filter: list[str] | None = Field(
-        default=None,
-        max_length=5,
-        description="Optional list of filenames to restrict the query to (up to 5)",
+    file_filter: list[Annotated[str, Field(min_length=1, max_length=255)]] | None = (
+        Field(
+            default=None,
+            max_length=5,
+            description="Optional list of filenames to restrict the query to (up to 5)",
+        )
     )
 
     @model_validator(mode="after")

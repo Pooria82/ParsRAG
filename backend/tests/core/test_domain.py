@@ -52,6 +52,30 @@ def test_document_query_requires_session_id() -> None:
         QueryRequest(prompt="What is this?", mode=QueryMode.STRICT)
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"prompt": "x" * 12_001, "mode": "llm-only"},
+        {
+            "prompt": "question",
+            "mode": "llm-only",
+            "chat_history": [{"role": "system", "content": "unsafe"}],
+        },
+        {
+            "prompt": "question",
+            "mode": "llm-only",
+            "chat_history": [{"role": "user", "content": "history"} for _ in range(21)],
+        },
+    ],
+)
+def test_query_request_bounds_prompt_roles_and_history(
+    payload: dict[str, object],
+) -> None:
+    """Untrusted conversation payloads remain within inference-safe bounds."""
+    with pytest.raises(ValidationError):
+        QueryRequest.model_validate(payload)
+
+
 def test_extracted_node() -> None:
     node = ExtractedNode(text="Chunk 1", metadata={"page": 1}, score=0.95)
     assert node.text == "Chunk 1"

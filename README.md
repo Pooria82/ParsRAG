@@ -141,6 +141,13 @@ OCR behavior is controlled with `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI`,
 `OCR_TIMEOUT_SECONDS`, and `OCR_MAX_PAGES`. Native PDF text always uses the fast
 path; Tesseract runs only for pages without selectable text.
 
+Uploads are limited to 50 MB per file, 100 MB per batch, five files per request,
+and validated by both extension and file signature. Office archives also have
+entry, expanded-size, and compression-ratio limits. `PARSRAG_INGEST_CONCURRENCY`
+and `PARSRAG_QUERY_CONCURRENCY` bound expensive work; excess requests receive
+HTTP 429 instead of exhausting workstation memory. `PARSRAG_MAX_REQUEST_BYTES`
+sets the HTTP body ceiling and defaults to 105 MiB including multipart overhead.
+
 ## Verification
 
 ```bash

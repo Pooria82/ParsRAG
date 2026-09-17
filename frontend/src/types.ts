@@ -43,7 +43,7 @@ export interface Message {
 export interface SessionDocument {
   name: string;
   size?: number;
-  status: 'indexed' | 'uploading' | 'error';
+  status: 'indexed' | 'uploading' | 'processing' | 'error';
   errorMessage?: string;
   enabled?: boolean;
   uploadProgress?: number;

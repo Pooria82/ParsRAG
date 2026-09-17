@@ -15,6 +15,7 @@ def test_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
+        patch("backend.api.routes._validate_file"),
         patch("backend.api.routes.parse_document_sections") as mock_parse_document,
         patch("backend.api.routes.chunk_text") as mock_chunk_text,
     ):
@@ -45,7 +46,10 @@ def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
-    with patch("backend.api.routes.parse_document_sections") as mock_parse_document:
+    with (
+        patch("backend.api.routes._validate_file"),
+        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
+    ):
         mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
         response = client.post(

@@ -40,8 +40,8 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
           {documents.map(doc => <div className={'document-row status-' + doc.status} key={doc.name}>
             <span className="document-file-icon"><FileText size={21} /><small>{doc.name.split('.').pop()?.toUpperCase()}</small></span>
             <div className="document-meta"><bdi title={doc.name}>{doc.name}</bdi><span>
-              {doc.status === 'uploading' ? <Loader2 size={12} className="spin" /> : doc.status === 'indexed' ? <Check size={12} /> : <AlertCircle size={12} />}
-              {doc.status === 'uploading' ? t.docUploading : doc.status === 'indexed' ? t.docIndexed : t.docError}
+              {doc.status === 'uploading' || doc.status === 'processing' ? <Loader2 size={12} className="spin" /> : doc.status === 'indexed' ? <Check size={12} /> : <AlertCircle size={12} />}
+              {doc.status === 'uploading' ? t.docUploading : doc.status === 'processing' ? t.docProcessing : doc.status === 'indexed' ? t.docIndexed : t.docError}
               {doc.size ? <small dir="ltr">{(doc.size / 1024 / 1024).toFixed(1)} MB</small> : null}
             </span>{doc.status === 'uploading' && <div className="upload-progress"><progress max="100" value={doc.uploadProgress ?? 0} aria-label={t.uploadProgress} /><output>{(doc.uploadProgress ?? 0).toLocaleString(language)}٪</output></div>}{doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}</div>
             {doc.status === 'indexed' && <input type="checkbox" checked={doc.enabled !== false}

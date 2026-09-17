@@ -1,10 +1,15 @@
+import io
+import os
 import re
+import zipfile
+from pathlib import PurePath
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
 
 from backend.api.dependencies import get_document_repository, get_query_strategy
+from backend.core.capacity import WorkLimiter
 from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import (
@@ -26,8 +31,91 @@ from backend.infrastructure.parsers.document_parser import parse_document_sectio
 router = APIRouter()
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_BATCH_SIZE_BYTES = 100 * 1024 * 1024
 MAX_FILES_PER_BATCH = 5
+MAX_ARCHIVE_ENTRIES = 10_000
+MAX_ARCHIVE_EXPANDED_BYTES = 200 * 1024 * 1024
+MAX_ARCHIVE_RATIO = 200
+READ_CHUNK_BYTES = 1024 * 1024
 SESSION_ID_REGEX = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+_ingest_limiter = WorkLimiter(
+    int(os.getenv("PARSRAG_INGEST_CONCURRENCY", "1")), "ingestion"
+)
+_query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
+
+
+def _read_bounded(upload: UploadFile, remaining_batch_bytes: int) -> bytes:
+    """Read one upload in chunks while enforcing file and batch limits."""
+    chunks: list[bytes] = []
+    size = 0
+    while chunk := upload.file.read(READ_CHUNK_BYTES):
+        size += len(chunk)
+        if size > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File '{upload.filename}' exceeds the 50MB limit.",
+            )
+        if size > remaining_batch_bytes:
+            raise HTTPException(
+                status_code=413, detail="The upload batch exceeds the 100MB limit."
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _validate_archive(data: bytes, extension: str) -> None:
+    """Reject forged or explosively expanded Office archives."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_ARCHIVE_ENTRIES:
+                raise ValueError("The Office archive contains too many entries.")
+            expanded = sum(entry.file_size for entry in entries)
+            if expanded > MAX_ARCHIVE_EXPANDED_BYTES:
+                raise ValueError("The Office archive expands beyond the safe limit.")
+            for entry in entries:
+                if entry.file_size and entry.compress_size == 0:
+                    raise ValueError(
+                        "The Office archive has an invalid compression ratio."
+                    )
+                if (
+                    entry.compress_size
+                    and entry.file_size / entry.compress_size > MAX_ARCHIVE_RATIO
+                ):
+                    raise ValueError(
+                        "The Office archive has a suspicious compression ratio."
+                    )
+            names = {entry.filename for entry in entries}
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The file is not a valid Office document archive.") from exc
+    required = "word/document.xml" if extension == ".docx" else "ppt/presentation.xml"
+    if "[Content_Types].xml" not in names or required not in names:
+        raise ValueError(
+            f"The file content does not match its {extension.upper()} extension."
+        )
+
+
+def _validate_file(upload: UploadFile, data: bytes) -> None:
+    """Validate filename boundaries and file signatures before parser work."""
+    filename = upload.filename or ""
+    if (
+        len(filename) > 255
+        or PurePath(filename).name != filename
+        or "/" in filename
+        or "\\" in filename
+    ):
+        raise ValueError("The filename is invalid.")
+    extension = PurePath(filename).suffix.lower()
+    if extension == ".pdf":
+        if not data.startswith(b"%PDF-"):
+            raise ValueError("The file content does not match its PDF extension.")
+        return
+    if extension in {".docx", ".pptx"}:
+        if not data.startswith(b"PK"):
+            raise ValueError("The file content does not match its Office extension.")
+        _validate_archive(data, extension)
+        return
+    raise ValueError("Unsupported file format. Only PDF, DOCX, and PPTX are allowed.")
 
 
 @router.get("/health")
@@ -101,7 +189,18 @@ def ingest_document(
             detail=f"A maximum of {MAX_FILES_PER_BATCH} files can be uploaded per request.",
         )
 
+    with _ingest_limiter.slot():
+        return _ingest_documents(upload_list, session_id, repo)
+
+
+def _ingest_documents(
+    upload_list: list[UploadFile],
+    session_id: str,
+    repo: AbstractDocumentRepository,
+) -> dict[str, str]:
+    """Perform bounded parsing, chunking, and persistence for one upload batch."""
     total_chunks = 0
+    total_bytes = 0
     ingested_names: list[str] = []
 
     # 3. Parse, chunk, and save each file
@@ -112,14 +211,11 @@ def ingest_document(
                 detail="Missing filename.",
             )
 
-        file_bytes = upload_item.file.read()
-        if len(file_bytes) > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File '{upload_item.filename}' exceeds the 50MB limit.",
-            )
+        file_bytes = _read_bounded(upload_item, MAX_BATCH_SIZE_BYTES - total_bytes)
+        total_bytes += len(file_bytes)
 
         try:
+            _validate_file(upload_item, file_bytes)
             sections = parse_document_sections(file_bytes, upload_item.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -152,29 +248,21 @@ def query_rag(
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""
-    # Map chat messages for LlamaIndex compatibility
-    llama_chat_history = [
-        LlamaChatMessage(role=msg.role, content=msg.content)
-        for msg in request.chat_history
-    ]
-
-    # 1. Condense the question (conversational memory)
-    condenser = CondenseQuestionPipeline()
-    condensed_query = condenser.condense(request.prompt, llama_chat_history)
-
-    # 2. Get the strategy based on the mode
-    strategy = get_query_strategy(request.mode, repo=repo)
-
-    # 3. Execute strategy
-    response = strategy.execute(
-        query=condensed_query,
-        chat_history=llama_chat_history,
-        session_id=request.session_id,
-        top_k=request.top_k,
-        file_filter=request.file_filter,
-    )
-
-    return response
+    with _query_limiter.slot():
+        llama_chat_history = [
+            LlamaChatMessage(role=msg.role, content=msg.content)
+            for msg in request.chat_history
+        ]
+        condenser = CondenseQuestionPipeline()
+        condensed_query = condenser.condense(request.prompt, llama_chat_history)
+        strategy = get_query_strategy(request.mode, repo=repo)
+        return strategy.execute(
+            query=condensed_query,
+            chat_history=llama_chat_history,
+            session_id=request.session_id,
+            top_k=request.top_k,
+            file_filter=request.file_filter,
+        )
 
 
 @router.get("/sessions/{session_id}/files", response_model=list[str])

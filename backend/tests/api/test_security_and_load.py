@@ -1,4 +1,6 @@
 import asyncio
+import io
+import zipfile
 from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.dependencies import get_document_repository
+from backend.api.routes import _validate_archive
 from backend.core.models.domain import QueryResponse
 from backend.main import app
 
@@ -83,6 +86,42 @@ def test_ingest_corrupted_document() -> None:
         data={"session_id": "session-123"},
     )
     assert response.status_code == 400
+
+
+def test_ingest_rejects_forged_pdf_signature() -> None:
+    """A PDF extension cannot bypass validation with arbitrary bytes."""
+    response = client.post(
+        "/ingest",
+        files={"file": ("forged.pdf", b"not a pdf", "application/pdf")},
+        data={"session_id": "session-123"},
+    )
+
+    assert response.status_code == 400
+    assert "does not match" in response.json()["detail"]
+
+
+def test_office_archive_rejects_extreme_expansion_ratio() -> None:
+    """Highly compressed Office payloads are rejected before XML parsing."""
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", "content")
+        archive.writestr("word/document.xml", b"0" * (2 * 1024 * 1024))
+
+    with pytest.raises(ValueError, match="compression ratio"):
+        _validate_archive(payload.getvalue(), ".docx")
+
+
+def test_declared_request_body_limit_is_rejected_before_parsing() -> None:
+    """Oversized declared bodies never reach multipart parsing."""
+    response = client.post(
+        "/ingest",
+        headers={"Content-Length": str(110_100_481)},
+        files={"file": ("tiny.pdf", b"%PDF-tiny", "application/pdf")},
+        data={"session_id": "session-123"},
+    )
+
+    assert response.status_code == 413
+    assert "Request body" in response.json()["detail"]
 
 
 # ==============================================================================

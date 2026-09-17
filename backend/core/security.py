@@ -125,3 +125,36 @@ class TrustedOriginMiddleware:
             await send({"type": "http.response.body", "body": response})
             return
         await self.app(scope, receive, send)
+
+
+class ContentLengthLimitMiddleware:
+    """Reject declared request bodies that exceed the workstation-safe limit."""
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        """Initialize the middleware with an inclusive byte limit."""
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Reject oversized HTTP requests before multipart parsing starts."""
+        if scope["type"] == "http":
+            value = Headers(scope=scope).get("content-length")
+            try:
+                oversized = value is not None and int(value) > self.max_bytes
+            except ValueError:
+                oversized = True
+            if oversized:
+                response = b'{"detail":"Request body exceeds the configured limit."}'
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 413,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(response)).encode("ascii")),
+                        ],
+                    }
+                )
+                await send({"type": "http.response.body", "body": response})
+                return
+        await self.app(scope, receive, send)

@@ -10,7 +10,11 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
 from backend.core.exceptions import ParsRAGError
-from backend.core.security import TrustedOriginMiddleware, configured_browser_origins
+from backend.core.security import (
+    ContentLengthLimitMiddleware,
+    TrustedOriginMiddleware,
+    configured_browser_origins,
+)
 from backend.infrastructure.llm.factory import setup_llm_and_embeddings
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 
@@ -35,6 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(TrustedOriginMiddleware, allowed_origins=trusted_origins)
+app.add_middleware(
+    ContentLengthLimitMiddleware,
+    max_bytes=int(os.getenv("PARSRAG_MAX_REQUEST_BYTES", str(105 * 1024 * 1024))),
+)
 
 
 @app.exception_handler(EmptyDocumentError)

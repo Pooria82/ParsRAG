@@ -209,7 +209,9 @@ export function App() {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 180000);
         try {
-          await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, uploadProgress } : d) })));
+          await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
+            ? { ...d, status: 'processing', uploadProgress: undefined }
+            : { ...d, status: 'uploading', uploadProgress } : d) })));
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined } : d) }));
         } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {

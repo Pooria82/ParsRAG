@@ -108,7 +108,7 @@ function parseDocuments(value: unknown): SessionDocument[] {
       name: doc.name, size: typeof doc.size === 'number' ? doc.size : undefined,
       status: doc.status === 'indexed' ? 'indexed' : 'error',
       enabled: doc.enabled !== false,
-      errorMessage: doc.status === 'uploading' ? 'interrupted'
+      errorMessage: doc.status === 'uploading' || doc.status === 'processing' ? 'interrupted'
         : typeof doc.errorMessage === 'string' ? doc.errorMessage : undefined,
     });
   }
