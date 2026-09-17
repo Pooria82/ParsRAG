@@ -3,8 +3,8 @@
 ## 1. Definitive Technology Stack
 To achieve FAANG-level production readiness, the initially proposed stack has been critically evaluated and upgraded. Below are the finalized technology decisions and their justifications:
 
-- **Frontend UI: Chainlit** *(Upgraded from Streamlit)*
-  - *Justification:* Streamlit executes in a top-down script rerun loop, which is suboptimal for complex conversational state management. Chainlit is purpose-built for LLM chat applications. It supports native asynchronous event handling, real-time token streaming, and isolated user sessions out-of-the-box.
+- **Frontend UI: React 18, TypeScript, and Vite**
+  - *Justification:* A dedicated React workspace provides precise control over bilingual RTL/LTR behavior, local state, accessibility, document management, and the branded interaction design. FastAPI serves the production build from `frontend/dist`.
 - **Backend Framework: FastAPI** *(Retained)*
   - *Justification:* Asynchronous, high-performance web framework with native Pydantic validation and auto-generated OpenAPI docs. Ideal for serving LLMs and decoupling the backend from the UI.
 - **RAG Orchestration: LlamaIndex** *(Upgraded from LangChain)*
@@ -21,7 +21,7 @@ To achieve FAANG-level production readiness, the initially proposed stack has be
 The system is entirely decoupled into microservices deployed via `Docker Compose`. This ensures independent scaling, clean boundaries, and isolated dependency management.
 
 ### Containerization Strategy
-1. **`chainlit-ui` Container:** Serves the frontend application on port 8000.
+1. **`react-ui` Build:** Vite builds the frontend, which FastAPI serves on port 8000.
 2. **`fastapi-backend` Container:** Hosts the core RAG logic, LlamaIndex orchestrator, and endpoints on port 8080.
 3. **`qdrant-db` Container:** Runs the official Rust-based Qdrant image.
 4. **`ollama-engine` Container:** Runs the local LLM (Qwen 2.5) with GPU-passthrough enabled for accelerated inference.
@@ -29,7 +29,7 @@ The system is entirely decoupled into microservices deployed via `Docker Compose
 ### Architecture Flow Diagram
 ```mermaid
 graph TD
-    Client((User)) -->|Uploads / Chats| UI[Chainlit UI Container]
+    Client((User)) -->|Uploads / Chats| UI[React UI served by FastAPI]
     
     subgraph FastAPI Backend Container
         Router[API Router]

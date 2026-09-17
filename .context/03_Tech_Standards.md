@@ -54,10 +54,10 @@ ParsRAG/
 │   │   └── parsers/           # Document ingestion and PDF parsing
 │   ├── tests/                 # Backend pytest suite
 │   └── main.py                # FastAPI application entrypoint
-├── frontend/                  # Chainlit UI
-│   ├── app.py                 # Chainlit async event loop and UI layout
-│   ├── chainlit.md            # Chainlit welcome screen markdown
-│   └── public/                # Static assets (logos, custom CSS)
+├── frontend/                  # React 18, TypeScript, and Vite UI
+│   ├── src/                   # Components, state, API client, and styles
+│   ├── public/                # Local fonts and brand assets
+│   └── tests/                 # Deterministic frontend tests
 ├── docker-compose.yml         # Defines backend, frontend, qdrant, and ollama
 ├── pyproject.toml             # Poetry/Ruff/MyPy configurations
 └── README.md

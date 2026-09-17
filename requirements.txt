@@ -6,7 +6,6 @@ llama-index-llms-openai
 llama-index-embeddings-huggingface
 qdrant-client>=1.7.0
 pymupdf>=1.23.0
-chainlit>=1.0.0
 ruff>=0.1.0
 mypy>=1.7.0
 pytest>=7.4.0

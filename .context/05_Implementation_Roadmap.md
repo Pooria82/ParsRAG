@@ -12,7 +12,7 @@ This document serves as the self-executable, atomic roadmap for building the Par
 **Actionable Steps:**
 - [x] Initialize the project (e.g., using `poetry init` or `requirements.txt`).
 - [x] Install core backend libraries: `fastapi`, `uvicorn`, `llama-index`, `qdrant-client`, `pymupdf`.
-- [x] Install frontend library: `chainlit`.
+- [x] Install the React 18, TypeScript, and Vite frontend toolchain.
 - [x] Install dev dependencies: `ruff`, `mypy`, `pytest`, `pytest-asyncio`.
 - [x] Create `.env.example` defining required environment variables (e.g., `QDRANT_HOST`, `OLLAMA_BASE_URL`).
 
@@ -22,8 +22,8 @@ This document serves as the self-executable, atomic roadmap for building the Par
 - [x] Create the `.gitignore` file exactly as specified in `04_Git_and_CI.md`.
 - [x] Create `backend/api/`, `backend/core/models/`, `backend/core/strategies/`, `backend/core/interfaces/`.
 - [x] Create `backend/infrastructure/database/`, `backend/infrastructure/llm/`, `backend/infrastructure/parsers/`.
-- [x] Create `frontend/` and `tests/` directories.
-- [x] Add `__init__.py` files where necessary to define Python modules.
+- [x] Create the `frontend/src/`, `frontend/public/`, and `frontend/tests/` directories.
+- [x] Add `__init__.py` files where necessary to define backend Python modules.
 
 ### Checkpoint: Phase 1
 - [x] Run `ruff check .` to ensure zero errors in the empty structure.
@@ -182,15 +182,15 @@ This phase conducts exhaustive, systematic validation across all document files 
 
 ---
 
-## Phase 8: Frontend Integration (Chainlit)
+## Phase 8: Frontend Integration (React)
 
-### Task 8.1: Chainlit Application
-**Description:** Build the user-facing chat UI.
+### Task 8.1: React Application
+**Description:** Build the bilingual user-facing chat workspace.
 **Actionable Steps:**
-- [ ] Create `frontend/app.py`.
-- [ ] Implement `on_chat_start` to configure radio buttons for the 3 RAG modes.
-- [ ] Implement file upload handlers in the chat interface.
-- [ ] Implement the `on_message` hook to send user messages to the FastAPI `/query` endpoint and stream the response back.
+- [x] Create the React 18 and TypeScript application under `frontend/src`.
+- [x] Implement accessible controls for the three RAG modes.
+- [x] Implement session-scoped document upload and selection.
+- [x] Connect the workspace to the FastAPI query and model-configuration endpoints.
 
 ---
 
@@ -200,7 +200,7 @@ This phase conducts exhaustive, systematic validation across all document files 
 **Description:** Containerize the microservices.
 **Actionable Steps:**
 - [ ] Create `backend/Dockerfile` optimizing for Python (multi-stage build).
-- [ ] Create `frontend/Dockerfile` for Chainlit.
+- [ ] Create `frontend/Dockerfile` for the Vite production build.
 
 ### Task 9.2: Docker Compose
 **Description:** Orchestrate the entire system.
