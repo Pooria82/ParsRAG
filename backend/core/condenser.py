@@ -5,6 +5,9 @@ from llama_index.core.prompts import PromptTemplate
 CONDENSE_PROMPT_TEMPLATE = """\
 Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question, in Persian (Farsi).
 
+CRITICAL INSTRUCTION FOR CODE & TECHNICAL QUERIES:
+If the follow-up question contains code snippets, function calls, SQL queries, commands, or technical identifiers, DO NOT alter, translate, or remove the code. Keep all code snippets and technical identifiers exactly as written, and formulate the conversational context around them.
+
 Chat History:
 {chat_history_str}
 

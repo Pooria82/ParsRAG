@@ -185,3 +185,34 @@ def test_hybrid_rag_expanded_candidate_pool(
     mock_repo.similarity_search.assert_called_with(
         "query", top_k=30, session_id=None, file_filter=None
     )
+
+
+def test_strict_rag_prompt_has_persian_and_code_rules() -> None:
+    """Verifies that STRICT_RAG_PROMPT_TEMPLATE enforces Persian output and code matching."""
+    from backend.core.strategies.strict_rag import STRICT_RAG_PROMPT_TEMPLATE
+
+    assert "MANDATORY LANGUAGE RULES" in STRICT_RAG_PROMPT_TEMPLATE
+    assert "Always respond in Persian (فارسی)" in STRICT_RAG_PROMPT_TEMPLATE
+    assert "Chinese" in STRICT_RAG_PROMPT_TEMPLATE
+    assert "CONTENT & CODE VERIFICATION RULES" in STRICT_RAG_PROMPT_TEMPLATE
+    assert "بله، این اطلاعات/کد در سند وجود دارد" in STRICT_RAG_PROMPT_TEMPLATE
+
+
+def test_hybrid_rag_prompt_has_persian_and_code_rules() -> None:
+    """Verifies that HYBRID_RAG_PROMPT_TEMPLATE enforces Persian output and code matching."""
+    from backend.core.strategies.hybrid_rag import HYBRID_RAG_PROMPT_TEMPLATE
+
+    assert "MANDATORY LANGUAGE RULES" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert "Always respond in Persian (فارسی)" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert "Chinese" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert "CONTENT & CODE VERIFICATION RULES" in HYBRID_RAG_PROMPT_TEMPLATE
+
+
+def test_condenser_prompt_has_code_preservation_rule() -> None:
+    """Verifies that CONDENSE_PROMPT_TEMPLATE instructs preserving code snippets verbatim."""
+    from backend.core.condenser import CONDENSE_PROMPT_TEMPLATE
+
+    assert (
+        "CRITICAL INSTRUCTION FOR CODE & TECHNICAL QUERIES" in CONDENSE_PROMPT_TEMPLATE
+    )
+    assert "DO NOT alter, translate, or remove the code" in CONDENSE_PROMPT_TEMPLATE
