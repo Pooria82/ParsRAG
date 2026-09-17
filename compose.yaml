@@ -15,6 +15,7 @@ services:
       PARSRAG_ALLOWED_ORIGINS: "${PARSRAG_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
+      QDRANT_COLLECTION: "${QDRANT_COLLECTION:-}"
       LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
       LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
       OLLAMA_BASE_URL: http://ollama:11434

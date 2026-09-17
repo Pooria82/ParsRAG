@@ -1,5 +1,6 @@
 import os
 from collections.abc import Generator
+from functools import lru_cache
 
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import QueryMode
@@ -10,20 +11,20 @@ from backend.core.strategies.strict_rag import StrictRAGStrategy
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
 
 
-def get_document_repository() -> Generator[AbstractDocumentRepository, None, None]:
-    """FastAPI dependency that provides a singleton-like Qdrant repository instance."""
-    # In a real heavy-load production scenario, you might share the client
-    # via app.state, but QdrantClient inside QdrantRepository handles pooling.
+@lru_cache(maxsize=1)
+def _shared_document_repository() -> AbstractDocumentRepository:
+    """Create the process-wide repository and reuse its pooled client."""
     host = os.getenv("QDRANT_HOST", "localhost")
     try:
         port = int(os.getenv("QDRANT_PORT", "6333"))
     except ValueError:
         port = 6333
-    repo = QdrantRepository(host=host, port=port)
-    try:
-        yield repo
-    finally:
-        pass
+    return QdrantRepository(host=host, port=port)
+
+
+def get_document_repository() -> Generator[AbstractDocumentRepository, None, None]:
+    """Provide the shared document repository to FastAPI routes."""
+    yield _shared_document_repository()
 
 
 def get_query_strategy(

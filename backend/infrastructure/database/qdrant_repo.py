@@ -1,4 +1,7 @@
+import hashlib
+import os
 import uuid
+from typing import cast
 
 from llama_index.core import Settings
 from qdrant_client import QdrantClient
@@ -20,25 +23,67 @@ class QdrantRepository(AbstractDocumentRepository):
         self,
         host: str = "localhost",
         port: int = 6333,
-        collection_name: str = "parsrag_collection",
-    ):
+        collection_name: str | None = None,
+        vector_size: int | None = None,
+    ) -> None:
+        """Connect to Qdrant and validate the embedding-specific collection."""
         if host == ":memory:":
             self.client = QdrantClient(location=":memory:")
         else:
             self.client = QdrantClient(host=host, port=port)
-        self.collection_name = collection_name
+        self.vector_size = vector_size or self._embedding_dimension()
+        self.collection_name = collection_name or self._versioned_collection_name()
         self._ensure_collection_and_indices()
+
+    def _embedding_dimension(self) -> int:
+        """Derive vector dimensions from the configured embedding adapter."""
+        embedding = Settings.embed_model.get_text_embedding("dimension probe")
+        if not embedding:
+            raise VectorDBConnectionError(
+                "The embedding model returned an empty vector."
+            )
+        return len(embedding)
+
+    def _versioned_collection_name(self) -> str:
+        """Keep incompatible embedding schemas in separate collections."""
+        explicit = os.getenv("QDRANT_COLLECTION", "").strip()
+        if explicit:
+            return explicit
+        model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")
+        version = hashlib.sha256(model_name.encode("utf-8")).hexdigest()[:12]
+        return f"parsrag_{version}"
+
+    def _existing_vector_size(self) -> int | None:
+        """Read the vector size advertised by an existing collection."""
+        info = self.client.get_collection(self.collection_name)
+        vectors = info.config.params.vectors
+        if isinstance(vectors, qmodels.VectorParams):
+            return vectors.size
+        if isinstance(vectors, dict) and len(vectors) == 1:
+            candidate = next(iter(vectors.values()))
+            return (
+                candidate.size if isinstance(candidate, qmodels.VectorParams) else None
+            )
+        return None
 
     def _ensure_collection_and_indices(self) -> None:
         try:
-            if not self.client.collection_exists(self.collection_name):
+            exists = self.client.collection_exists(self.collection_name)
+            if not exists:
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=qmodels.VectorParams(
-                        size=768,  # e5-base dimensions
+                        size=self.vector_size,
                         distance=qmodels.Distance.COSINE,
                     ),
                 )
+            else:
+                stored_size = self._existing_vector_size()
+                if stored_size is not None and stored_size != self.vector_size:
+                    raise VectorDBConnectionError(
+                        "The Qdrant collection embedding dimension does not match "
+                        f"the active model ({stored_size} != {self.vector_size})."
+                    )
             # Ensure payload indices on session_id and filename
             self.client.create_payload_index(
                 collection_name=self.collection_name,
@@ -57,14 +102,12 @@ class QdrantRepository(AbstractDocumentRepository):
                     f"Failed to connect to or initialize Qdrant collection: {exc}"
                 ) from exc
 
-    def save_nodes(
-        self, nodes: list[ExtractedNode], session_id: str | None = None
-    ) -> None:
+    def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Saves a list of ExtractedNode objects into Qdrant.
 
         Args:
             nodes (list[ExtractedNode]): The document chunks to save.
-            session_id (str | None, optional): Session ID for filtering context.
+            session_id: Required session ID for filtering context.
         """
         if not nodes:
             return
@@ -77,7 +120,7 @@ class QdrantRepository(AbstractDocumentRepository):
             for idx, (node, emb) in enumerate(zip(nodes, embeddings)):
                 payload = node.metadata.copy()
                 payload["text"] = node.text
-                payload["session_id"] = session_id or "global"
+                payload["session_id"] = session_id
 
                 points.append(
                     qmodels.PointStruct(
@@ -115,21 +158,13 @@ class QdrantRepository(AbstractDocumentRepository):
         try:
             query_embedding = Settings.embed_model.get_text_embedding(query)
 
-            # Filter by session_id OR global
-            should_conditions: list[qmodels.Condition] = [
-                qmodels.FieldCondition(
-                    key="session_id", match=qmodels.MatchValue(value="global")
-                )
-            ]
-            if session_id:
-                should_conditions.append(
-                    qmodels.FieldCondition(
-                        key="session_id", match=qmodels.MatchValue(value=session_id)
-                    )
-                )
+            if session_id is None:
+                return []
 
             must_conditions: list[qmodels.Condition] = [
-                qmodels.Filter(should=should_conditions)
+                qmodels.FieldCondition(
+                    key="session_id", match=qmodels.MatchValue(value=session_id)
+                )
             ]
 
             # Filter by filename(s) if provided
@@ -183,17 +218,23 @@ class QdrantRepository(AbstractDocumentRepository):
                     )
                 ]
             )
-            results, _ = self.client.scroll(
-                collection_name=self.collection_name,
-                scroll_filter=scroll_filter,
-                limit=1000,
-                with_payload=["filename"],
-                with_vectors=False,
-            )
             filenames: set[str] = set()
-            for point in results:
-                if point.payload and "filename" in point.payload:
-                    filenames.add(str(point.payload["filename"]))
+            offset: int | str | uuid.UUID | None = None
+            while True:
+                results, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=scroll_filter,
+                    limit=256,
+                    offset=offset,
+                    with_payload=["filename"],
+                    with_vectors=False,
+                )
+                for point in results:
+                    if point.payload and "filename" in point.payload:
+                        filenames.add(str(point.payload["filename"]))
+                if next_offset is None:
+                    break
+                offset = cast(int | str | uuid.UUID, next_offset)
             return sorted(filenames)
         except Exception as exc:
             raise VectorDBConnectionError(

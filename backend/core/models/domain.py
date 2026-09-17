@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class QueryMode(str, Enum):
@@ -43,14 +43,18 @@ class OllamaModel(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    role: str = Field(..., description="Role of the sender (e.g., 'user', 'assistant')")
-    content: str = Field(..., description="Content of the message")
+    """One bounded conversational history item."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=12_000)
 
 
 class QueryRequest(BaseModel):
-    prompt: str = Field(..., description="The user's query")
+    """Validated query and its session-scoped context."""
+
+    prompt: str = Field(..., min_length=1, max_length=12_000)
     chat_history: list[ChatMessage] = Field(
-        default_factory=list, description="Previous conversation history"
+        default_factory=list, max_length=20, description="Previous conversation history"
     )
     mode: QueryMode = Field(
         default=QueryMode.HYBRID, description="The RAG execution mode"
@@ -82,16 +86,12 @@ class QueryRequest(BaseModel):
         description="Optional list of filenames to restrict the query to (up to 5)",
     )
 
-
-class DocumentIngestionRequest(BaseModel):
-    filename: str = Field(..., description="Name of the file being ingested")
-    file_bytes: bytes = Field(..., description="Raw bytes of the file")
-    session_id: str | None = Field(
-        default=None,
-        max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Optional session ID to scope the document (alphanumeric, dashes, underscores only)",
-    )
+    @model_validator(mode="after")
+    def require_document_session(self) -> "QueryRequest":
+        """Require an isolation boundary for every document-backed query."""
+        if self.mode is not QueryMode.LLM_ONLY and self.session_id is None:
+            raise ValueError("session_id is required for document-backed queries")
+        return self
 
 
 class DeleteDocumentRequest(BaseModel):

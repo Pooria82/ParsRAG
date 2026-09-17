@@ -33,6 +33,7 @@ def test_ingest_unsupported_file_extension() -> None:
         files={
             "file": ("malicious.exe", b"binary content", "application/x-msdownload")
         },
+        data={"session_id": "session-123"},
     )
     assert response.status_code == 400
     assert "Unsupported file format" in response.json()["detail"]
@@ -55,12 +56,14 @@ def test_ingest_oversized_file() -> None:
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
             },
+            data={"session_id": "session-123"},
         )
     # Testing standard client with oversized bytes directly
     oversized_bytes = b"0" * (51 * 1024 * 1024)
     response = client.post(
         "/ingest",
         files={"file": ("oversized.docx", oversized_bytes, "application/octet-stream")},
+        data={"session_id": "session-123"},
     )
     assert response.status_code == 413
     assert "exceeds the 50MB limit" in response.json()["detail"]
@@ -77,6 +80,7 @@ def test_ingest_corrupted_document() -> None:
                 "application/octet-stream",
             )
         },
+        data={"session_id": "session-123"},
     )
     assert response.status_code == 400
 
@@ -93,7 +97,7 @@ def test_zero_leakage_on_key_error(mock_condenser_cls: MagicMock) -> None:
     mock_condenser.condense.side_effect = KeyError("internal_database_secret_key_id")
     mock_condenser_cls.return_value = mock_condenser
 
-    payload = {"prompt": "trigger", "mode": "strict"}
+    payload = {"prompt": "trigger", "mode": "strict", "session_id": "session-123"}
     response = client.post("/query", json=payload)
 
     assert response.status_code == 500
@@ -112,7 +116,7 @@ def test_zero_leakage_on_zero_division(mock_condenser_cls: MagicMock) -> None:
     )
     mock_condenser_cls.return_value = mock_condenser
 
-    payload = {"prompt": "trigger", "mode": "hybrid"}
+    payload = {"prompt": "trigger", "mode": "hybrid", "session_id": "session-123"}
     response = client.post("/query", json=payload)
 
     assert response.status_code == 500

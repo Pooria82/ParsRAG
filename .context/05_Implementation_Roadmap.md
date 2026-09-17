@@ -281,12 +281,12 @@ only when the user enables a remote API endpoint.
 ### Task 10.3: Session Isolation & Data Lifecycle
 **Description:** Ensure a single workstation user can understand, enumerate, and completely remove locally indexed data.
 **Actionable Steps:**
-- [ ] Require session IDs for ingestion and document-backed queries; remove implicit globally shared uploads.
-- [ ] Make “clear all data” delete every known backend session before clearing browser state, and report partial failures.
-- [ ] Add Qdrant pagination so file discovery is correct beyond the first 1,000 points.
-- [ ] Derive and validate vector dimensions from the configured embedding model instead of hard-coding 768.
-- [ ] Version Qdrant collections by embedding configuration and document the migration/reset path when embeddings change.
-- [ ] Document localStorage and Qdrant retention, backup, restore, and secure deletion behavior.
+- [x] Require session IDs for ingestion and document-backed queries; remove implicit globally shared uploads.
+- [x] Make “clear all data” delete every known backend session before clearing browser state, and report partial failures.
+- [x] Add Qdrant pagination so file discovery is correct beyond the first 1,000 points.
+- [x] Derive and validate vector dimensions from the configured embedding model instead of hard-coding 768.
+- [x] Version Qdrant collections by embedding configuration and document the migration/reset path when embeddings change.
+- [x] Document localStorage and Qdrant retention, backup, restore, and secure deletion behavior.
 
 ### Task 10.4: Resource & Input Hardening
 **Description:** Bound memory, CPU, parser, and inference work on personal workstations.

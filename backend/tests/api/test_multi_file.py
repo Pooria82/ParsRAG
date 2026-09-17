@@ -232,6 +232,7 @@ def test_query_route_with_file_filter(
     payload = {
         "prompt": "What is in file 2?",
         "mode": "strict",
+        "session_id": "session-123",
         "file_filter": ["file2.docx"],
     }
 
@@ -242,7 +243,7 @@ def test_query_route_with_file_filter(
     mock_strategy.execute.assert_called_once_with(
         query="condensed query",
         chat_history=[],
-        session_id=None,
+        session_id="session-123",
         top_k=None,
         file_filter=["file2.docx"],
     )

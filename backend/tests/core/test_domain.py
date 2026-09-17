@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from backend.core.models.domain import (
     ChatMessage,
-    DocumentIngestionRequest,
     ExtractedNode,
     QueryMode,
     QueryRequest,
@@ -28,11 +27,11 @@ def test_chat_message_missing_fields() -> None:
         ChatMessage(role="user")  # type: ignore[call-arg]
 
 
-def test_query_request_defaults() -> None:
-    req = QueryRequest(prompt="What is this?")
+def test_llm_only_query_allows_no_session() -> None:
+    req = QueryRequest(prompt="What is this?", mode=QueryMode.LLM_ONLY)
     assert req.prompt == "What is this?"
     assert req.chat_history == []
-    assert req.mode == QueryMode.HYBRID
+    assert req.mode == QueryMode.LLM_ONLY
     assert req.session_id is None
 
 
@@ -48,13 +47,9 @@ def test_query_request_custom() -> None:
     assert len(req.chat_history) == 1
 
 
-def test_document_ingestion_request() -> None:
-    req = DocumentIngestionRequest(
-        filename="test.pdf", file_bytes=b"fakebytes", session_id="abc"
-    )
-    assert req.filename == "test.pdf"
-    assert req.file_bytes == b"fakebytes"
-    assert req.session_id == "abc"
+def test_document_query_requires_session_id() -> None:
+    with pytest.raises(ValidationError, match="session_id is required"):
+        QueryRequest(prompt="What is this?", mode=QueryMode.STRICT)
 
 
 def test_extracted_node() -> None:

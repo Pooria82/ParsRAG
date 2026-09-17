@@ -26,7 +26,7 @@ def test_qdrant_initialization_failure_raises_vectordb_error() -> None:
         mock_client_cls.return_value = mock_client
 
         try:
-            QdrantRepository(host="invalid-host", port=9999)
+            QdrantRepository(host="invalid-host", port=9999, vector_size=768)
             assert False, "Expected VectorDBConnectionError was not raised"
         except VectorDBConnectionError as exc:
             assert "Failed to connect to or initialize Qdrant" in str(exc)
@@ -46,11 +46,11 @@ def test_qdrant_save_nodes_failure_raises_vectordb_error() -> None:
         mock_client_cls.return_value = mock_client
         mock_settings.embed_model.get_text_embedding_batch.return_value = [[0.1] * 768]
 
-        repo = QdrantRepository(collection_name="test_col")
+        repo = QdrantRepository(collection_name="test_col", vector_size=768)
         node = ExtractedNode(text="متن تستی", metadata={})
 
         try:
-            repo.save_nodes([node])
+            repo.save_nodes([node], session_id="test-session")
             assert False, "Expected VectorDBConnectionError was not raised"
         except VectorDBConnectionError as exc:
             assert "Failed to save nodes in Qdrant" in str(exc)
@@ -70,10 +70,10 @@ def test_qdrant_similarity_search_failure_raises_vectordb_error() -> None:
         mock_client_cls.return_value = mock_client
         mock_settings.embed_model.get_text_embedding.return_value = [0.1] * 768
 
-        repo = QdrantRepository(collection_name="test_col")
+        repo = QdrantRepository(collection_name="test_col", vector_size=768)
 
         try:
-            repo.similarity_search("پرسش تستی")
+            repo.similarity_search("پرسش تستی", session_id="test-session")
             assert False, "Expected VectorDBConnectionError was not raised"
         except VectorDBConnectionError as exc:
             assert "Failed to perform similarity search in Qdrant" in str(exc)
@@ -92,7 +92,7 @@ def test_parsrag_domain_exception_handler_sterile_response() -> None:
     try:
         response = client.post(
             "/query",
-            json={"prompt": "تست خطا", "mode": "strict"},
+            json={"prompt": "تست خطا", "mode": "strict", "session_id": "session-123"},
         )
         assert response.status_code == 500
         # Verify zero leak of internal secrets or python tracebacks

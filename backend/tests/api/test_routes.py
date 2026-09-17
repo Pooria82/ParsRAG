@@ -49,13 +49,31 @@ def test_ingest_empty_document() -> None:
         mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
         response = client.post(
-            "/ingest", files={"file": ("empty.pdf", b"empty bytes", "application/pdf")}
+            "/ingest",
+            files={"file": ("empty.pdf", b"empty bytes", "application/pdf")},
+            data={"session_id": "session-123"},
         )
 
         assert response.status_code == 400
         assert response.json()["detail"] == "No text found"
 
     app.dependency_overrides.clear()
+
+
+def test_ingest_requires_session_boundary() -> None:
+    """Documents cannot be stored in an implicit shared namespace."""
+    response = client.post(
+        "/ingest", files={"file": ("test.pdf", b"fake pdf bytes", "application/pdf")}
+    )
+
+    assert response.status_code == 422
+
+
+def test_document_query_requires_session_boundary() -> None:
+    """Document-backed modes reject queries without a session identifier."""
+    response = client.post("/query", json={"prompt": "Question", "mode": "strict"})
+
+    assert response.status_code == 422
 
 
 @patch("backend.api.routes.CondenseQuestionPipeline")
@@ -73,7 +91,7 @@ def test_query_success(
     )
     mock_get_strategy.return_value = mock_strategy
 
-    payload = {"prompt": "What is this?", "mode": "hybrid"}
+    payload = {"prompt": "What is this?", "mode": "hybrid", "session_id": "session-123"}
 
     response = client.post("/query", json=payload)
 
@@ -83,7 +101,7 @@ def test_query_success(
     mock_strategy.execute.assert_called_once_with(
         query="condensed query",
         chat_history=[],
-        session_id=None,
+        session_id="session-123",
         top_k=None,
         file_filter=None,
     )
@@ -104,7 +122,12 @@ def test_query_with_custom_top_k(
     )
     mock_get_strategy.return_value = mock_strategy
 
-    payload = {"prompt": "Aggregate all sections", "mode": "strict", "top_k": 20}
+    payload = {
+        "prompt": "Aggregate all sections",
+        "mode": "strict",
+        "top_k": 20,
+        "session_id": "session-123",
+    }
 
     response = client.post("/query", json=payload)
 
@@ -113,7 +136,7 @@ def test_query_with_custom_top_k(
     mock_strategy.execute.assert_called_once_with(
         query="condensed query",
         chat_history=[],
-        session_id=None,
+        session_id="session-123",
         top_k=20,
         file_filter=None,
     )
@@ -128,7 +151,7 @@ def test_global_exception_handler(mock_condenser_cls: MagicMock) -> None:
     )
     mock_condenser_cls.return_value = mock_condenser
 
-    payload = {"prompt": "Trigger crash", "mode": "strict"}
+    payload = {"prompt": "Trigger crash", "mode": "strict", "session_id": "session-123"}
 
     response = client.post("/query", json=payload)
 

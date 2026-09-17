@@ -71,12 +71,12 @@ def read_ollama_models(base_url: str = "http://localhost:11434") -> list[OllamaM
 def ingest_document(
     file: UploadFile | None = File(None),  # noqa: B008
     files: list[UploadFile] | None = File(None),  # noqa: B008
-    session_id: str | None = Form(None),
+    session_id: str = Form(...),
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
     """Ingests 1 to 5 documents, parses them, chunks them, and saves them to Qdrant."""
     # 1. Validate session_id
-    if session_id is not None and not SESSION_ID_REGEX.match(session_id):
+    if not SESSION_ID_REGEX.match(session_id):
         raise HTTPException(
             status_code=400,
             detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",

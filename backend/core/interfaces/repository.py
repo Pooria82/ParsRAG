@@ -7,14 +7,12 @@ class AbstractDocumentRepository(ABC):
     """Abstract interface defining the Document Repository contract."""
 
     @abstractmethod
-    def save_nodes(
-        self, nodes: list[ExtractedNode], session_id: str | None = None
-    ) -> None:
+    def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Saves extracted document nodes into the repository.
 
         Args:
             nodes (list[ExtractedNode]): The nodes to save.
-            session_id (str | None, optional): The session ID associated with these nodes.
+            session_id: The required session isolation boundary.
         """
 
     @abstractmethod

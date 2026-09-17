@@ -247,6 +247,22 @@ export function App() {
     } catch { return false; }
   };
 
+  const clearAllData = async (): Promise<void> => {
+    if (busy) throw new Error('busy');
+    const current = [...sessionsRef.current];
+    const failures: string[] = [];
+    for (const session of current) {
+      try {
+        await api.deleteSession(session.id, AbortSignal.timeout(15000));
+      } catch {
+        failures.push(session.id);
+      }
+    }
+    if (failures.length) throw new Error('backend_delete_failed');
+    const fresh = createSession(settings.language, settings.defaultMode);
+    setSessions([fresh]); setActiveId(fresh.id); setNotice(null);
+  };
+
   const updateSettings = useCallback((updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated })), []);
   const transitionTheme = useThemeTransition(theme => updateSettings({ theme }));
   const transitionLanguage = useLanguageTransition(language => updateSettings({ language }));
@@ -310,7 +326,7 @@ export function App() {
         else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);
         else updateSettings(updated);
       }} busy={busy}
-      onClearAllData={() => { const fresh = createSession(settings.language, settings.defaultMode); setSessions([fresh]); setActiveId(fresh.id); setNotice(null); }} />
+      onClearAllData={clearAllData} />
   </div>;
 }
 

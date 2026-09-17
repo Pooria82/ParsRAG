@@ -122,6 +122,21 @@ Qdrant vectors, Ollama models, the embedding cache, and non-secret application
 configuration survive `docker compose down`. Run `docker compose down -v` only
 when you intentionally want to delete all persistent volumes.
 
+Conversation messages and UI settings are stored in browser `localStorage`.
+Document chunks are stored in Qdrant under the conversation session ID; uploads
+without a valid session ID are rejected. “Clear all local data” first removes
+every known session from Qdrant and clears browser history only after all server
+deletions succeed. Qdrant collections are named from `EMBED_MODEL_NAME`, so a
+different embedding model starts a compatible collection instead of mixing
+vector dimensions. To migrate, re-upload the source documents; to reclaim an old
+collection, delete it with Qdrant tooling after confirming it is no longer needed.
+
+Back up the `qdrant_data` volume together with browser storage if conversation
+recovery matters. Volume or collection deletion removes the application's access
+to those records but is not a guarantee of forensic erasure on the underlying
+disk; use the operating system's approved secure-erasure process for sensitive
+hardware disposal.
+
 OCR behavior is controlled with `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI`,
 `OCR_TIMEOUT_SECONDS`, and `OCR_MAX_PAGES`. Native PDF text always uses the fast
 path; Tesseract runs only for pages without selectable text.

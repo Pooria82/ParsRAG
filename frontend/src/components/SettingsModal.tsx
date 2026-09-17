@@ -10,13 +10,14 @@ import { ParsRagApiClient } from '../services/api';
 interface SettingsModalProps {
   open?: boolean;
   onClose: () => void; settings: AppSettings;
-  onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => void; busy: boolean;
+  onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => Promise<void>; busy: boolean;
 }
 
 export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy }: SettingsModalProps) {
   const t = translations[settings.language];
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearStatus, setClearStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [endpoint, setEndpoint] = useState(settings.backendUrl);
   const [invalid, setInvalid] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -136,7 +137,10 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         </form>
         <div className="data-setting"><h3>{t.clearAllData}</h3><p>{t.clearAllDesc}</p>
           {!clearConfirm ? <button className="button danger-outline" disabled={busy} onClick={() => setClearConfirm(true)}><Trash2 size={16} />{t.clearAllData}</button>
-            : <div className="clear-confirm"><strong>{t.clearAllConfirm}</strong><div className="dialog-actions"><button className="button secondary" onClick={() => setClearConfirm(false)}>{t.cancel}</button><button className="button danger" disabled={busy} onClick={() => { onClearAllData(); onClose(); }}>{t.clear}</button></div></div>}
+            : <div className="clear-confirm"><strong>{t.clearAllConfirm}</strong><div className="dialog-actions"><button className="button secondary" disabled={clearStatus === 'loading'} onClick={() => { setClearConfirm(false); setClearStatus('idle'); }}>{t.cancel}</button><button className="button danger" disabled={busy || clearStatus === 'loading'} onClick={() => {
+              setClearStatus('loading');
+              void onClearAllData().then(onClose).catch(() => setClearStatus('error'));
+            }}>{clearStatus === 'loading' ? t.saving : t.clear}</button></div>{clearStatus === 'error' && <p className="inline-error" role="alert">{t.clearAllFailed}</p>}</div>}
         </div>
       </>}
     </div>
