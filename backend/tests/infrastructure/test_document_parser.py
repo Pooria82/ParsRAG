@@ -22,9 +22,7 @@ def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     mock_doc.__iter__.return_value = [mock_page]
     mock_fitz_open.return_value = mock_doc
 
-    with pytest.raises(
-        EmptyDocumentError, match="The document contains no selectable text"
-    ):
+    with pytest.raises(EmptyDocumentError, match="Scanned PDFs require OCR"):
         parse_document(b"fake pdf bytes", "fake.pdf")
 
     mock_doc.close.assert_called_once()
@@ -43,6 +41,81 @@ def test_pdf_sections_keep_page_numbers(mock_fitz_open: MagicMock) -> None:
 
     assert [section.metadata for section in sections] == [{"page": 1}, {"page": 2}]
     mock_doc.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+def test_scanned_pdf_uses_ocr_when_enabled(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fully scanned PDFs use OCR and preserve their page citation."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    page = MagicMock()
+    page.get_text.return_value = ""
+    document = MagicMock()
+    document.__iter__.return_value = [page]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.return_value = "متن فارسی اسکن‌شده"
+
+    sections = parse_document_sections(b"pdf", "scan.pdf")
+
+    assert sections[0].text == "متن فارسی اسکن‌شده"
+    assert sections[0].metadata == {"page": 1}
+    mock_extract_page_text.assert_called_once()
+    document.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+def test_mixed_pdf_only_ocrs_scanned_pages(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Native PDF pages remain the fast path in mixed documents."""
+    monkeypatch.setenv("OCR_ENABLED", "true")
+    native, scanned = MagicMock(), MagicMock()
+    native.get_text.return_value = "native text"
+    scanned.get_text.return_value = ""
+    document = MagicMock()
+    document.__iter__.return_value = [native, scanned]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.return_value = "ocr text"
+
+    sections = parse_document_sections(b"pdf", "mixed.pdf")
+
+    assert [(item.text, item.metadata) for item in sections] == [
+        ("native text", {"page": 1}),
+        ("ocr text", {"page": 2}),
+    ]
+    mock_extract_page_text.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+def test_pdf_ocr_page_limit_is_enforced(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OCR work is bounded independently from the upload byte limit."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    monkeypatch.setenv("OCR_MAX_PAGES", "1")
+    pages = [MagicMock(), MagicMock()]
+    for page in pages:
+        page.get_text.return_value = ""
+    document = MagicMock()
+    document.__iter__.return_value = pages
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.return_value = "ocr text"
+
+    with pytest.raises(ValueError, match="limited to 1 OCR pages"):
+        parse_document_sections(b"pdf", "large-scan.pdf")
+
+    assert mock_extract_page_text.call_count == 1
+    document.close.assert_called_once()
 
 
 def test_chunk_text() -> None:

@@ -11,6 +11,12 @@ from docx.text.paragraph import Paragraph
 from pptx import Presentation
 
 from backend.core.exceptions import EmptyDocumentError
+from backend.infrastructure.parsers.ocr import (
+    OCRError,
+    OCRPageLimitError,
+    OCRSettings,
+    extract_page_text,
+)
 
 __all__ = [
     "EmptyDocumentError",
@@ -62,16 +68,7 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
     """Extracts text with page, slide, paragraph, or section metadata."""
     lower_name = filename.lower()
     if lower_name.endswith(".pdf"):
-        try:
-            document = fitz.open(stream=file_bytes, filetype="pdf")
-        except Exception as exc:
-            raise ValueError("Corrupted or invalid PDF document.") from exc
-        sections = [
-            ParsedSection(text=text.strip(), metadata={"page": index})
-            for index, page in enumerate(document, start=1)
-            if (text := page.get_text("text")).strip()
-        ]
-        document.close()
+        sections = _parse_pdf_sections(file_bytes)
     elif lower_name.endswith(".docx"):
         try:
             document = Document(io.BytesIO(file_bytes))
@@ -112,9 +109,7 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
         )
     if not sections:
         if lower_name.endswith(".pdf"):
-            raise EmptyDocumentError(
-                "The document contains no selectable text. Scanned PDFs are not supported."
-            )
+            raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
         raise EmptyDocumentError("The document contains no text.")
     return sections
 
@@ -212,26 +207,47 @@ def _format_pptx_table(table: Any) -> str:
 
 
 def _parse_pdf(file_bytes: bytes) -> str:
-    """Extracts text from PDF bytes using PyMuPDF."""
+    """Extracts native and OCR text from PDF bytes."""
+    sections = _parse_pdf_sections(file_bytes)
+    if not sections:
+        raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
+    return "\n\n".join(section.text for section in sections)
+
+
+def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
+    """Extracts ordered PDF pages, using OCR only for scanned pages."""
     try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-    except Exception as e:
-        raise ValueError("Corrupted or invalid PDF document.") from e
+        document = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception as exc:
+        raise ValueError("Corrupted or invalid PDF document.") from exc
 
-    text = ""
-    for page in doc:
-        page_text = page.get_text("text")
-        if page_text:
-            text += page_text + "\n"
-
-    doc.close()
-
-    if not text.strip():
-        raise EmptyDocumentError(
-            "The document contains no selectable text. Scanned PDFs are not supported."
-        )
-
-    return text.strip()
+    settings = OCRSettings.from_environment()
+    sections: list[ParsedSection] = []
+    scanned_pages = 0
+    try:
+        for page_number, page in enumerate(document, start=1):
+            text = page.get_text("text").strip()
+            if not text:
+                scanned_pages += 1
+                if not settings.enabled:
+                    continue
+                if scanned_pages > settings.max_pages:
+                    raise OCRPageLimitError(
+                        f"Scanned PDFs are limited to {settings.max_pages} OCR pages."
+                    )
+                try:
+                    text = extract_page_text(page, settings)
+                except OCRError as exc:
+                    raise ValueError(
+                        f"Scanned PDFs could not be processed: {exc}"
+                    ) from exc
+            if text:
+                sections.append(
+                    ParsedSection(text=text, metadata={"page": page_number})
+                )
+    finally:
+        document.close()
+    return sections
 
 
 def _parse_docx(file_bytes: bytes) -> str:

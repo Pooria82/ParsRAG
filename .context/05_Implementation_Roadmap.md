@@ -224,11 +224,11 @@ but credentials are supplied only at runtime and are never baked into an image.
 ### Task 9.3: Scanned PDF OCR Adapter
 **Description:** Extend PDF parsing with bounded, traceable OCR while preserving native text extraction as the fast path.
 **Actionable Steps:**
-- [ ] Add a Tesseract infrastructure adapter with environment-controlled enablement, languages, DPI, timeout, and maximum page count.
-- [ ] OCR only PDF pages that contain no selectable text; keep native and OCR pages in original order.
-- [ ] Preserve page metadata for citations and normalize OCR output before chunking.
-- [ ] Return specific, localized-safe validation errors when OCR is disabled, unavailable, times out, or exceeds configured limits.
-- [ ] Add unit tests for native PDFs, fully scanned PDFs, mixed native/scanned PDFs, disabled OCR, missing OCR runtime, and page limits.
+- [x] Add a Tesseract infrastructure adapter with environment-controlled enablement, languages, DPI, timeout, and maximum page count.
+- [x] OCR only PDF pages that contain no selectable text; keep native and OCR pages in original order.
+- [x] Preserve page metadata for citations and normalize OCR output before chunking.
+- [x] Return specific, localized-safe validation errors when OCR is disabled, unavailable, times out, or exceeds configured limits.
+- [x] Add unit tests for native PDFs, fully scanned PDFs, mixed native/scanned PDFs, disabled OCR, missing OCR runtime, and page limits.
 
 ### Task 9.4: Runtime Configuration & Operations
 **Description:** Make local and container startup explicit, safe, and maintainable.
