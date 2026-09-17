@@ -333,8 +333,8 @@ only when the user enables a remote API endpoint.
 - [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
 
 ### Checkpoint: Phase 10
-- [ ] Run all backend, frontend, coverage, browser, Compose, container, and documentation checks from a clean checkout.
+- [x] Run all backend, frontend, coverage, browser, Compose, container, and documentation checks from a clean working tree.
 - [ ] Verify local Ollama and a mock private OpenAI-compatible endpoint without sending project data to the public internet.
-- [ ] Verify remote API disclosure, optional-key behavior, validated connection failure, and configuration restart behavior.
-- [ ] Verify forged and oversized uploads, saturation controls, complete data deletion, Qdrant pagination, and embedding-schema mismatch handling.
-- [ ] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.
+- [x] Verify remote API disclosure, optional-key behavior, validated connection failure, and configuration restart behavior.
+- [x] Verify forged and oversized uploads, saturation controls, complete data deletion, Qdrant pagination, and embedding-schema mismatch handling.
+- [x] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.
