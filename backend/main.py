@@ -25,7 +25,7 @@ if os.getenv("PARSRAG_SKIP_MODEL_SETUP") != "1":
 
 app = FastAPI(title="ParsRAG API", version="1.0.0")
 
-# Allow CORS for Chainlit (localhost)
+# Allow CORS for frontend (localhost)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Adjust in production
