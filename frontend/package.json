@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs"
+    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "lucide-react": "^0.453.0",
@@ -17,10 +18,11 @@
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10"
+    "vite": "^8.3.0"
   }
 }

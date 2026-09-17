@@ -16,10 +16,10 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     VIRTUAL_ENV=/opt/venv
 RUN python -m venv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-COPY requirements-runtime.txt /tmp/requirements-runtime.txt
+COPY requirements-runtime.txt requirements.lock /tmp/
 RUN pip install --upgrade pip \
     && pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}" \
-    && pip install -r /tmp/requirements-runtime.txt
+    && pip install -r /tmp/requirements-runtime.txt -c /tmp/requirements.lock
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 \

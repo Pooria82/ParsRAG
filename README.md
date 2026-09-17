@@ -67,6 +67,28 @@ For frontend hot reload, run `npm run dev` inside `frontend`. The interface vali
 Native OCR is disabled by default. Install Tesseract with Persian and English
 language data and set `OCR_ENABLED=1` to process scanned PDF pages locally.
 
+## Installation and resource planning
+
+Source installation requires Python 3.12, Node.js 22, Qdrant, and either Ollama
+or an OpenAI-compatible endpoint. The container path additionally requires Docker
+Engine with Compose. CPU-only operation is supported but local generation and
+embedding are slower; 16 GB system RAM is a practical starting point, while GPU
+memory needs depend on the chosen Ollama model and quantization. Keep free disk
+space for the container images, embedding cache, Qdrant vectors, OCR packages,
+and optional Ollama weights; model files commonly consume several gigabytes.
+
+The first connected start may download the Hugging Face embedding model and, in
+the `local-model` profile, the selected Ollama model. For an offline site, preload
+those caches and images on a connected staging machine, export them using the
+approved Docker/Ollama procedures, transfer them through the organization's media
+control process, and start ParsRAG only after the artifacts are present. API mode
+avoids an Ollama model download but still needs the embedding model locally.
+
+The source path is intended for development and customization. The Compose path
+is the supported reproducible runtime: it builds the frontend into the FastAPI
+image and persists Qdrant, model configuration, embeddings, and optional Ollama
+weights in named volumes.
+
 ## Docker Compose
 
 Docker packages the Vite build, FastAPI, Tesseract, Persian OCR data, and Python
@@ -174,6 +196,8 @@ docker compose config -q
 ```
 
 The visual identity, color tokens, motion rules and SVG usage are documented in [`frontend/BRAND.md`](frontend/BRAND.md).
+Historical evaluation evidence and its limitations are documented in
+[`docs/evaluation/phase7-summary.md`](docs/evaluation/phase7-summary.md).
 
 ## Architecture & ADRs
 

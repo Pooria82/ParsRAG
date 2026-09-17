@@ -318,18 +318,18 @@ only when the user enables a remote API endpoint.
 ### Task 10.7: Automated Quality & Supply-Chain Controls
 **Description:** Make the checks described by the repository enforceable on every public contribution.
 **Actionable Steps:**
-- [ ] Add GitHub Actions for backend tests, Ruff, strict mypy, frontend tests/build, coverage, Compose validation, and Docker build.
-- [ ] Enforce an achievable coverage baseline, publish coverage output, and add end-to-end browser smoke tests for core workflows.
-- [ ] Pin the tested Python dependency set with a lock/constraints artifact and keep the npm lockfile authoritative with `npm ci`.
-- [ ] Add Dependabot configuration, dependency review, secret scanning guidance, SBOM generation, and container vulnerability scanning.
-- [ ] Pin release container inputs by immutable version/digest where practical and document the update process.
+- [x] Add GitHub Actions for backend tests, Ruff, strict mypy, frontend tests/build, coverage, Compose validation, and Docker build.
+- [x] Enforce an achievable coverage baseline, publish coverage output, and add end-to-end browser smoke tests for core workflows.
+- [x] Pin the tested Python dependency set with a lock/constraints artifact and keep the npm lockfile authoritative with `npm ci`.
+- [x] Add Dependabot configuration, dependency review, secret scanning guidance, SBOM generation, and container vulnerability scanning.
+- [x] Pin release container inputs by immutable version/digest where practical and document the update process.
 
 ### Task 10.8: Public Repository & Release Readiness
 **Description:** Publish a credible, legally usable, and maintainable first release.
 **Actionable Steps:**
-- [ ] Add an open-source license, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
-- [ ] Replace documentation promises that are not implemented and publish reproducible, anonymized evaluation evidence for quantitative claims.
-- [ ] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
+- [x] Add an open-source license, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
+- [ ] Replace documentation promises that are not implemented and publish reproducible, anonymized evaluation evidence for quantitative claims. (Claims were corrected and an anonymized limitations report was published; a reproducible live report awaits the separately requested model-evaluation run.)
+- [x] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
 - [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
 
 ### Checkpoint: Phase 10

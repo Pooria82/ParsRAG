@@ -50,6 +50,40 @@ def test_configure_api_model_keeps_secret_out_of_response(
     assert not hasattr(response, "api_key")
 
 
+@patch("backend.infrastructure.llm.factory.Settings")
+@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_private_api_without_key_is_verified_through_models_endpoint(
+    mock_get: MagicMock,
+    mock_openai: MagicMock,
+    mock_settings: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trusted keyless API is verified before its adapter becomes active."""
+    import backend.infrastructure.llm.factory as factory
+
+    monkeypatch.setattr(factory, "_api_key", None)
+    response = configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="corporate-model",
+            base_url="https://127.0.0.1/v1",
+        ),
+        persist=False,
+    )
+
+    mock_get.assert_called_once_with(
+        "https://127.0.0.1/v1/models",
+        headers={},
+        timeout=8.0,
+        follow_redirects=False,
+    )
+    mock_get.return_value.raise_for_status.assert_called_once()
+    assert mock_openai.call_args.kwargs["api_key"] == ""
+    assert mock_settings.llm is mock_openai.return_value
+    assert response.api_key_configured is False
+
+
 @patch("backend.infrastructure.llm.factory.httpx.get")
 def test_list_ollama_models_returns_installed_models(mock_get: MagicMock) -> None:
     mock_get.return_value.json.return_value = {
