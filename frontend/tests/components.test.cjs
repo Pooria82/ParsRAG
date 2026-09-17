@@ -23,6 +23,13 @@ test('model markdown cannot execute HTML or fetch a tracking image', () => {
   assert.match(html, /tracker/);
 });
 
+test('assistant response direction follows its content instead of interface language', () => {
+  const englishInPersian = render(ChatFeed, { messages: [{ id: 'en', role: 'assistant', timestamp: 1, content: 'This answer is in English.' }], language: 'fa', isGenerating: false, activeMode: 'hybrid', onRetry: noop, onEditPrompt: noop, onSelectVariant: noop, isBusy: false });
+  const persianInEnglish = render(ChatFeed, { messages: [{ id: 'fa', role: 'assistant', timestamp: 1, content: 'این پاسخ فارسی است.' }], language: 'en', isGenerating: false, activeMode: 'hybrid', onRetry: noop, onEditPrompt: noop, onSelectVariant: noop, isBusy: false });
+  assert.match(englishInPersian, /class="prose-content" dir="auto"/);
+  assert.match(persianInEnglish, /class="prose-content" dir="auto"/);
+});
+
 test('sources are compact, unique, escaped and show traceable locations', () => {
   const html = render(ChatFeed, { messages: [{ id: 'm2', role: 'assistant', content: 'پاسخ', timestamp: 1,
     citations: [{ filename: '<img src=x onerror=alert(1)>', locations: [{ kind: 'page', start: 3 }] }] }],

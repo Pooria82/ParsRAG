@@ -64,8 +64,8 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </div>
             </> : <>
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
-              {message.error ? <div className="message-error-body"><AlertCircle size={18} /><p>{message.content}</p></div> :
-                <div className="prose-content">
+              {message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
+                <div className="prose-content" dir="auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                     a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
                     img: ({ alt }) => <span className="external-image-note">[{alt || t.externalImage}]</span>,
