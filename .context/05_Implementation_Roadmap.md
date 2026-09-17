@@ -194,28 +194,55 @@ This phase conducts exhaustive, systematic validation across all document files 
 
 ---
 
-## Phase 9: Dockerization & Final Orchestration
+## Phase 9: Production Packaging, Orchestration & OCR
 
-### Task 9.1: Dockerfiles
-**Description:** Containerize the microservices.
+The active UI is a Vite-built React application served by FastAPI. Production
+therefore uses one immutable application image rather than separate UI and API
+containers. Qdrant and Ollama remain infrastructure adapters behind the existing
+repository and model-provider boundaries. API-backed models remain configurable,
+but credentials are supplied only at runtime and are never baked into an image.
+
+### Task 9.1: Reproducible Application Image
+**Description:** Package the React build, FastAPI runtime, document parsers, and OCR tools in one production image.
 **Actionable Steps:**
-- [ ] Create `backend/Dockerfile` optimizing for Python (multi-stage build).
-- [ ] Create `frontend/Dockerfile` for the Vite production build.
+- [ ] Add a root multi-stage `Dockerfile`: Node builds `frontend/dist`; a slim Python stage installs locked runtime dependencies and copies only application artifacts.
+- [ ] Install Tesseract with Persian and English language data in the runtime stage.
+- [ ] Run the application as an unprivileged user and expose only port 8000.
+- [ ] Add `.dockerignore` rules for secrets, local environments, caches, test data, generated builds, and vector/model storage.
+- [ ] Add an image-level health check against FastAPI `/health`.
 
-### Task 9.2: Docker Compose
-**Description:** Orchestrate the entire system.
+### Task 9.2: Local Service Orchestration
+**Description:** Run the application with persistent Qdrant and Ollama services on an isolated Compose network.
 **Actionable Steps:**
-- [ ] Create `docker-compose.yml` in the root directory.
-- [ ] Define `ui`, `api`, `qdrant`, and `ollama` services.
-- [ ] Configure networking and volume mounts (excluding qdrant_storage from git).
+- [ ] Add `compose.yaml` with `app`, `qdrant`, `ollama`, and one-shot `ollama-init` services.
+- [ ] Configure named volumes for Qdrant collections, Ollama models, and the Hugging Face embedding cache.
+- [ ] Pass `QDRANT_HOST=qdrant` and `OLLAMA_BASE_URL=http://ollama:11434` through environment configuration without weakening public URL validation.
+- [ ] Add health checks and dependency conditions so the app starts only after Qdrant and the selected model service are ready.
+- [ ] Keep Ollama reachable only through the application network; publish only the application port by default.
+- [ ] Make the initial Ollama model configurable with `OLLAMA_MODEL`, while preserving API-provider deployments through `.env`.
 
-### Checkpoint: Final
-- [ ] Run `docker-compose up --build`.
-- [ ] Upload a Persian `.docx` or `.pptx` file and ask a follow-up question. Verify response quality.
-
-### Task 9.3: Advanced Document Parsing (PDF OCR)
-**Description:** Implement robust PDF handling, specifically dealing with scanned documents via OCR (e.g., Tesseract or similar).
+### Task 9.3: Scanned PDF OCR Adapter
+**Description:** Extend PDF parsing with bounded, traceable OCR while preserving native text extraction as the fast path.
 **Actionable Steps:**
-- [ ] Integrate an OCR engine or robust PDF parser to extract Persian text from scanned and native PDFs.
-- [ ] Update the `document_parser.py` to handle `.pdf` file types.
-- [ ] Add rigorous testing for complex PDF layouts.
+- [ ] Add a Tesseract infrastructure adapter with environment-controlled enablement, languages, DPI, timeout, and maximum page count.
+- [ ] OCR only PDF pages that contain no selectable text; keep native and OCR pages in original order.
+- [ ] Preserve page metadata for citations and normalize OCR output before chunking.
+- [ ] Return specific, localized-safe validation errors when OCR is disabled, unavailable, times out, or exceeds configured limits.
+- [ ] Add unit tests for native PDFs, fully scanned PDFs, mixed native/scanned PDFs, disabled OCR, missing OCR runtime, and page limits.
+
+### Task 9.4: Runtime Configuration & Operations
+**Description:** Make local and container startup explicit, safe, and maintainable.
+**Actionable Steps:**
+- [ ] Replace example credentials with placeholders and document every Docker/OCR environment variable.
+- [ ] Allow only loopback or the explicit internal Ollama service hostname for Ollama configuration.
+- [ ] Remove obsolete Windows launcher scripts superseded by documented Vite, Uvicorn, and Compose commands.
+- [ ] Update `README.md` with local development, Docker startup, model provisioning, persistence, health checks, and shutdown instructions.
+- [ ] Add deterministic tests for Compose configuration, Docker build inputs, environment defaults, and internal Ollama URL validation.
+
+### Checkpoint: Phase 9
+- [ ] Run backend tests, Ruff, strict mypy, frontend tests, and the Vite production build.
+- [ ] Validate `docker compose config` without exposing secrets.
+- [ ] Build the production application image and verify its non-root user and health check.
+- [ ] Start the stack and verify `/health`, Qdrant readiness, Ollama readiness, and persistent volumes.
+- [ ] Upload native and scanned Persian documents and confirm traceable page citations.
+- [ ] With the configured model available, verify document deletion and all three query modes end to end.
