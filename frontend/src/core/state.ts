@@ -1,4 +1,4 @@
-import type { AppSettings, Citation, Language, Message, RAGMode, Session, SessionDocument } from '../types';
+import type { AppSettings, Citation, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument } from '../types';
 
 export const STORAGE = {
   sessions: 'parsrag_sessions_v1',
@@ -8,7 +8,8 @@ export const STORAGE = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'fa', theme: 'light', defaultMode: 'hybrid', strictThreshold: 0.8,
-  dynamicDepth: true, topK: 15, selectedModel: 'google/gemma-4-26b-a4b-it', backendUrl: '',
+  dynamicDepth: true, topK: 15, selectedModel: 'google/gemma-4-26b-a4b-it',
+  apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:12b', backendUrl: '',
 };
 
 export const MAX_DOCUMENTS = 5;
@@ -47,6 +48,9 @@ export function parseSettings(raw: string | null, origin?: string): AppSettings 
       dynamicDepth: typeof value.dynamicDepth === 'boolean' ? value.dynamicDepth : true,
       topK: typeof value.topK === 'number' && Number.isInteger(value.topK)
         ? Math.max(1, Math.min(50, value.topK)) : 15,
+      selectedModel: typeof value.selectedModel === 'string' && value.selectedModel.trim() ? value.selectedModel : DEFAULT_SETTINGS.selectedModel,
+      apiModelName: typeof value.apiModelName === 'string' && value.apiModelName.trim() ? value.apiModelName : DEFAULT_SETTINGS.apiModelName,
+      ollamaModelName: typeof value.ollamaModelName === 'string' && value.ollamaModelName.trim() ? value.ollamaModelName : DEFAULT_SETTINGS.ollamaModelName,
       backendUrl: typeof value.backendUrl === 'string' && isLocalEndpoint(value.backendUrl, origin)
         ? value.backendUrl.trim().replace(/\/+$/, '') : '',
     };
@@ -72,11 +76,22 @@ function parseMessages(value: unknown): Message[] {
   if (!Array.isArray(value)) return [];
   return value.filter(isRecord).filter(m => typeof m.id === 'string'
     && typeof m.content === 'string' && ['user', 'assistant', 'system'].includes(String(m.role)))
-    .map(m => ({
-      id: m.id as string, role: m.role as Message['role'], content: m.content as string,
-      timestamp: typeof m.timestamp === 'number' ? m.timestamp : 0,
-      error: m.error === true, citations: parseCitations(m.citations),
-    }));
+    .map(m => {
+      const variants = Array.isArray(m.variants) ? m.variants.filter(isRecord).filter(variant => typeof variant.id === 'string' && typeof variant.content === 'string').map(variant => ({
+        id: variant.id as string, content: variant.content as string,
+        timestamp: typeof variant.timestamp === 'number' ? variant.timestamp : 0,
+        error: variant.error === true, citations: parseCitations(variant.citations),
+      })) : [];
+      const activeVariant = variants.length ? Math.max(0, Math.min(variants.length - 1, typeof m.activeVariant === 'number' ? m.activeVariant : variants.length - 1)) : undefined;
+      const active = activeVariant === undefined ? undefined : variants[activeVariant];
+      return {
+        id: m.id as string, role: m.role as Message['role'], content: active?.content ?? m.content as string,
+        timestamp: active?.timestamp ?? (typeof m.timestamp === 'number' ? m.timestamp : 0),
+        error: active?.error ?? m.error === true, citations: active?.citations ?? parseCitations(m.citations),
+        variants: variants.length ? variants : undefined, activeVariant,
+        parentUserId: typeof m.parentUserId === 'string' ? m.parentUserId : undefined,
+      };
+    });
 }
 
 function parseDocuments(value: unknown): SessionDocument[] {
@@ -184,4 +199,29 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
   }));
   merged.push(...current.filter(doc => doc.status !== 'indexed' && !names.includes(doc.name)));
   return merged;
+}
+
+export function appendResponseVariant(message: Message, variant: ResponseVariant): Message {
+  const variants = message.variants?.length ? [...message.variants, variant] : [
+    { id: `${message.id}-original`, content: message.content, citations: message.citations, error: message.error, timestamp: message.timestamp },
+    variant,
+  ];
+  return { ...message, content: variant.content, citations: variant.citations, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
+}
+
+export function selectResponseVariant(message: Message, index: number): Message {
+  const variant = message.variants?.[index];
+  return variant ? { ...message, content: variant.content, citations: variant.citations, error: variant.error, timestamp: variant.timestamp, activeVariant: index } : message;
+}
+
+export function prepareTurnRegeneration(messages: Message[], userId: string, assistantId: string | undefined, prompt: string, edit: boolean) {
+  const userIndex = messages.findIndex(message => message.id === userId);
+  if (userIndex < 0) return { history: messages, visible: messages };
+  const assistantIndex = assistantId ? messages.findIndex(message => message.id === assistantId) : -1;
+  const lastKept = assistantIndex > userIndex ? assistantIndex : userIndex;
+  return {
+    history: messages.slice(0, userIndex),
+    visible: messages.slice(0, lastKept + 1).map(message => message.id === userId && edit
+      ? { ...message, content: prompt.trim(), timestamp: Date.now() } : message),
+  };
 }

@@ -19,6 +19,14 @@ export interface Citation {
   locations: Array<{ kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }>;
 }
 
+export interface ResponseVariant {
+  id: string;
+  content: string;
+  timestamp: number;
+  citations?: Citation[];
+  error?: boolean;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -27,6 +35,9 @@ export interface Message {
   citations?: Citation[];
   isStreaming?: boolean;
   error?: boolean;
+  variants?: ResponseVariant[];
+  activeVariant?: number;
+  parentUserId?: string;
 }
 
 export interface SessionDocument {
@@ -57,5 +68,7 @@ export interface AppSettings {
   dynamicDepth: boolean;
   topK: number;
   selectedModel: string;
+  apiModelName: string;
+  ollamaModelName: string;
   backendUrl: string;
 }

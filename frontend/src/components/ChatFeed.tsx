@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { AlertCircle, ArrowDown, Check, Copy, FileText, RotateCcw } from 'lucide-react';
+import { AlertCircle, ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RotateCcw, X } from 'lucide-react';
 import type { Message, Language, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
-  onRetry: (messageId: string) => void; isBusy: boolean;
+  onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
+  onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, isBusy }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy }: ChatFeedProps) {
   const t = translations[language];
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -19,6 +20,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   const [showJump, setShowJump] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(copyTimer.current), []);
   const toBottom = () => {
@@ -48,10 +50,19 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       setShowJump(!nearBottom.current);
     }}>
       <div className="message-list" role="log" aria-label={t.conversations} aria-live="polite" aria-relevant="additions">
-        {messages.map((message, index) => message.role === 'system'
+        {messages.map(message => message.role === 'system'
           ? <p key={message.id} className="system-message">{message.content}</p>
           : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '')} aria-label={message.role === 'user' ? t.you : t.appName}>
-            {message.role === 'user' ? <div className="user-bubble" dir="auto">{message.content}</div> : <>
+            {message.role === 'user' ? <>
+              {editing?.id === message.id ? <form className="prompt-edit" onSubmit={event => { event.preventDefault(); const value = editing.value.trim(); if (value && value !== message.content) onEditPrompt(message.id, value); setEditing(null); }}>
+                <textarea autoFocus value={editing.value} onChange={event => setEditing({ id: message.id, value: event.target.value })} aria-label={t.editPrompt} />
+                <div><button type="button" onClick={() => setEditing(null)}><X size={14} />{t.cancel}</button><button className="save-prompt" disabled={!editing.value.trim() || editing.value.trim() === message.content || isBusy}><Check size={14} />{t.saveAndSubmit}</button></div>
+              </form> : <div className="user-bubble" dir="auto">{message.content}</div>}
+              <div className="message-actions user-actions">
+                <button onClick={() => void copy(message)} title={t.copyPrompt}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copyPrompt}</button>
+                <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
+              </div>
+            </> : <>
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
               {message.error ? <div className="message-error-body"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content">
@@ -68,7 +79,12 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </section>}
               <div className="message-actions">
                 {!message.error && <button onClick={() => void copy(message)} title={t.copy}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copy}</button>}
-                {message.error && index === messages.length - 1 && <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>}
+                <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>
+                {message.variants && message.variants.length > 1 && <span className="variant-navigation" aria-label={t.responseVersions}>
+                  <button aria-label={t.previousResponse} disabled={isBusy || (message.activeVariant ?? 0) <= 0} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) - 1)}><ChevronRight size={15} /></button>
+                  <output>{((message.activeVariant ?? 0) + 1).toLocaleString(language)} / {message.variants.length.toLocaleString(language)}</output>
+                  <button aria-label={t.nextResponse} disabled={isBusy || (message.activeVariant ?? 0) >= message.variants.length - 1} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) + 1)}><ChevronLeft size={15} /></button>
+                </span>}
               </div>
             </>}
           </article>)}

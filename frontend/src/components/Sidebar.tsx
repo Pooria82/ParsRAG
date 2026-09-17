@@ -39,7 +39,7 @@ export function Sidebar(props: SidebarProps) {
   const closeEdit = () => { if (!deleting) setEdit(null); };
 
   const content = <>
-    <div className="sidebar-brand"><BrandMark /><div><strong>{t.appName}</strong><span>{t.workspace}</span></div></div>
+    <button className="sidebar-brand" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChat}><BrandMark /><span><strong>{t.appName}</strong><small>{t.workspace}</small></span></button>
     <button className="new-chat-button" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChatShortcut}>
       <Plus size={19} /><span>{t.newChat}</span><span className="shortcut-symbol" aria-hidden="true">⌘</span>
     </button>

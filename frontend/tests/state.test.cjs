@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_SETTINGS, MAX_FILE_BYTES, parseSettings, parseSessions, createSession,
-  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint,
+  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint, appendResponseVariant, selectResponseVariant, prepareTurnRegeneration,
 } = require('./.compiled/core/state.js');
 
 test('recovers malformed storage and validates settings without external endpoints', () => {
@@ -13,11 +13,38 @@ test('recovers malformed storage and validates settings without external endpoin
   assert.equal(settings.theme, 'light');
   assert.equal(settings.topK, 50);
   assert.equal(settings.backendUrl, '');
+  assert.equal(settings.apiModelName, 'google/gemma-4-26b-a4b-it');
+  assert.equal(settings.ollamaModelName, 'gemma3:12b');
   assert.equal(isLocalEndpoint('https://localhost.evil.com'), false);
   assert.equal(isLocalEndpoint('http://localhost@evil.com'), false);
   assert.equal(isLocalEndpoint('http://localhost:8000'), true);
   assert.equal(isLocalEndpoint('http://[::1]:8000'), true);
   assert.equal(isLocalEndpoint('http://192.168.1.10:8000', 'http://192.168.1.10:8000'), true);
+});
+
+test('keeps regenerated answers as navigable response variants', () => {
+  const original = { id: 'a1', role: 'assistant', content: 'first', timestamp: 1 };
+  const next = { id: 'v2', content: 'second', timestamp: 2 };
+  const message = appendResponseVariant(original, next);
+  assert.equal(message.variants.length, 2);
+  assert.equal(message.activeVariant, 1);
+  assert.equal(message.content, 'second');
+  assert.equal(selectResponseVariant(message, 0).content, 'first');
+  assert.equal(selectResponseVariant(message, 99), message);
+});
+
+test('editing a prompt branches from that turn and removes later conversation state', () => {
+  const messages = [
+    { id: 'u0', role: 'user', content: 'before', timestamp: 1 },
+    { id: 'a0', role: 'assistant', content: 'before answer', timestamp: 2 },
+    { id: 'u1', role: 'user', content: 'old prompt', timestamp: 3 },
+    { id: 'a1', role: 'assistant', content: 'old answer', timestamp: 4 },
+    { id: 'u2', role: 'user', content: 'later prompt', timestamp: 5 },
+  ];
+  const branch = prepareTurnRegeneration(messages, 'u1', 'a1', 'edited prompt', true);
+  assert.deepEqual(branch.history.map(message => message.id), ['u0', 'a0']);
+  assert.deepEqual(branch.visible.map(message => message.id), ['u0', 'a0', 'u1', 'a1']);
+  assert.equal(branch.visible[2].content, 'edited prompt');
 });
 
 test('preserves old conversations and recovers interrupted uploads', () => {

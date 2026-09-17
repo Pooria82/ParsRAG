@@ -30,10 +30,14 @@
 ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-new(root) { z-index: 2; animation: theme-reveal .52s var(--ease-out); }
 ::view-transition-old(root) { z-index: 1; }
+[data-language-transition]::view-transition-old(root) { animation: language-out .2s ease-in both; }
+[data-language-transition]::view-transition-new(root) { animation: language-in .48s var(--ease-out) both; clip-path: none; }
 @keyframes theme-reveal {
   from { clip-path: circle(0 at var(--theme-x) var(--theme-y)); }
   to { clip-path: circle(150vmax at var(--theme-x) var(--theme-y)); }
 }
+@keyframes language-out { to { opacity: .2; transform: translateY(-4px) scale(.995); } }
+@keyframes language-in { from { opacity: 0; transform: translateY(8px) scale(.99); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
 
 .choice-menu { position: relative; }
 .choice-menu-trigger {
@@ -63,7 +67,7 @@
   border-radius: 12px;
   background: var(--surface);
   box-shadow: var(--shadow-popover);
-  animation: menu-enter 170ms var(--ease-out) both;
+  animation: menu-enter 280ms var(--ease-out) both;
 }
 .choice-menu-popover button { width: 100%; min-height: 55px; display: flex; align-items: center; gap: 12px; padding: 9px 10px; text-align: start; border-radius: 8px; }
 .choice-menu-popover button:hover, .choice-menu-popover button:focus-visible { background: var(--surface-soft); }
@@ -71,10 +75,12 @@
 .choice-menu-popover button > svg { color: var(--accent); }
 @keyframes menu-enter { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: none; } }
 
-.settings-body { animation: settings-panel-enter 220ms var(--ease-out) both; }
+.settings-body { animation: settings-panel-enter 360ms var(--ease-out) both; }
 @keyframes settings-panel-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.model-field-swap { animation: model-field-swap 380ms var(--ease-out) both; }
+@keyframes model-field-swap { from { opacity: .25; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .settings-tabs > button { position: relative; }
-.settings-tabs > button::after { content: ''; position: absolute; inset-inline: 18%; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transition: transform 220ms var(--ease-out); }
+.settings-tabs > button::after { content: ''; position: absolute; inset-inline: 18%; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transition: transform 340ms var(--ease-out); }
 .settings-tabs > button[aria-selected='true']::after { transform: scaleX(1); }
 .settings-tabs > button[aria-selected='true'] { border-bottom-color: transparent !important; }
 
@@ -93,7 +99,7 @@
 @keyframes drawer-enter { from { transform: translateX(28px); opacity: .65; } }
 @keyframes drawer-enter-rtl { from { transform: translateX(-28px); opacity: .65; } }
 
-.send-button, .new-chat-button, .button, .starter-card, .settings-button, .documents-button { transition-duration: 180ms; transition-timing-function: var(--ease-out); }
+.send-button, .new-chat-button, .button, .starter-card, .settings-button, .documents-button { transition-duration: 260ms; transition-timing-function: var(--ease-out); }
 .send-button:active:not(:disabled), .button:active:not(:disabled), .icon-button:active:not(:disabled) { transform: scale(.94); }
 .starter-card:active { transform: scale(.985); }
 .theme-toggle > svg { transition: transform 320ms var(--ease-out); }

@@ -54,3 +54,17 @@ test('deletes one document with a JSON filename payload', async () => {
   await new ParsRagApiClient('').deleteDocument('session-1', 'راهنما.pdf');
   assert.deepEqual(JSON.parse(body), { filename: 'راهنما.pdf' });
 });
+
+test('reads and saves model configuration without exposing API credentials', async () => {
+  const requests = [];
+  global.fetch = async (url, init = {}) => {
+    requests.push({ url: String(url), init });
+    return new Response(JSON.stringify({ provider: 'ollama', model_name: 'gemma3:12b', base_url: 'http://localhost:11434', api_key_configured: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const client = new ParsRagApiClient('http://localhost:8000');
+  assert.equal((await client.modelConfiguration()).model_name, 'gemma3:12b');
+  const saved = await client.configureModel({ provider: 'ollama', model_name: 'gemma3:12b', base_url: 'http://localhost:11434' });
+  assert.equal(saved.provider, 'ollama');
+  assert.equal(requests[1].init.method, 'PUT');
+  assert.deepEqual(JSON.parse(requests[1].init.body), { provider: 'ollama', model_name: 'gemma3:12b', base_url: 'http://localhost:11434' });
+});

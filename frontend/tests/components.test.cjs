@@ -9,6 +9,8 @@ const { SettingsModal } = require('./.compiled/components/SettingsModal.js');
 const { BootSequence } = require('./.compiled/components/BootSequence.js');
 const { ChoiceMenu } = require('./.compiled/components/ui/ChoiceMenu.js');
 const { BrandMark } = require('./.compiled/components/BrandMark.js');
+const { Header } = require('./.compiled/components/Header.js');
+const { Sidebar } = require('./.compiled/components/Sidebar.js');
 const { DEFAULT_SETTINGS } = require('./.compiled/core/state.js');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 const noop = () => {};
@@ -29,6 +31,20 @@ test('sources are compact, unique, escaped and show traceable locations', () => 
   assert.match(html, /صفحه ۳/);
   assert.doesNotMatch(html, /<img/);
   assert.doesNotMatch(html, /<details|امتیاز ارتباط/);
+});
+
+test('message actions include prompt editing, copying, retry and response navigation', () => {
+  const html = render(ChatFeed, { messages: [
+    { id: 'u1', role: 'user', content: 'original prompt', timestamp: 1 },
+    { id: 'a1', role: 'assistant', content: 'second answer', timestamp: 3, activeVariant: 1, variants: [
+      { id: 'v1', content: 'first answer', timestamp: 2 }, { id: 'v2', content: 'second answer', timestamp: 3 },
+    ] },
+  ], language: 'en', isGenerating: false, activeMode: 'hybrid', onRetry: noop, onEditPrompt: noop, onSelectVariant: noop, isBusy: false });
+  assert.match(html, /Copy prompt/);
+  assert.match(html, /Edit prompt/);
+  assert.match(html, /Try again/);
+  assert.match(html, /aria-label="Response versions"/);
+  assert.match(html, />2 \/ 2</);
 });
 
 test('empty Persian composer uses RTL, has a real label and disables empty submission', () => {
@@ -79,6 +95,13 @@ test('brand mark is a reusable project-owned vector asset', () => {
   assert.match(html, /data-brand="parsrag-mark"/);
   assert.equal((html.match(/<path/g) || []).length >= 4, true);
   assert.doesNotMatch(html, /linearGradient|radialGradient|filter=/);
+});
+
+test('brand controls are real buttons that start a new conversation', () => {
+  const header = render(Header, { title: 'Thread', language: 'en', isSidebarOpen: true, isEmpty: false, documentCount: 0, onToggleSidebar: noop, onOpenDocuments: noop, onNewChat: noop });
+  const sidebar = render(Sidebar, { sessions: [], activeSessionId: '', onSelectSession: noop, onNewChat: noop, onDeleteSession: async () => true, onRenameSession: noop, language: 'en', theme: 'light', onToggleTheme: noop, onOpenSettings: noop, isOpen: true, isMobile: false, onClose: noop, connection: 'online', onRetryConnection: noop });
+  assert.match(header, /<button class="header-brand"[^>]*title="New conversation"/);
+  assert.match(sidebar, /<button class="sidebar-brand"[^>]*title="New conversation"/);
 });
 
 test('settings mode selector is a keyboard-ready custom menu rather than a native select', () => {

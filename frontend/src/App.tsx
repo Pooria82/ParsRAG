@@ -10,10 +10,11 @@ import { Welcome } from './components/Welcome';
 import { BootSequence } from './components/BootSequence';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
+import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { ApiError, ParsRagApiClient } from './services/api';
-import type { AppSettings, Message, Session, SessionDocument } from './types';
+import type { AppSettings, Message, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { buildQuery, createSession, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, STORAGE, validateUploads } from './core/state';
+import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, parseSessions, parseSettings, prepareTurnRegeneration, selectResponseVariant, STORAGE, validateUploads } from './core/state';
 
 function readStorage(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -135,22 +136,21 @@ export function App() {
     }] }));
   };
 
-  const send = async (session: Session, prompt: string, retryId?: string) => {
+  const send = async (session: Session, prompt: string, target?: { userId: string; assistantId?: string; edit?: boolean }) => {
     if (!prompt.trim() || queryRef.current || uploadRef.current) return;
     if (session.ragMode === 'strict' && !session.documents.some(d => d.status === 'indexed')) {
       setNotice(t.uploadFirst); setDocumentsOpen(true); return;
     }
-    const requestSession = retryId ? { ...session, messages: session.messages.filter(m => m.id !== retryId) } : session;
-    // A retried prompt is already present in history; do not duplicate it.
-    const historySession = retryId ? { ...requestSession, messages: requestSession.messages.slice(0, -1) } : requestSession;
+    const prepared = target ? prepareTurnRegeneration(session.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)) : null;
+    const historySession = prepared ? { ...session, messages: prepared.history } : session;
     const payload = buildQuery(historySession, settings, prompt);
     const controller = new AbortController();
     queryRef.current = { controller, sessionId: session.id };
     setGeneratingId(session.id); setNotice(null);
-    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: prompt.trim(), timestamp: Date.now() };
+    const userMessage: Message = { id: target?.userId ?? crypto.randomUUID(), role: 'user', content: prompt.trim(), timestamp: Date.now() };
     updateSession(session.id, s => ({
-      ...s, messages: retryId ? s.messages.filter(m => m.id !== retryId) : [...s.messages, userMessage],
-      draft: retryId ? s.draft : '',
+      ...s, messages: target ? prepareTurnRegeneration(s.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)).visible : [...s.messages, userMessage],
+      draft: target ? s.draft : '',
       title: s.messages.length ? s.title : prompt.trim().slice(0, 48) + (prompt.trim().length > 48 ? '…' : ''),
       updatedAt: Date.now(),
     }));
@@ -158,17 +158,33 @@ export function App() {
     try {
       const data = parseAnswer(await api.query(payload, controller.signal));
       if (controller.signal.aborted) return;
-      updateSession(session.id, s => ({ ...s, messages: [...s.messages, {
-        id: crypto.randomUUID(), role: 'assistant', content: data.answer, citations: data.citations, timestamp: Date.now(),
-      }], updatedAt: Date.now() }));
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now() };
+      updateSession(session.id, s => {
+        if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
+          return { ...s, messages: s.messages.map(message => {
+            if (message.id !== target.assistantId) return message;
+            return appendResponseVariant(message, variant);
+          }), updatedAt: Date.now() };
+        }
+        const assistant: Message = { id: crypto.randomUUID(), role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+        return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
+      });
       setConnection('online');
     } catch (error: unknown) {
       if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
       const content = controller.signal.reason === 'timeout' ? t.timeout
         : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
-      updateSession(session.id, s => ({ ...s, messages: [...s.messages, {
-        id: crypto.randomUUID(), role: 'assistant', content, error: true, timestamp: Date.now(),
-      }], updatedAt: Date.now() }));
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content, error: true, timestamp: Date.now() };
+      updateSession(session.id, s => {
+        if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
+          return { ...s, messages: s.messages.map(message => {
+            if (message.id !== target.assistantId) return message;
+            return appendResponseVariant(message, variant);
+          }), updatedAt: Date.now() };
+        }
+        const assistant: Message = { id: crypto.randomUUID(), role: 'assistant', parentUserId: userMessage.id, content, error: true, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+        return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
+      });
       void checkHealth();
     } finally {
       clearTimeout(timeout);
@@ -233,6 +249,7 @@ export function App() {
 
   const updateSettings = useCallback((updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated })), []);
   const transitionTheme = useThemeTransition(theme => updateSettings({ theme }));
+  const transitionLanguage = useLanguageTransition(language => updateSettings({ language }));
   const selectedDocuments = active.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
   const composer = <Composer key={active.id} value={active.draft ?? ''} onChange={draft => updateSession(active.id, s => ({ ...s, draft }))}
     onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
@@ -252,7 +269,7 @@ export function App() {
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
       connection={connection} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
     <main className="workspace">
-      <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length}
+      <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
       {(notice || storageError) && <div className="notice" role="status"><AlertCircle size={17} /><span>{storageError ? t.storageFailed : notice}</span>{!storageError && <button className="icon-button" onClick={() => setNotice(null)} aria-label={t.dismiss}><X size={16} /></button>}</div>}
       {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
@@ -261,10 +278,18 @@ export function App() {
       }} /> : <>
         <ChatFeed key={active.id} messages={active.messages} language={settings.language} isGenerating={generatingId === active.id} activeMode={active.ragMode}
           isBusy={busy} onRetry={messageId => {
-            const errorIndex = active.messages.findIndex(m => m.id === messageId);
-            const previous = active.messages.slice(0, errorIndex).reverse().find(m => m.role === 'user');
-            if (previous) void send(active, previous.content, messageId);
-          }} />
+            const assistant = active.messages.find(message => message.id === messageId);
+            const assistantIndex = active.messages.findIndex(message => message.id === messageId);
+            const previous = assistant?.parentUserId ? active.messages.find(message => message.id === assistant.parentUserId) : active.messages.slice(0, assistantIndex).reverse().find(message => message.role === 'user');
+            if (previous) void send(active, previous.content, { userId: previous.id, assistantId: messageId });
+          }} onEditPrompt={(messageId, content) => {
+            const userIndex = active.messages.findIndex(message => message.id === messageId);
+            const assistant = active.messages.slice(userIndex + 1).find(message => message.role === 'assistant');
+            void send(active, content, { userId: messageId, assistantId: assistant?.id, edit: true });
+          }} onSelectVariant={(messageId, variantIndex) => updateSession(active.id, session => ({ ...session, messages: session.messages.map(message => {
+            if (message.id !== messageId || !message.variants?.[variantIndex]) return message;
+            return selectResponseVariant(message, variantIndex);
+          }) }))} />
         <div className="active-composer">
           {selectedDocuments.length > 0 && active.ragMode !== 'llm-only' && <button className="active-documents" onClick={() => setDocumentsOpen(true)}><FileText size={13} />{selectedDocuments.length.toLocaleString(settings.language)} {t.selectedDocs}</button>}
           {composer}
@@ -282,6 +307,7 @@ export function App() {
     <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);
+        else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);
         else updateSettings(updated);
       }} busy={busy}
       onClearAllData={() => { const fresh = createSession(settings.language, settings.defaultMode); setSessions([fresh]); setActiveId(fresh.id); setNotice(null); }} />
