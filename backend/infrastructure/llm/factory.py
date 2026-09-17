@@ -19,6 +19,7 @@ from backend.core.models.domain import (
 load_dotenv()
 
 _configuration_lock = RLock()
+_api_key = os.getenv("OPENROUTER_API_KEY") or None
 _configuration = ModelConfigurationRequest(
     provider=ModelProvider.API
     if os.getenv("LLM_PROVIDER", "ollama").lower() in {"api", "openrouter"}
@@ -27,7 +28,7 @@ _configuration = ModelConfigurationRequest(
     base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     if os.getenv("LLM_PROVIDER", "ollama").lower() in {"api", "openrouter"}
     else os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-    api_key=os.getenv("OPENROUTER_API_KEY") or None,
+    api_key=_api_key,
 )
 
 
@@ -48,7 +49,7 @@ def get_model_configuration() -> ModelConfigurationResponse:
             provider=_configuration.provider,
             model_name=_configuration.model_name,
             base_url=_configuration.base_url,
-            api_key_configured=bool(_configuration.api_key),
+            api_key_configured=bool(_api_key),
         )
 
 
@@ -56,14 +57,15 @@ def configure_model(
     configuration: ModelConfigurationRequest,
 ) -> ModelConfigurationResponse:
     """Applies a validated model connection for subsequent requests."""
-    global _configuration
+    global _api_key, _configuration
     base_url = configuration.base_url.rstrip("/")
     if configuration.provider is ModelProvider.OLLAMA and not _is_local_ollama_url(
         base_url
     ):
         raise ValueError("Ollama must use a local loopback address.")
     if configuration.provider is ModelProvider.API:
-        api_key = configuration.api_key or _configuration.api_key
+        api_key = configuration.api_key or _api_key
+        _api_key = api_key
         Settings.llm = OpenAILike(
             model=configuration.model_name,
             api_key=api_key or "",

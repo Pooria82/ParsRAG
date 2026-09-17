@@ -59,3 +59,35 @@ def test_list_ollama_models_returns_installed_models(mock_get: MagicMock) -> Non
 def test_ollama_rejects_non_local_service() -> None:
     with pytest.raises(ValueError, match="loopback"):
         list_ollama_models("https://remote.example")
+
+
+@patch("backend.infrastructure.llm.factory.Ollama")
+@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_switching_to_ollama_does_not_forget_existing_api_key(
+    mock_settings: MagicMock, mock_openai: MagicMock, mock_ollama: MagicMock
+) -> None:
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="api-model",
+            base_url="https://models.example/v1",
+            api_key="keep-me",
+        )
+    )
+    local = configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.OLLAMA,
+            model_name="local-model",
+            base_url="http://localhost:11434",
+        )
+    )
+    assert local.api_key_configured is True
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="api-model",
+            base_url="https://models.example/v1",
+        )
+    )
+    assert mock_openai.call_args.kwargs["api_key"] == "keep-me"
