@@ -214,7 +214,7 @@ export function App() {
         } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
             ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'scanned_pdf'
-              ? settings.language === 'fa' ? 'این PDF اسکن‌شده است و متن قابل انتخاب ندارد.' : 'This PDF is scanned and has no selectable text.'
+              ? settings.language === 'fa' ? 'پردازش OCR این PDF اسکن‌شده در دسترس نیست یا غیرفعال شده است.' : 'OCR for this scanned PDF is unavailable or disabled.'
               : t.uploadFailed,
           } : d) }));
         } finally { clearTimeout(timeout); }
