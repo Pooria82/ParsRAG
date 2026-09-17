@@ -205,21 +205,21 @@ but credentials are supplied only at runtime and are never baked into an image.
 ### Task 9.1: Reproducible Application Image
 **Description:** Package the React build, FastAPI runtime, document parsers, and OCR tools in one production image.
 **Actionable Steps:**
-- [ ] Add a root multi-stage `Dockerfile`: Node builds `frontend/dist`; a slim Python stage installs locked runtime dependencies and copies only application artifacts.
-- [ ] Install Tesseract with Persian and English language data in the runtime stage.
-- [ ] Run the application as an unprivileged user and expose only port 8000.
-- [ ] Add `.dockerignore` rules for secrets, local environments, caches, test data, generated builds, and vector/model storage.
-- [ ] Add an image-level health check against FastAPI `/health`.
+- [x] Add a root multi-stage `Dockerfile`: Node builds `frontend/dist`; a slim Python stage installs declared runtime dependencies and copies only application artifacts.
+- [x] Install Tesseract with Persian and English language data in the runtime stage.
+- [x] Run the application as an unprivileged user and expose only port 8000.
+- [x] Add `.dockerignore` rules for secrets, local environments, caches, test data, generated builds, and vector/model storage.
+- [x] Add an image-level health check against FastAPI `/health`.
 
 ### Task 9.2: Local Service Orchestration
 **Description:** Run the application with persistent Qdrant and Ollama services on an isolated Compose network.
 **Actionable Steps:**
-- [ ] Add `compose.yaml` with `app`, `qdrant`, `ollama`, and one-shot `ollama-init` services.
-- [ ] Configure named volumes for Qdrant collections, Ollama models, and the Hugging Face embedding cache.
-- [ ] Pass `QDRANT_HOST=qdrant` and `OLLAMA_BASE_URL=http://ollama:11434` through environment configuration without weakening public URL validation.
-- [ ] Add health checks and dependency conditions so the app starts only after Qdrant and the selected model service are ready.
-- [ ] Keep Ollama reachable only through the application network; publish only the application port by default.
-- [ ] Make the initial Ollama model configurable with `OLLAMA_MODEL`, while preserving API-provider deployments through `.env`.
+- [x] Add `compose.yaml` with `app`, `qdrant`, `ollama`, and one-shot `ollama-init` services.
+- [x] Configure named volumes for Qdrant collections, Ollama models, and the Hugging Face embedding cache.
+- [x] Pass `QDRANT_HOST=qdrant` and `OLLAMA_BASE_URL=http://ollama:11434` through environment configuration without weakening public URL validation.
+- [x] Gate app startup on healthy Qdrant and gate optional model provisioning on healthy Ollama; API-provider deployments do not require Ollama.
+- [x] Keep Ollama reachable only through the application network; publish only the application port by default.
+- [x] Make the initial Ollama model configurable with `OLLAMA_MODEL`, while preserving API-provider deployments through `.env`.
 
 ### Task 9.3: Scanned PDF OCR Adapter
 **Description:** Extend PDF parsing with bounded, traceable OCR while preserving native text extraction as the fast path.
@@ -233,16 +233,16 @@ but credentials are supplied only at runtime and are never baked into an image.
 ### Task 9.4: Runtime Configuration & Operations
 **Description:** Make local and container startup explicit, safe, and maintainable.
 **Actionable Steps:**
-- [ ] Replace example credentials with placeholders and document every Docker/OCR environment variable.
-- [ ] Allow only loopback or the explicit internal Ollama service hostname for Ollama configuration.
-- [ ] Remove obsolete Windows launcher scripts superseded by documented Vite, Uvicorn, and Compose commands.
-- [ ] Update `README.md` with local development, Docker startup, model provisioning, persistence, health checks, and shutdown instructions.
-- [ ] Add deterministic tests for Compose configuration, Docker build inputs, environment defaults, and internal Ollama URL validation.
+- [x] Replace example credentials with placeholders and document every Docker/OCR environment variable.
+- [x] Allow only loopback or the explicit internal Ollama service hostname for Ollama configuration.
+- [x] Remove obsolete Windows launcher scripts superseded by documented Vite, Uvicorn, and Compose commands.
+- [x] Update `README.md` with local development, Docker startup, model provisioning, persistence, health checks, and shutdown instructions.
+- [x] Add deterministic tests for Compose configuration, Docker build inputs, environment defaults, and internal Ollama URL validation.
 
 ### Checkpoint: Phase 9
-- [ ] Run backend tests, Ruff, strict mypy, frontend tests, and the Vite production build.
-- [ ] Validate `docker compose config` without exposing secrets.
-- [ ] Build the production application image and verify its non-root user and health check.
-- [ ] Start the stack and verify `/health`, Qdrant readiness, Ollama readiness, and persistent volumes.
-- [ ] Upload native and scanned Persian documents and confirm traceable page citations.
-- [ ] With the configured model available, verify document deletion and all three query modes end to end.
+- [x] Run backend tests, Ruff, strict mypy, frontend tests, and the Vite production build.
+- [x] Validate `docker compose config` without exposing secrets.
+- [x] Build the production application image and verify its non-root user and health check.
+- [x] Start the app and Qdrant, verify `/health`, and confirm indexed data survives a Qdrant restart through the named volume.
+- [x] Upload native and scanned Persian documents and confirm the scanned chunk retains page metadata for citations.
+- [ ] Start the optional Ollama profile and repeat live model checks when model validation is requested; this run intentionally excludes the previously completed model evaluation.

@@ -63,8 +63,9 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# 6. Chainlit & UI
-.chainlit/
+# 6. Frontend build output
+node_modules/
+dist/
 
 # 7. Raw Data & Uploads
 data/

@@ -18,18 +18,17 @@ To achieve FAANG-level production readiness, the initially proposed stack has be
 - **Chunking Strategy:**
   - *Justification:* Using LlamaIndex's `SentenceSplitter` (formerly `RecursiveCharacterTextSplitter`) tuned specifically for Persian prose (target size: 500-1000 characters, overlap: 150 characters) to maintain semantic context boundaries.
 ## 2. High-Level System Architecture (Microservices)
-The system is entirely decoupled into microservices deployed via `Docker Compose`. This ensures independent scaling, clean boundaries, and isolated dependency management.
+The system keeps application and infrastructure boundaries explicit under Docker Compose. FastAPI serves the immutable React build, while Qdrant and Ollama remain replaceable infrastructure adapters.
 
 ### Containerization Strategy
-1. **`react-ui` Build:** Vite builds the frontend, which FastAPI serves on port 8000.
-2. **`fastapi-backend` Container:** Hosts the core RAG logic, LlamaIndex orchestrator, and endpoints on port 8080.
-3. **`qdrant-db` Container:** Runs the official Rust-based Qdrant image.
-4. **`ollama-engine` Container:** Runs the local LLM (Qwen 2.5) with GPU-passthrough enabled for accelerated inference.
+1. **`app` Container:** A multi-stage image builds React with Vite, then serves the static workspace and typed API from FastAPI on port 8000.
+2. **`qdrant` Container:** Runs the official Qdrant image with a private persistent volume.
+3. **`ollama` Container:** Runs the local model service with a private persistent volume; an optional one-shot service pulls the configured model.
 
 ### Architecture Flow Diagram
 ```mermaid
 graph TD
-    Client((User)) -->|Uploads / Chats| UI[React UI served by FastAPI]
+    Client((User)) -->|Port 8000| App[React UI + FastAPI application image]
     
     subgraph FastAPI Backend Container
         Router[API Router]
@@ -45,7 +44,7 @@ graph TD
         Ollama[Ollama Engine: Qwen 2.5]
     end
 
-    UI -->|REST / WebSockets| Router
+    App --> Router
     Router --> ExceptionHandler
     ExceptionHandler -->|Intercepts ParsRAGErrors| QueryPipeline
     QueryPipeline --> RAGRouter
@@ -61,7 +60,7 @@ graph TD
     Generator -->|Streams Prompt| Ollama
     Ollama -->|Streams Tokens| Generator
     Generator -->|Returns Stream| Router
-    Router --> UI
+    Router --> App
 ```
 
 ## 3. Object-Oriented Design (OOP) & GoF Patterns

@@ -35,16 +35,19 @@ ParsRAG/
 ├── .context/                  # Architecture Decision Records (ADRs) and PRDs
 ├── backend/                   # FastAPI API, LlamaIndex Core, and Infrastructure
 ├── frontend/                  # React UI, local font and brand assets
-├── tests/                     # Pytest suite
-└── docker-compose.yml         # Container orchestration
+├── Dockerfile                 # Multi-stage React and FastAPI production image
+└── compose.yaml               # App, Qdrant, Ollama, and persistent volumes
 ```
 
-## Quick Start
+## Local Development
 
-1. **Configure the local environment:**
+1. **Create a private local configuration:**
    ```bash
    cp .env.example .env
    ```
+   Select `LLM_PROVIDER=ollama` for a local model or `LLM_PROVIDER=api` and set
+   `OPENROUTER_API_KEY` for an API-compatible provider. Never commit `.env`.
+
 2. **Install and build the frontend:**
    ```bash
    cd frontend
@@ -59,6 +62,48 @@ ParsRAG/
 
 For frontend hot reload, run `npm run dev` inside `frontend`. The interface validates persisted state, keeps conversations in the browser, and accepts only local backend endpoints.
 
+Native OCR is disabled by default. Install Tesseract with Persian and English
+language data and set `OCR_ENABLED=1` to process scanned PDF pages locally.
+
+## Docker Compose
+
+Docker packages the Vite build, FastAPI, Tesseract, Persian OCR data, and Python
+runtime in one non-root application image. Qdrant and Ollama are private services;
+only the application port is published.
+
+For an Ollama deployment, choose `OLLAMA_MODEL` in `.env` and start the local-model
+profile. The one-shot initializer downloads the model into its persistent volume:
+
+```bash
+docker compose --profile local-model up --build
+```
+
+For an API-backed model, configure `LLM_PROVIDER=api`, `LLM_MODEL_NAME`,
+`OPENROUTER_BASE_URL`, and `OPENROUTER_API_KEY`, then run:
+
+```bash
+docker compose up --build
+```
+
+The first start may download the multilingual embedding model into the
+`model_cache` volume. Check the application at `http://127.0.0.1:8000/health`
+and inspect service state with `docker compose ps`.
+`HF_HUB_DISABLE_XET=1` uses the regular HTTP download path during this bootstrap;
+set it to `0` only when the deployment has a tested Xet connection.
+
+```bash
+docker compose logs -f app
+docker compose down
+```
+
+Qdrant vectors, Ollama models, and the embedding cache survive `docker compose
+down`. Run `docker compose down -v` only when you intentionally want to delete all
+three persistent volumes.
+
+OCR behavior is controlled with `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI`,
+`OCR_TIMEOUT_SECONDS`, and `OCR_MAX_PAGES`. Native PDF text always uses the fast
+path; Tesseract runs only for pages without selectable text.
+
 ## Verification
 
 ```bash
@@ -68,8 +113,10 @@ npm run build
 
 cd ..
 .venv/Scripts/python -m pytest backend/tests -q
+.venv/Scripts/python -m ruff format --check backend
 .venv/Scripts/python -m ruff check backend
 .venv/Scripts/python -m mypy --strict backend
+docker compose config -q
 ```
 
 The visual identity, color tokens, motion rules and SVG usage are documented in [`frontend/BRAND.md`](frontend/BRAND.md).
