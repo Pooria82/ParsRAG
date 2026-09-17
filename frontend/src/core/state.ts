@@ -8,7 +8,7 @@ export const STORAGE = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'fa', theme: 'light', defaultMode: 'hybrid', strictThreshold: 0.8,
-  dynamicDepth: true, topK: 15, selectedModel: 'llama3.1:8b', backendUrl: '',
+  dynamicDepth: true, topK: 15, selectedModel: 'google/gemma-4-26b-a4b-it', backendUrl: '',
 };
 
 export const MAX_DOCUMENTS = 5;
@@ -55,12 +55,17 @@ export function parseSettings(raw: string | null, origin?: string): AppSettings 
 
 function parseCitations(value: unknown): Citation[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isRecord).filter(c => typeof c.body === 'string').map(c => ({
-    title: typeof c.title === 'string' ? c.title : '',
-    filename: typeof c.filename === 'string' ? c.filename : 'Document',
-    body: c.body as string,
-    score: typeof c.score === 'number' && Number.isFinite(c.score) ? c.score : 0,
-  }));
+  const sources = new Map<string, Citation>();
+  for (const c of value.filter(isRecord).filter(c => typeof c.filename === 'string')) {
+    const filename = c.filename as string;
+    const locations = Array.isArray(c.locations) ? c.locations.filter(isRecord).filter(location =>
+      ['page', 'slide', 'paragraph', 'section'].includes(String(location.kind)) && typeof location.start === 'number'
+    ).map(location => ({ kind: location.kind as Citation['locations'][number]['kind'], start: location.start as number, end: typeof location.end === 'number' ? location.end : undefined })) : [];
+    const current = sources.get(filename) ?? { filename, locations: [] };
+    for (const location of locations) if (!current.locations.some(item => item.kind === location.kind && item.start === location.start && item.end === location.end)) current.locations.push(location);
+    sources.set(filename, current);
+  }
+  return [...sources.values()];
 }
 
 function parseMessages(value: unknown): Message[] {
@@ -89,9 +94,6 @@ function parseDocuments(value: unknown): SessionDocument[] {
         : typeof doc.errorMessage === 'string' ? doc.errorMessage : undefined,
     });
   }
-  // An empty file_filter means "all files" to the API, so retain one selection.
-  const indexed = docs.filter(d => d.status === 'indexed');
-  if (indexed.length && indexed.every(d => d.enabled === false)) indexed[0].enabled = true;
   return docs;
 }
 
@@ -144,13 +146,10 @@ export function validateUploads(files: Pick<File, 'name' | 'size'>[], documents:
 export function buildQuery(session: Session, settings: AppSettings, prompt: string) {
   const indexed = session.documents.filter(d => d.status === 'indexed');
   const selected = indexed.filter(d => d.enabled !== false).map(d => d.name);
-  if (session.ragMode !== 'llm-only' && indexed.length && !selected.length) {
-    throw new Error('Select at least one document.');
-  }
   return {
     prompt: prompt.trim(), mode: session.ragMode, session_id: session.id,
     top_k: settings.dynamicDepth ? null : settings.topK,
-    file_filter: session.ragMode === 'llm-only' || !selected.length ? null : selected,
+    file_filter: session.ragMode === 'llm-only' || !indexed.length ? null : selected,
     chat_history: session.messages.filter(m => !m.error && m.role !== 'system').slice(-10)
       .map(({ role, content }) => ({ role, content })),
   };
@@ -161,13 +160,20 @@ export function parseAnswer(value: unknown): { answer: string; citations: Citati
     throw new Error('invalid_response');
   }
   const nodes = Array.isArray(value.source_nodes) ? value.source_nodes : [];
-  return { answer: value.answer, citations: nodes.filter(isRecord).map((node, index) => ({
-    title: String(index + 1),
-    filename: isRecord(node.metadata) && typeof node.metadata.filename === 'string'
-      ? node.metadata.filename : 'Document',
-    body: typeof node.text === 'string' ? node.text : '',
-    score: typeof node.score === 'number' && Number.isFinite(node.score) ? node.score : 0,
-  })) };
+  const sources = new Map<string, Citation>();
+  for (const node of nodes.filter(isRecord)) {
+    const metadata = isRecord(node.metadata) ? node.metadata : {};
+    const filename = typeof metadata.filename === 'string' ? metadata.filename : 'Document';
+    const citation = sources.get(filename) ?? { filename, locations: [] };
+    const add = (kind: Citation['locations'][number]['kind'], start: unknown, end?: unknown) => {
+      if (typeof start !== 'number' || !Number.isFinite(start)) return;
+      const location = { kind, start, ...(typeof end === 'number' && Number.isFinite(end) ? { end } : {}) };
+      if (!citation.locations.some(item => item.kind === kind && item.start === start && item.end === location.end)) citation.locations.push(location);
+    };
+    add('page', metadata.page); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
+    sources.set(filename, citation);
+  }
+  return { answer: value.answer, citations: [...sources.values()] };
 }
 
 export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown): SessionDocument[] {
@@ -177,8 +183,5 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
     ...current.find(doc => doc.name === name), name, status: 'indexed', errorMessage: undefined,
   }));
   merged.push(...current.filter(doc => doc.status !== 'indexed' && !names.includes(doc.name)));
-  if (merged.some(d => d.status === 'indexed') && !merged.some(d => d.status === 'indexed' && d.enabled !== false)) {
-    merged.find(d => d.status === 'indexed')!.enabled = true;
-  }
   return merged;
 }

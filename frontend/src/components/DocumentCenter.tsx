@@ -8,16 +8,16 @@ import { Dialog } from './Dialog';
 interface DocumentCenterProps {
   isOpen: boolean; onClose: () => void; documents: SessionDocument[];
   onUploadFiles: (files: File[]) => void; onRemoveFailed: (name: string) => void;
-  onToggleDocument: (name: string) => void; language: Language; isUploading: boolean;
+  onToggleDocument: (name: string) => void; onDeleteDocument: (name: string) => void; language: Language; isUploading: boolean;
   activeMode: RAGMode; error: string | null;
 }
 
-export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, language, isUploading, activeMode, error }: DocumentCenterProps) {
+export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, language, isUploading, activeMode, error }: DocumentCenterProps) {
   const t = translations[language];
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const full = documents.length >= MAX_DOCUMENTS;
-  const selectedCount = documents.filter(d => d.status === 'indexed' && d.enabled !== false).length;
   return <Dialog open={isOpen} onClose={onClose} title={t.docCenterTitle} subtitle={t.docCenterDesc} closeLabel={t.close} className="documents-dialog">
     <div className="documents-body">
       <input type="file" ref={fileInput} className="visually-hidden" tabIndex={-1} accept={FILE_ACCEPT} multiple aria-label={t.attach}
@@ -43,10 +43,10 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
               {doc.status === 'uploading' ? <Loader2 size={12} className="spin" /> : doc.status === 'indexed' ? <Check size={12} /> : <AlertCircle size={12} />}
               {doc.status === 'uploading' ? t.docUploading : doc.status === 'indexed' ? t.docIndexed : t.docError}
               {doc.size ? <small dir="ltr">{(doc.size / 1024 / 1024).toFixed(1)} MB</small> : null}
-            </span>{doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}</div>
+            </span>{doc.status === 'uploading' && <div className="upload-progress"><progress max="100" value={doc.uploadProgress ?? 0} aria-label={t.uploadProgress} /><output>{(doc.uploadProgress ?? 0).toLocaleString(language)}٪</output></div>}{doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}</div>
             {doc.status === 'indexed' && <input type="checkbox" checked={doc.enabled !== false}
-              disabled={doc.enabled !== false && selectedCount === 1}
               onChange={() => onToggleDocument(doc.name)} aria-label={t.docSelected + ': ' + doc.name} />}
+            {doc.status === 'indexed' && (pendingDelete === doc.name ? <span className="document-delete-confirm"><button className="button secondary" onClick={() => setPendingDelete(null)}>{t.cancel}</button><button className="button danger" disabled={isUploading} onClick={() => { onDeleteDocument(doc.name); setPendingDelete(null); }}>{t.confirmDeleteDocument}</button></span> : <button className="icon-button danger-text" disabled={isUploading} onClick={() => setPendingDelete(doc.name)} aria-label={t.deleteDocument + ': ' + doc.name}><Trash2 size={16} /></button>)}
             {doc.status === 'error' && <button className="icon-button danger-text" onClick={() => onRemoveFailed(doc.name)} aria-label={t.removeFailed + ': ' + doc.name}><Trash2 size={16} /></button>}
           </div>)}
         </div>

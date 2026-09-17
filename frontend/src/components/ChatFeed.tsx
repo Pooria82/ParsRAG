@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, FileText, RotateCcw } from 'lucide-react';
+import { AlertCircle, ArrowDown, Check, Copy, FileText, RotateCcw } from 'lucide-react';
 import type { Message, Language, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
@@ -62,13 +62,10 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                     pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
                   }}>{message.content}</ReactMarkdown>
                 </div>}
-              {Boolean(message.citations?.length) && <details className="citation-group">
-                <summary><FileText size={16} /><span>{t.citationsTitle}</span><span className="citation-count">{message.citations!.length.toLocaleString(language)}</span><ChevronDown size={15} /></summary>
-                <div className="citation-list">{message.citations!.map((citation, citationIndex) => <details className="citation" key={citationIndex}>
-                  <summary><span className="source-number">{(citationIndex + 1).toLocaleString(language)}</span><bdi>{citation.filename}</bdi><ChevronDown size={14} /></summary>
-                  <div className="citation-body">{citation.score > 0 && <span className="relevance">{t.similarityScore}: {citation.score.toLocaleString(language, { maximumFractionDigits: 3 })}</span>}<p dir="auto">{citation.body}</p></div>
-                </details>)}</div>
-              </details>}
+              {Boolean(message.citations?.length) && <section className="citation-summary" aria-label={t.citationsTitle}>
+                <header><FileText size={15} /><span>{t.citationsTitle}</span></header>
+                <ul>{message.citations!.map(citation => <li key={citation.filename}><bdi>{citation.filename}</bdi>{citation.locations.length > 0 && <span className="source-locations">{citation.locations.map((location, locationIndex) => <span key={`${location.kind}-${location.start}-${location.end ?? ''}`}>{t.locationLabels[location.kind]} {location.start.toLocaleString(language)}{location.end && location.end !== location.start ? `–${location.end.toLocaleString(language)}` : ''}{locationIndex < citation.locations.length - 1 ? '، ' : ''}</span>)}</span>}</li>)}</ul>
+              </section>}
               <div className="message-actions">
                 {!message.error && <button onClick={() => void copy(message)} title={t.copy}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copy}</button>}
                 {message.error && index === messages.length - 1 && <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>}

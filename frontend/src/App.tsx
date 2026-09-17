@@ -186,15 +186,15 @@ export function App() {
     if (!validation.accepted.length) return;
     const acceptedFiles = validation.accepted.map(index => files[index]);
     uploadRef.current = true; setUploadingId(sessionId);
-    const optimistic: SessionDocument[] = acceptedFiles.map(file => ({ name: file.name, size: file.size, status: 'uploading', enabled: true }));
+    const optimistic: SessionDocument[] = acceptedFiles.map(file => ({ name: file.name, size: file.size, status: 'uploading', uploadProgress: 0, enabled: true }));
     updateSession(sessionId, s => ({ ...s, documents: [...s.documents, ...optimistic], updatedAt: Date.now() }));
     try {
       for (const file of acceptedFiles) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 180000);
         try {
-          await api.ingest(file, sessionId, controller.signal);
-          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', errorMessage: undefined } : d) }));
+          await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, uploadProgress } : d) })));
+          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined } : d) }));
         } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
             ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'scanned_pdf'
@@ -204,6 +204,14 @@ export function App() {
         } finally { clearTimeout(timeout); }
       }
     } finally { uploadRef.current = false; setUploadingId(undefined); }
+  };
+
+  const deleteDocument = async (name: string) => {
+    if (busy) return;
+    try {
+      await api.deleteDocument(active.id, name, AbortSignal.timeout(15000));
+      updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name), updatedAt: Date.now() }));
+    } catch { setUploadError({ sessionId: active.id, text: t.documentDeleteFailed }); }
   };
 
   const deleteSession = async (id: string): Promise<boolean> => {
@@ -267,9 +275,8 @@ export function App() {
       onUploadFiles={files => void upload(files)} language={settings.language} isUploading={busy} activeMode={active.ragMode}
       error={uploadError?.sessionId === active.id ? uploadError.text : null}
       onRemoveFailed={name => updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name || d.status !== 'error') }))}
+      onDeleteDocument={name => void deleteDocument(name)}
       onToggleDocument={name => updateSession(active.id, s => {
-        const selected = s.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
-        if (selected.length === 1 && selected[0].name === name) return s;
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />
     <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}

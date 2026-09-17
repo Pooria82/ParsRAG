@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Check, CircleHelp, Database, Moon, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
-import type { AppSettings, RAGMode } from '../types';
+import { useEffect, useState } from 'react';
+import { Check, CircleHelp, Database, Moon, RefreshCw, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
+import type { AppSettings, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
 import { ChoiceMenu } from './ui/ChoiceMenu';
+import { ParsRagApiClient } from '../services/api';
 
 interface SettingsModalProps {
   open?: boolean;
@@ -19,6 +20,26 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [endpoint, setEndpoint] = useState(settings.backendUrl);
   const [invalid, setInvalid] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [provider, setProvider] = useState<ModelProvider>('api');
+  const [modelName, setModelName] = useState(settings.selectedModel);
+  const [modelUrl, setModelUrl] = useState('https://openrouter.ai/api/v1');
+  const [apiKey, setApiKey] = useState('');
+  const [keyConfigured, setKeyConfigured] = useState(false);
+  const [models, setModels] = useState<OllamaModel[]>([]);
+  const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'saved' | 'error'>('idle');
+  const modelApi = new ParsRagApiClient(settings.backendUrl);
+  useEffect(() => {
+    if (!open || tab !== 'connection') return;
+    const controller = new AbortController(); setModelStatus('loading');
+    void modelApi.modelConfiguration(controller.signal).then(config => {
+      setProvider(config.provider); setModelName(config.model_name); setModelUrl(config.base_url); setKeyConfigured(config.api_key_configured); setModelStatus('idle');
+    }).catch(() => { if (!controller.signal.aborted) setModelStatus('error'); });
+    return () => controller.abort();
+  }, [open, tab, settings.backendUrl]);
+  const loadOllamaModels = async () => {
+    setModelStatus('loading');
+    try { setModels(await modelApi.ollamaModels(modelUrl)); setModelStatus('idle'); } catch { setModelStatus('error'); }
+  };
   const tabs = [{ id: 'general', label: t.tabGeneral, Icon: Sun }, { id: 'rag', label: t.tabRAG, Icon: SlidersHorizontal }, { id: 'connection', label: t.tabModel, Icon: Database }] as const;
   return <Dialog open={open} onClose={onClose} title={t.settingsTitle} subtitle={t.settingsSubtitle} closeLabel={t.close} className="settings-dialog">
     <div className="settings-tabs" role="tablist" aria-label={t.settingsTitle}>
@@ -61,6 +82,22 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         <p className="info-note"><CircleHelp size={18} />{t.serverManaged}</p>
       </>}
       {tab === 'connection' && <>
+        <form className="model-settings" onSubmit={event => {
+          event.preventDefault(); setModelStatus('loading');
+          void modelApi.configureModel({ provider, model_name: modelName.trim(), base_url: modelUrl.trim(), ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
+            setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved'); onUpdateSettings({ selectedModel: config.model_name });
+          }).catch(() => setModelStatus('error'));
+        }}>
+          <div className="setting-field"><label>{t.modelProviderLabel}</label><div className="segmented-control">
+            <label><input type="radio" name="provider" checked={provider === 'api'} onChange={() => { setProvider('api'); setModelUrl('https://openrouter.ai/api/v1'); }} /><span>{t.modelProviderApi}</span></label>
+            <label><input type="radio" name="provider" checked={provider === 'ollama'} onChange={() => { setProvider('ollama'); setModelUrl('http://localhost:11434'); }} /><span>{t.modelProviderOllama}</span></label>
+          </div></div>
+          <div className="setting-field"><label htmlFor="model-url">{t.modelBaseUrl}</label><input className="text-input" id="model-url" dir="ltr" value={modelUrl} required onChange={event => setModelUrl(event.target.value)} /></div>
+          <div className="setting-field"><label htmlFor="model-name">{t.modelName}</label><input className="text-input" id="model-name" dir="ltr" list="ollama-models" value={modelName} required onChange={event => setModelName(event.target.value)} /><datalist id="ollama-models">{models.map(model => <option value={model.name} key={model.name} />)}</datalist></div>
+          {provider === 'api' && <div className="setting-field"><label htmlFor="api-key">{t.apiKey}{keyConfigured && <small>{t.apiKeyConfigured}</small>}</label><input className="text-input" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : ''} onChange={event => setApiKey(event.target.value)} /></div>}
+          <div className="model-actions">{provider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button" disabled={busy || modelStatus === 'loading'}>{t.saveModel}</button></div>
+          {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && <p className="inline-error" role="alert">{t.modelError}</p>}
+        </form>
         <form className="setting-field" onSubmit={event => {
           event.preventDefault();
           if (!isLocalEndpoint(endpoint, window.location.origin)) { setInvalid(true); return; }

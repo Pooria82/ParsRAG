@@ -21,13 +21,14 @@ test('recovers malformed storage and validates settings without external endpoin
 });
 
 test('preserves old conversations and recovers interrupted uploads', () => {
-  const raw = [{ id: 'session_old', title: 'پژوهش', messages: [{ id: 'm', role: 'user', content: 'سلام' }, null],
+  const raw = [{ id: 'session_old', title: 'پژوهش', messages: [{ id: 'm', role: 'user', content: 'سلام', citations: [{ filename: 'a.pdf', body: 'old' }, { filename: 'a.pdf', body: 'old 2' }] }, null],
     documents: [{ name: 'a.pdf', status: 'uploading' }, { name: 'b.pdf', status: 'indexed', enabled: false }], ragMode: 'strict' }];
   const [session] = parseSessions(JSON.stringify([...raw, ...raw, { id: '../invalid' }, null]));
   assert.equal(parseSessions(JSON.stringify([...raw, ...raw])).length, 1);
   assert.equal(session.messages[0].content, 'سلام');
+  assert.equal(session.messages[0].citations.length, 1);
   assert.equal(session.documents[0].status, 'error');
-  assert.equal(session.documents[1].enabled, true);
+  assert.equal(session.documents[1].enabled, false);
   assert.equal(session.ragMode, 'strict');
 });
 
@@ -56,14 +57,14 @@ test('builds all three API modes with scoped documents and clean conversational 
     assert.equal(payload.chat_history.length, 1);
   }
   session.documents[0].enabled = false;
-  assert.throws(() => buildQuery(session, DEFAULT_SETTINGS, 'hi'), /Select/);
+  assert.deepEqual(buildQuery(session, DEFAULT_SETTINGS, 'hi').file_filter, []);
 });
 
-test('rejects invalid answers and accepts nullable citation scores', () => {
+test('rejects invalid answers and deduplicates compact source locations', () => {
   assert.throws(() => parseAnswer({ answer: '' }), /invalid_response/);
   assert.throws(() => parseAnswer(null), /invalid_response/);
-  assert.deepEqual(parseAnswer({ answer: 'پاسخ', source_nodes: [{ text: 'متن', score: null, metadata: { filename: 'a.pdf' } }] }), {
-    answer: 'پاسخ', citations: [{ title: '1', body: 'متن', filename: 'a.pdf', score: 0 }],
+  assert.deepEqual(parseAnswer({ answer: 'پاسخ', source_nodes: [{ text: 'متن', metadata: { filename: 'a.pdf', page: 2 } }, { text: 'بیشتر', metadata: { filename: 'a.pdf', page: 2 } }] }), {
+    answer: 'پاسخ', citations: [{ filename: 'a.pdf', locations: [{ kind: 'page', start: 2 }] }],
   });
 });
 

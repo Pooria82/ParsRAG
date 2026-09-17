@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { ApiError, ParsRagApiClient } = require('./.compiled/services/api.js');
 
 const originalFetch = global.fetch;
-afterEach(() => { global.fetch = originalFetch; });
+const originalXhr = global.XMLHttpRequest;
+afterEach(() => { global.fetch = originalFetch; global.XMLHttpRequest = originalXhr; });
 
 test('API client normalizes base URLs and reports health without leaking fetch details', async () => {
   let requested = '';
@@ -14,9 +15,11 @@ test('API client normalizes base URLs and reports health without leaking fetch d
 });
 
 test('API client classifies scanned PDFs for localized UI handling', async () => {
-  global.fetch = async () => new Response(JSON.stringify({ detail: 'Scanned PDFs are not supported' }), {
-    status: 422, headers: { 'Content-Type': 'application/json' },
-  });
+  global.XMLHttpRequest = class {
+    upload = {}; status = 422; responseText = JSON.stringify({ detail: 'Scanned PDFs are not supported' });
+    open() {} abort() { this.onabort?.(); }
+    send() { this.onload?.(); }
+  };
   const client = new ParsRagApiClient('http://localhost:8000');
   await assert.rejects(() => client.ingest(new File(['scan'], 'scan.pdf'), 'session-1'), error => {
     assert.equal(error instanceof ApiError, true);
@@ -26,10 +29,28 @@ test('API client classifies scanned PDFs for localized UI handling', async () =>
   });
 });
 
+test('upload reports byte progress and reaches 100 percent', async () => {
+  global.XMLHttpRequest = class {
+    upload = {}; status = 200; responseText = '';
+    open() {} abort() { this.onabort?.(); }
+    send() { this.upload.onprogress?.({ lengthComputable: true, loaded: 3, total: 4 }); this.onload?.(); }
+  };
+  const values = [];
+  await new ParsRagApiClient('').ingest(new File(['data'], 'file.pdf'), 'session-1', undefined, value => values.push(value));
+  assert.deepEqual(values, [75, 100]);
+});
+
 test('API client encodes session identifiers in resource paths', async () => {
   let requested = '';
   global.fetch = async url => { requested = String(url); return new Response('[]', { status: 200 }); };
   const client = new ParsRagApiClient('');
   await client.files('session / فارسی');
   assert.equal(requested, '/sessions/session%20%2F%20%D9%81%D8%A7%D8%B1%D8%B3%DB%8C/files');
+});
+
+test('deletes one document with a JSON filename payload', async () => {
+  let body = '';
+  global.fetch = async (_url, init) => { body = String(init.body); return new Response(null, { status: 200 }); };
+  await new ParsRagApiClient('').deleteDocument('session-1', 'راهنما.pdf');
+  assert.deepEqual(JSON.parse(body), { filename: 'راهنما.pdf' });
 });

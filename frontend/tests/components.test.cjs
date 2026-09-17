@@ -21,13 +21,14 @@ test('model markdown cannot execute HTML or fetch a tracking image', () => {
   assert.match(html, /tracker/);
 });
 
-test('citation filenames and excerpts are escaped, with keyboard-operable disclosure', () => {
+test('sources are compact, unique, escaped and show traceable locations', () => {
   const html = render(ChatFeed, { messages: [{ id: 'm2', role: 'assistant', content: 'پاسخ', timestamp: 1,
-    citations: [{ filename: '<img src=x onerror=alert(1)>', body: '<script>source</script>', score: 0.8 }] }],
+    citations: [{ filename: '<img src=x onerror=alert(1)>', locations: [{ kind: 'page', start: 3 }] }] }],
     language: 'fa', isGenerating: false, activeMode: 'strict', onRetry: noop, isBusy: false });
-  assert.match(html, /<details class="citation"/);
-  assert.match(html, /&lt;script&gt;source&lt;\/script&gt;/);
+  assert.match(html, /class="citation-summary"/);
+  assert.match(html, /صفحه ۳/);
   assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /<details|امتیاز ارتباط/);
 });
 
 test('empty Persian composer uses RTL, has a real label and disables empty submission', () => {
@@ -47,12 +48,13 @@ test('stop control replaces submission during a pending answer', () => {
   assert.doesNotMatch(html, /<textarea[^>]*disabled/);
 });
 
-test('document controls match API formats and protect the final selected source', () => {
+test('document controls allow clearing the final source and deleting an indexed document', () => {
   const html = render(DocumentCenter, { isOpen: false, onClose: noop, documents: [{ name: 'a.pdf', status: 'indexed' }],
-    onUploadFiles: noop, onRemoveFailed: noop, onToggleDocument: noop, language: 'en', isUploading: false, activeMode: 'strict', error: null });
+    onUploadFiles: noop, onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'en', isUploading: false, activeMode: 'strict', error: null });
   assert.match(html, /accept=".pdf,.docx,.pptx"/);
-  assert.match(html, /type="checkbox"[^>]*disabled=""/);
-  assert.doesNotMatch(html, /Delete document/);
+  assert.match(html, /type="checkbox"/);
+  assert.doesNotMatch(html, /type="checkbox"[^>]*disabled=""/);
+  assert.match(html, /Delete document: a.pdf/);
 });
 
 test('settings render labeled native choices and modal semantics in both languages', () => {

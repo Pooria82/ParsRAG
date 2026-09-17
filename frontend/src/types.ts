@@ -3,12 +3,20 @@ export type RAGMode = 'hybrid' | 'strict' | 'llm-only';
 export type Language = 'fa' | 'en';
 
 export type Theme = 'dark' | 'light';
+export type ModelProvider = 'api' | 'ollama';
+
+export interface ModelConfiguration {
+  provider: ModelProvider;
+  model_name: string;
+  base_url: string;
+  api_key_configured: boolean;
+}
+
+export interface OllamaModel { name: string; size?: number | null }
 
 export interface Citation {
-  title: string;
   filename: string;
-  body: string;
-  score: number;
+  locations: Array<{ kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }>;
 }
 
 export interface Message {
@@ -27,6 +35,7 @@ export interface SessionDocument {
   status: 'indexed' | 'uploading' | 'error';
   errorMessage?: string;
   enabled?: boolean;
+  uploadProgress?: number;
 }
 
 export interface Session {
