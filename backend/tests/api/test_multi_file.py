@@ -20,10 +20,12 @@ def test_multi_file_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes.parse_document") as mock_parse_document,
+        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
         patch("backend.api.routes.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_document.return_value = "Extracted text content"
+        mock_parse_document.return_value = [
+            MagicMock(text="Extracted text content", metadata={"section": 1})
+        ]
         mock_chunk_text.return_value = [
             ExtractedNode(text="Chunk 1", metadata={"filename": "doc.docx"})
         ]
@@ -114,6 +116,7 @@ def test_resolve_target_files_logic() -> None:
     assert resolve_target_files(
         "هر سوالی", available, explicit_filter=["نیازمندی‌ها.docx"]
     ) == ["نیازمندی‌ها.docx"]
+    assert resolve_target_files("هر سوالی", available, explicit_filter=[]) == []
 
     # Specific file mention
     assert resolve_target_files("در فایل گزارش اول چه مواردی ذکر شده؟", available) == [
@@ -146,6 +149,19 @@ def test_format_multi_doc_context_structure() -> None:
     assert "=== سند 2: doc2.docx ===" in formatted
     assert "Text from Doc 1" in formatted
     assert "Text from Doc 2" in formatted
+
+
+def test_context_exposes_reliable_location_to_the_model() -> None:
+    formatted = format_multi_doc_context(
+        [
+            ExtractedNode(
+                text="Located text",
+                score=0.9,
+                metadata={"filename": "guide.pdf", "page": 7},
+            )
+        ]
+    )
+    assert "[source: guide.pdf, page: 7]" in formatted
 
 
 @patch("backend.core.strategies.strict_rag.Settings")

@@ -7,6 +7,7 @@ from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.document_parser import (
     EmptyDocumentError,
     parse_document,
+    parse_document_sections,
 )
 
 
@@ -26,6 +27,21 @@ def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     ):
         parse_document(b"fake pdf bytes", "fake.pdf")
 
+    mock_doc.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+def test_pdf_sections_keep_page_numbers(mock_fitz_open: MagicMock) -> None:
+    mock_doc = MagicMock()
+    first, second = MagicMock(), MagicMock()
+    first.get_text.return_value = "first page"
+    second.get_text.return_value = "second page"
+    mock_doc.__iter__.return_value = [first, second]
+    mock_fitz_open.return_value = mock_doc
+
+    sections = parse_document_sections(b"pdf", "guide.pdf")
+
+    assert [section.metadata for section in sections] == [{"page": 1}, {"page": 2}]
     mock_doc.close.assert_called_once()
 
 

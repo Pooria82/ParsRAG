@@ -1,4 +1,5 @@
 import io
+from dataclasses import dataclass
 from typing import Any
 
 import fitz  # type: ignore  # PyMuPDF
@@ -11,7 +12,20 @@ from pptx import Presentation
 
 from backend.core.exceptions import EmptyDocumentError
 
-__all__ = ["EmptyDocumentError", "parse_document"]
+__all__ = [
+    "EmptyDocumentError",
+    "ParsedSection",
+    "parse_document",
+    "parse_document_sections",
+]
+
+
+@dataclass(frozen=True)
+class ParsedSection:
+    """Text extracted from a traceable document location."""
+
+    text: str
+    metadata: dict[str, int]
 
 
 def parse_document(file_bytes: bytes, filename: str) -> str:
@@ -42,6 +56,67 @@ def parse_document(file_bytes: bytes, filename: str) -> str:
         raise ValueError(
             "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
         )
+
+
+def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSection]:
+    """Extracts text with page, slide, paragraph, or section metadata."""
+    lower_name = filename.lower()
+    if lower_name.endswith(".pdf"):
+        try:
+            document = fitz.open(stream=file_bytes, filetype="pdf")
+        except Exception as exc:
+            raise ValueError("Corrupted or invalid PDF document.") from exc
+        sections = [
+            ParsedSection(text=text.strip(), metadata={"page": index})
+            for index, page in enumerate(document, start=1)
+            if (text := page.get_text("text")).strip()
+        ]
+        document.close()
+    elif lower_name.endswith(".docx"):
+        try:
+            document = Document(io.BytesIO(file_bytes))
+        except Exception as exc:
+            raise ValueError("Corrupted or invalid DOCX document.") from exc
+        sections = []
+        paragraph = 0
+        for section_index, child in enumerate(
+            document.element.body.iterchildren(), start=1
+        ):
+            if isinstance(child, CT_P):
+                value = Paragraph(child, document).text.strip()
+                if value:
+                    paragraph += 1
+                    sections.append(ParsedSection(value, {"paragraph": paragraph}))
+            elif isinstance(child, CT_Tbl):
+                value = _format_docx_table(Table(child, document)).strip()
+                if value:
+                    sections.append(ParsedSection(value, {"section": section_index}))
+    elif lower_name.endswith(".pptx"):
+        try:
+            presentation = Presentation(io.BytesIO(file_bytes))
+        except Exception as exc:
+            raise ValueError("Corrupted or invalid PPTX document.") from exc
+        sections = []
+        for slide_index, slide in enumerate(presentation.slides, start=1):
+            parts: list[str] = []
+            for shape in slide.shapes:
+                if getattr(shape, "has_table", False):
+                    parts.append(_format_pptx_table(shape.table))
+                elif hasattr(shape, "text") and shape.text and shape.text.strip():
+                    parts.append(shape.text.strip())
+            if text := "\n\n".join(part for part in parts if part).strip():
+                sections.append(ParsedSection(text, {"slide": slide_index}))
+    else:
+        raise ValueError(
+            "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
+        )
+    if not sections:
+        if lower_name.endswith(".pdf"):
+            raise EmptyDocumentError(
+                "The document contains no selectable text. Scanned PDFs are not supported."
+            )
+        raise EmptyDocumentError("The document contains no text.")
+    return sections
 
 
 def _clean_cell_text(text: str) -> str:

@@ -21,6 +21,7 @@ Do not use your own external knowledge under any circumstances.
 If multiple documents are provided in the context:
 - If asked to summarize, compare, or draw conclusions across the documents, synthesize the facts from each document comprehensively and state the overarching conclusion clearly.
 - If asked about a specific document, focus your answer on that document while citing the document name where relevant.
+- When a source label includes a page, slide, paragraph, or section, append that exact source label at the end of the relevant answer paragraph. Never invent a location.
 
 Context:
 {context_str}

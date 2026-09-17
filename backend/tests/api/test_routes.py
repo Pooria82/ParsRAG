@@ -15,10 +15,12 @@ def test_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes.parse_document") as mock_parse_document,
+        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
         patch("backend.api.routes.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_document.return_value = "Extracted text"
+        mock_parse_document.return_value = [
+            MagicMock(text="Extracted text", metadata={"page": 1})
+        ]
         mock_chunk_text.return_value = [
             ExtractedNode(text="Extracted text", metadata={"filename": "test.pdf"})
         ]
@@ -43,7 +45,7 @@ def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
-    with patch("backend.api.routes.parse_document") as mock_parse_document:
+    with patch("backend.api.routes.parse_document_sections") as mock_parse_document:
         mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
         response = client.post(
@@ -161,6 +163,17 @@ def test_delete_session_success() -> None:
     app.dependency_overrides.clear()
 
 
+def test_delete_one_session_document() -> None:
+    mock_repo = MagicMock()
+    app.dependency_overrides[get_document_repository] = lambda: mock_repo
+    response = client.request(
+        "DELETE", "/sessions/test-session-123/files", json={"filename": "راهنما.pdf"}
+    )
+    assert response.status_code == 200
+    mock_repo.delete_document.assert_called_once_with("test-session-123", "راهنما.pdf")
+    app.dependency_overrides.clear()
+
+
 def test_session_endpoints_invalid_session_id() -> None:
     response_get = client.get("/sessions/invalid session with spaces/files")
     assert response_get.status_code == 400
@@ -169,3 +182,41 @@ def test_session_endpoints_invalid_session_id() -> None:
     response_delete = client.delete("/sessions/invalid;semicolon")
     assert response_delete.status_code == 400
     assert "Invalid session_id" in response_delete.json()["detail"]
+
+
+@patch("backend.api.routes.get_model_configuration")
+def test_model_configuration_never_returns_api_key(mock_get: MagicMock) -> None:
+    from backend.core.models.domain import ModelConfigurationResponse, ModelProvider
+
+    mock_get.return_value = ModelConfigurationResponse(
+        provider=ModelProvider.API,
+        model_name="google/gemma-4-26b-a4b-it",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_configured=True,
+    )
+    response = client.get("/models/configuration")
+    assert response.status_code == 200
+    assert response.json()["model_name"] == "google/gemma-4-26b-a4b-it"
+    assert "api_key" not in response.json()
+
+
+@patch("backend.api.routes.configure_model")
+def test_update_model_configuration(mock_configure: MagicMock) -> None:
+    from backend.core.models.domain import ModelConfigurationResponse, ModelProvider
+
+    mock_configure.return_value = ModelConfigurationResponse(
+        provider=ModelProvider.OLLAMA,
+        model_name="gemma3:12b",
+        base_url="http://localhost:11434",
+        api_key_configured=False,
+    )
+    response = client.put(
+        "/models/configuration",
+        json={
+            "provider": "ollama",
+            "model_name": "gemma3:12b",
+            "base_url": "http://localhost:11434",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["provider"] == "ollama"

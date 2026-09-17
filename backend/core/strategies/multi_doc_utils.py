@@ -4,6 +4,21 @@ import re
 from backend.core.models.domain import ExtractedNode
 
 
+def _location_tag(node: ExtractedNode) -> str:
+    """Formats reliable parser metadata for model-visible inline citations."""
+    metadata = node.metadata
+    for key, label in (
+        ("page", "page"),
+        ("slide", "slide"),
+        ("paragraph", "paragraph"),
+        ("section", "section"),
+    ):
+        value = metadata.get(key)
+        if isinstance(value, int):
+            return f", {label}: {value}"
+    return ""
+
+
 def resolve_target_files(
     query: str,
     available_files: list[str],
@@ -19,6 +34,8 @@ def resolve_target_files(
     Returns:
         list[str] | None: A filtered list of filenames, or None to query across all files.
     """
+    if explicit_filter == []:
+        return []
     if explicit_filter:
         valid_files = [f for f in explicit_filter if f in available_files]
         return valid_files if valid_files else explicit_filter
@@ -109,7 +126,7 @@ def format_multi_doc_context(nodes: list[ExtractedNode]) -> str:
         parts: list[str] = []
         for idx, n in enumerate(nodes, start=1):
             fn = n.metadata.get("filename", "")
-            fn_tag = f" [سند: {fn}]" if fn else ""
+            fn_tag = f" [source: {fn}{_location_tag(n)}]" if fn else ""
             score_tag = f" (امتیاز: {n.score:.2f})" if n.score is not None else ""
             parts.append(f"--- بخش {idx}{fn_tag}{score_tag} ---\n{n.text}")
         return "\n\n".join(parts)
@@ -121,7 +138,9 @@ def format_multi_doc_context(nodes: list[ExtractedNode]) -> str:
         chunk_parts: list[str] = []
         for chunk_idx, n in enumerate(doc_nodes, start=1):
             score_tag = f" (امتیاز: {n.score:.2f})" if n.score is not None else ""
-            chunk_parts.append(f"--- بخش {chunk_idx}{score_tag} ---\n{n.text}")
+            chunk_parts.append(
+                f"--- بخش {chunk_idx} [source: {fn}{_location_tag(n)}]{score_tag} ---\n{n.text}"
+            )
         doc_sections.append(f"{doc_header}\n" + "\n\n".join(chunk_parts))
 
     return "\n\n" + "\n\n".join(doc_sections)

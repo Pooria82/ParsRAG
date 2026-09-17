@@ -10,6 +10,38 @@ class QueryMode(str, Enum):
     LLM_ONLY = "llm-only"
 
 
+class ModelProvider(str, Enum):
+    """Supported runtime model connection types."""
+
+    API = "api"
+    OLLAMA = "ollama"
+
+
+class ModelConfigurationRequest(BaseModel):
+    """Validated runtime model connection settings."""
+
+    provider: ModelProvider
+    model_name: str = Field(..., min_length=1, max_length=200)
+    base_url: str = Field(..., min_length=1, max_length=500)
+    api_key: str | None = Field(default=None, max_length=1000)
+
+
+class ModelConfigurationResponse(BaseModel):
+    """Safe model settings returned to the browser."""
+
+    provider: ModelProvider
+    model_name: str
+    base_url: str
+    api_key_configured: bool
+
+
+class OllamaModel(BaseModel):
+    """One locally installed Ollama model."""
+
+    name: str
+    size: int | None = None
+
+
 class ChatMessage(BaseModel):
     role: str = Field(..., description="Role of the sender (e.g., 'user', 'assistant')")
     content: str = Field(..., description="Content of the message")
@@ -60,6 +92,12 @@ class DocumentIngestionRequest(BaseModel):
         pattern=r"^[a-zA-Z0-9_-]+$",
         description="Optional session ID to scope the document (alphanumeric, dashes, underscores only)",
     )
+
+
+class DeleteDocumentRequest(BaseModel):
+    """Identifies one indexed document to remove from a session."""
+
+    filename: str = Field(..., min_length=1, max_length=255)
 
 
 class ExtractedNode(BaseModel):

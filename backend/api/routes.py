@@ -1,14 +1,27 @@
 import re
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
 
 from backend.api.dependencies import get_document_repository, get_query_strategy
 from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import QueryRequest, QueryResponse
+from backend.core.models.domain import (
+    DeleteDocumentRequest,
+    ModelConfigurationRequest,
+    ModelConfigurationResponse,
+    OllamaModel,
+    QueryRequest,
+    QueryResponse,
+)
+from backend.infrastructure.llm.factory import (
+    configure_model,
+    get_model_configuration,
+    list_ollama_models,
+)
 from backend.infrastructure.parsers.chunker import chunk_text
-from backend.infrastructure.parsers.document_parser import parse_document
+from backend.infrastructure.parsers.document_parser import parse_document_sections
 
 router = APIRouter()
 
@@ -21,6 +34,36 @@ SESSION_ID_REGEX = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 def health_check() -> dict[str, str]:
     """Health check endpoint to verify backend service readiness."""
     return {"status": "ok"}
+
+
+@router.get("/models/configuration", response_model=ModelConfigurationResponse)
+def read_model_configuration() -> ModelConfigurationResponse:
+    """Returns the active model connection without exposing secrets."""
+    return get_model_configuration()
+
+
+@router.put("/models/configuration", response_model=ModelConfigurationResponse)
+def update_model_configuration(
+    request: ModelConfigurationRequest,
+) -> ModelConfigurationResponse:
+    """Applies model settings for subsequent queries."""
+    try:
+        return configure_model(request)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid model configuration."
+        ) from exc
+
+
+@router.get("/models/ollama", response_model=list[OllamaModel])
+def read_ollama_models(base_url: str = "http://localhost:11434") -> list[OllamaModel]:
+    """Lists installed models from an Ollama service."""
+    try:
+        return list_ollama_models(base_url)
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not connect to Ollama."
+        ) from exc
 
 
 @router.post("/ingest")
@@ -76,12 +119,18 @@ def ingest_document(
             )
 
         try:
-            text = parse_document(file_bytes, upload_item.filename)
+            sections = parse_document_sections(file_bytes, upload_item.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-        metadata = {"filename": upload_item.filename}
-        nodes = chunk_text(text, metadata=metadata)
+        nodes = []
+        for section in sections:
+            nodes.extend(
+                chunk_text(
+                    section.text,
+                    metadata={"filename": upload_item.filename, **section.metadata},
+                )
+            )
         repo.save_nodes(nodes, session_id=session_id)
         total_chunks += len(nodes)
         ingested_names.append(upload_item.filename)
@@ -154,3 +203,16 @@ def delete_session(
         )
     repo.delete_session(session_id)
     return {"message": f"Session '{session_id}' deleted successfully."}
+
+
+@router.delete("/sessions/{session_id}/files")
+def delete_session_document(
+    session_id: str,
+    request: DeleteDocumentRequest,
+    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> dict[str, str]:
+    """Deletes one indexed document without affecting the rest of the session."""
+    if not SESSION_ID_REGEX.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    repo.delete_document(session_id, request.filename)
+    return {"message": f"Document '{request.filename}' deleted successfully."}

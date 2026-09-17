@@ -79,3 +79,27 @@ def test_qdrant_delete_session(mock_qdrant_client_cls: MagicMock) -> None:
     mock_client.delete.assert_called_once()
     _, kwargs = mock_client.delete.call_args
     assert kwargs["collection_name"] == "test_collection"
+
+
+@patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
+def test_qdrant_delete_document_scopes_session_and_filename(
+    mock_qdrant_client_cls: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_qdrant_client_cls.return_value = mock_client
+    repo = QdrantRepository(collection_name="test_collection")
+
+    repo.delete_document("session-one", "guide.pdf")
+
+    selector = mock_client.delete.call_args.kwargs["points_selector"]
+    assert len(selector.filter.must) == 2
+
+
+@patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
+@patch("backend.infrastructure.database.qdrant_repo.Settings")
+def test_empty_file_filter_returns_no_results_without_embedding(
+    mock_settings: MagicMock, mock_qdrant_client_cls: MagicMock
+) -> None:
+    repo = QdrantRepository(collection_name="test_collection")
+    assert repo.similarity_search("query", file_filter=[]) == []
+    mock_settings.embed_model.get_text_embedding.assert_not_called()

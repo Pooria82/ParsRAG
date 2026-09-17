@@ -55,3 +55,7 @@ class AbstractDocumentRepository(ABC):
         Args:
             session_id (str): The session ID to delete.
         """
+
+    @abstractmethod
+    def delete_document(self, session_id: str, filename: str) -> None:
+        """Deletes every chunk for one document in a session."""

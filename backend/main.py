@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,7 +20,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Initialize LLM and Embeddings globally
-setup_llm_and_embeddings()
+if os.getenv("PARSRAG_SKIP_MODEL_SETUP") != "1":
+    setup_llm_and_embeddings()
 
 app = FastAPI(title="ParsRAG API", version="1.0.0")
 

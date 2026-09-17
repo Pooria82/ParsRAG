@@ -110,6 +110,8 @@ class QdrantRepository(AbstractDocumentRepository):
         Returns:
             list[ExtractedNode]: The retrieved document nodes.
         """
+        if file_filter == []:
+            return []
         try:
             query_embedding = Settings.embed_model.get_text_embedding(query)
 
@@ -221,4 +223,28 @@ class QdrantRepository(AbstractDocumentRepository):
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to delete session nodes in Qdrant: {exc}"
+            ) from exc
+
+    def delete_document(self, session_id: str, filename: str) -> None:
+        """Deletes every chunk for one document in a session."""
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=qmodels.FilterSelector(
+                    filter=qmodels.Filter(
+                        must=[
+                            qmodels.FieldCondition(
+                                key="session_id",
+                                match=qmodels.MatchValue(value=session_id),
+                            ),
+                            qmodels.FieldCondition(
+                                key="filename", match=qmodels.MatchValue(value=filename)
+                            ),
+                        ]
+                    )
+                ),
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to delete document nodes in Qdrant: {exc}"
             ) from exc
