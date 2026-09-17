@@ -61,6 +61,33 @@ def test_ollama_rejects_non_local_service() -> None:
         list_ollama_models("https://remote.example")
 
 
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_ollama_accepts_explicit_compose_service(
+    mock_get: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact configured Docker hostname is accepted without allowing arbitrary hosts."""
+    monkeypatch.setenv("OLLAMA_INTERNAL_HOST", "ollama")
+    mock_get.return_value.json.return_value = {"models": []}
+
+    assert list_ollama_models("http://ollama:11434") == []
+    with pytest.raises(ValueError, match="configured internal host"):
+        list_ollama_models("http://ollama.example:11434")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://user@localhost:11434",
+        "http://localhost:11434/api/tags",
+        "http://localhost:11434?redirect=remote",
+    ],
+)
+def test_ollama_rejects_ambiguous_local_urls(url: str) -> None:
+    """Credentials, paths, and query strings cannot disguise an Ollama target."""
+    with pytest.raises(ValueError, match="loopback"):
+        list_ollama_models(url)
+
+
 @patch("backend.infrastructure.llm.factory.Ollama")
 @patch("backend.infrastructure.llm.factory.OpenAILike")
 @patch("backend.infrastructure.llm.factory.Settings")

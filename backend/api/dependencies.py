@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 
 from backend.core.interfaces.repository import AbstractDocumentRepository
@@ -13,7 +14,12 @@ def get_document_repository() -> Generator[AbstractDocumentRepository, None, Non
     """FastAPI dependency that provides a singleton-like Qdrant repository instance."""
     # In a real heavy-load production scenario, you might share the client
     # via app.state, but QdrantClient inside QdrantRepository handles pooling.
-    repo = QdrantRepository()
+    host = os.getenv("QDRANT_HOST", "localhost")
+    try:
+        port = int(os.getenv("QDRANT_PORT", "6333"))
+    except ValueError:
+        port = 6333
+    repo = QdrantRepository(host=host, port=port)
     try:
         yield repo
     finally:

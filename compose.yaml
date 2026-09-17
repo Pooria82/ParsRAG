@@ -1,0 +1,114 @@
+name: parsrag
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parsrag-app:local
+    restart: unless-stopped
+    ports:
+      - "${PARSRAG_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
+      LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_INTERNAL_HOST: ollama
+      OPENROUTER_BASE_URL: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      EMBED_MODEL_NAME: "${EMBED_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"
+      OCR_ENABLED: "${OCR_ENABLED:-1}"
+      OCR_LANGUAGES: "${OCR_LANGUAGES:-fas+eng}"
+      OCR_DPI: "${OCR_DPI:-300}"
+      OCR_TIMEOUT_SECONDS: "${OCR_TIMEOUT_SECONDS:-45}"
+      OCR_MAX_PAGES: "${OCR_MAX_PAGES:-30}"
+      STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.80}"
+      RAG_TOP_K: "${RAG_TOP_K:-15}"
+      STRICT_RAG_TOP_K: "${STRICT_RAG_TOP_K:-15}"
+      HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
+      HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-15}"
+    volumes:
+      - model_cache:/home/parsrag/.cache
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - parsrag_backend
+      - parsrag_egress
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    expose:
+      - "6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -ec ': > /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - parsrag_backend
+
+  ollama:
+    image: ollama/ollama:0.34.1
+    restart: unless-stopped
+    expose:
+      - "11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-30m}"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - parsrag_backend
+
+  ollama-init:
+    image: ollama/ollama:0.34.1
+    profiles: ["local-model"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/ollama"]
+    command: ["pull", "${OLLAMA_MODEL:-gemma3:12b}"]
+    restart: "no"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - parsrag_backend
+
+volumes:
+  qdrant_data:
+  ollama_models:
+  model_cache:
+
+networks:
+  parsrag_backend:
+    driver: bridge
+    internal: true
+  parsrag_egress:
+    driver: bridge

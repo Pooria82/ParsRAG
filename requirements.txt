@@ -1,18 +1,6 @@
-fastapi>=0.100.0
-uvicorn>=0.23.0
-llama-index>=0.10.0
-llama-index-llms-ollama
-llama-index-llms-openai
-llama-index-embeddings-huggingface
-qdrant-client>=1.7.0
-pymupdf>=1.23.0
+-r requirements-runtime.txt
+
 ruff>=0.1.0
 mypy>=1.7.0
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
-pydantic>=2.5.0
-flashrank>=0.2.8
-llama-index-postprocessor-flashrank-rerank
-python-docx>=1.1.0
-llama-index-llms-openai-like
-python-pptx>=1.0.0

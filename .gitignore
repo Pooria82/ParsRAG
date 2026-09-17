@@ -50,6 +50,7 @@ uploads/
 documents/
 *.pdf
 *.txt
+!requirements-runtime.txt
 *.docx
 *.pptx
 

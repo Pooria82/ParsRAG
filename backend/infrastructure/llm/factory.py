@@ -33,13 +33,26 @@ _configuration = ModelConfigurationRequest(
 
 
 def _is_local_ollama_url(value: str) -> bool:
-    """Checks that Ollama stays on the local machine."""
+    """Checks that Ollama stays on loopback or the Compose service network."""
     parsed = urlparse(value)
-    return parsed.scheme == "http" and parsed.hostname in {
+    allowed_hosts = {
         "localhost",
         "127.0.0.1",
         "::1",
     }
+    internal_host = os.getenv("OLLAMA_INTERNAL_HOST", "").strip().lower()
+    if internal_host:
+        allowed_hosts.add(internal_host)
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname is not None
+        and parsed.hostname.lower() in allowed_hosts
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.query == ""
+        and parsed.fragment == ""
+        and parsed.path in {"", "/"}
+    )
 
 
 def get_model_configuration() -> ModelConfigurationResponse:
@@ -62,7 +75,7 @@ def configure_model(
     if configuration.provider is ModelProvider.OLLAMA and not _is_local_ollama_url(
         base_url
     ):
-        raise ValueError("Ollama must use a local loopback address.")
+        raise ValueError("Ollama must use loopback or the configured internal host.")
     if configuration.provider is ModelProvider.API:
         api_key = configuration.api_key or _api_key
         _api_key = api_key
@@ -92,7 +105,7 @@ def configure_model(
 def list_ollama_models(base_url: str) -> list[OllamaModel]:
     """Lists models installed on the configured Ollama service."""
     if not _is_local_ollama_url(base_url):
-        raise ValueError("Ollama must use a local loopback address.")
+        raise ValueError("Ollama must use loopback or the configured internal host.")
     response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=5.0)
     response.raise_for_status()
     payload = response.json()
