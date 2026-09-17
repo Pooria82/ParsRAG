@@ -246,3 +246,95 @@ but credentials are supplied only at runtime and are never baked into an image.
 - [x] Start the app and Qdrant, verify `/health`, and confirm indexed data survives a Qdrant restart through the named volume.
 - [x] Upload native and scanned Persian documents and confirm the scanned chunk retains page metadata for citations.
 - [ ] Start the optional Ollama profile and repeat live model checks when model validation is requested; this run intentionally excludes the previously completed model evaluation.
+
+---
+
+## Phase 10: Offline-First Public Release Hardening
+
+ParsRAG is a single-user, offline-first application for personal and corporate
+workstations. Local Ollama remains the privacy-preserving default. Users without
+suitable hardware may explicitly connect to either an OpenAI-compatible service
+inside their own network or an external model API. The interface and runtime must
+make the selected trust boundary visible: document context leaves the workstation
+only when the user enables a remote API endpoint.
+
+### Task 10.1: Product Boundary & Safe Network Defaults
+**Description:** Make the supported deployment model explicit and safe by default without removing corporate or external model APIs.
+**Actionable Steps:**
+- [ ] Document local Ollama, private/corporate API, and external API as three explicit trust modes.
+- [ ] Bind the Compose application port to loopback by default and require an explicit host override for LAN exposure.
+- [ ] Replace wildcard CORS with configurable same-origin/local-development origins and reject untrusted browser origins on state-changing requests.
+- [ ] Validate model API URLs: allow HTTP for loopback/private-network endpoints, require HTTPS for public endpoints, and reject credentials, query strings, fragments, metadata/link-local, multicast, and unspecified addresses.
+- [ ] Add a visible disclosure before enabling a non-local model API because prompts and retrieved document context can leave the workstation.
+- [ ] Remove absolute privacy and hallucination claims; scope evaluation statements to the tested dataset, model, and date.
+
+### Task 10.2: Model Connection Lifecycle
+**Description:** Make runtime model selection reliable across local Ollama, corporate OpenAI-compatible services, and external APIs.
+**Actionable Steps:**
+- [ ] Preserve separate model names and base URLs when switching providers, including the internal Compose Ollama hostname.
+- [ ] Allow API services with optional credentials so trusted corporate endpoints without API keys remain supported.
+- [ ] Verify `/models` for OpenAI-compatible APIs and `/api/tags` for Ollama before reporting a successful connection.
+- [ ] Persist non-secret active model settings atomically; load secrets only from the environment or current process memory.
+- [ ] Explain restart behavior for runtime-only API keys and never persist an API key in browser storage, logs, responses, or committed files.
+- [ ] Align model, retrieval-threshold, and OCR defaults across code, `.env.example`, Compose, frontend state, and documentation.
+
+### Task 10.3: Session Isolation & Data Lifecycle
+**Description:** Ensure a single workstation user can understand, enumerate, and completely remove locally indexed data.
+**Actionable Steps:**
+- [ ] Require session IDs for ingestion and document-backed queries; remove implicit globally shared uploads.
+- [ ] Make “clear all data” delete every known backend session before clearing browser state, and report partial failures.
+- [ ] Add Qdrant pagination so file discovery is correct beyond the first 1,000 points.
+- [ ] Derive and validate vector dimensions from the configured embedding model instead of hard-coding 768.
+- [ ] Version Qdrant collections by embedding configuration and document the migration/reset path when embeddings change.
+- [ ] Document localStorage and Qdrant retention, backup, restore, and secure deletion behavior.
+
+### Task 10.4: Resource & Input Hardening
+**Description:** Bound memory, CPU, parser, and inference work on personal workstations.
+**Actionable Steps:**
+- [ ] Enforce request-body and aggregate batch limits before unbounded reads; stream uploads into bounded buffers.
+- [ ] Validate file signatures in addition to extensions and reject oversized or suspicious DOCX/PPTX archives before parsing.
+- [ ] Bound prompt length, history count, history message length, filename length, and allowed chat roles with Pydantic.
+- [ ] Add configurable concurrency limits for ingestion and query work and return explicit overload responses.
+- [ ] Add deterministic tests for oversized bodies, archive expansion, forged extensions, large histories, and concurrent saturation.
+
+### Task 10.5: Runtime Health, Cancellation & Progress
+**Description:** Report the real service state and avoid misleading controls.
+**Actionable Steps:**
+- [ ] Split liveness and readiness endpoints; readiness must verify model initialization and Qdrant access.
+- [ ] Keep the UI available while large local embedding assets initialize and expose a clear preparing state.
+- [ ] Distinguish byte upload progress from server-side parsing, OCR, embedding, and indexing progress.
+- [ ] Propagate cancellation where the active model adapter supports it; otherwise label the action as stopping local display and prevent stale responses.
+- [ ] Add structured request logging with correlation IDs while redacting prompts, document text, and credentials.
+
+### Task 10.6: Architecture & Maintainability
+**Description:** Remove duplicate contracts and align the implementation with repository coding rules.
+**Actionable Steps:**
+- [ ] Consolidate the duplicate async/sync query strategy interfaces into one contract and remove unused domain types.
+- [ ] Split oversized frontend orchestration/state modules where responsibilities can be isolated without prop proliferation.
+- [ ] Enforce Google-style public docstrings in Ruff and resolve the existing docstring findings.
+- [ ] Add canonical `pyproject.toml` configuration for Ruff, mypy, pytest, coverage, and project metadata.
+- [ ] Add collection/schema versioning notes and architecture decisions for single-user scope and remote-model trust boundaries.
+
+### Task 10.7: Automated Quality & Supply-Chain Controls
+**Description:** Make the checks described by the repository enforceable on every public contribution.
+**Actionable Steps:**
+- [ ] Add GitHub Actions for backend tests, Ruff, strict mypy, frontend tests/build, coverage, Compose validation, and Docker build.
+- [ ] Enforce an achievable coverage baseline, publish coverage output, and add end-to-end browser smoke tests for core workflows.
+- [ ] Pin the tested Python dependency set with a lock/constraints artifact and keep the npm lockfile authoritative with `npm ci`.
+- [ ] Add Dependabot configuration, dependency review, secret scanning guidance, SBOM generation, and container vulnerability scanning.
+- [ ] Pin release container inputs by immutable version/digest where practical and document the update process.
+
+### Task 10.8: Public Repository & Release Readiness
+**Description:** Publish a credible, legally usable, and maintainable first release.
+**Actionable Steps:**
+- [ ] Add an open-source license, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
+- [ ] Replace documentation promises that are not implemented and publish reproducible, anonymized evaluation evidence for quantitative claims.
+- [ ] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
+- [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
+
+### Checkpoint: Phase 10
+- [ ] Run all backend, frontend, coverage, browser, Compose, container, and documentation checks from a clean checkout.
+- [ ] Verify local Ollama and a mock private OpenAI-compatible endpoint without sending project data to the public internet.
+- [ ] Verify remote API disclosure, optional-key behavior, validated connection failure, and configuration restart behavior.
+- [ ] Verify forged and oversized uploads, saturation controls, complete data deletion, Qdrant pagination, and embedding-schema mismatch handling.
+- [ ] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.
