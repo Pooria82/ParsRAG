@@ -261,22 +261,22 @@ only when the user enables a remote API endpoint.
 ### Task 10.1: Product Boundary & Safe Network Defaults
 **Description:** Make the supported deployment model explicit and safe by default without removing corporate or external model APIs.
 **Actionable Steps:**
-- [ ] Document local Ollama, private/corporate API, and external API as three explicit trust modes.
-- [ ] Bind the Compose application port to loopback by default and require an explicit host override for LAN exposure.
-- [ ] Replace wildcard CORS with configurable same-origin/local-development origins and reject untrusted browser origins on state-changing requests.
-- [ ] Validate model API URLs: allow HTTP for loopback/private-network endpoints, require HTTPS for public endpoints, and reject credentials, query strings, fragments, metadata/link-local, multicast, and unspecified addresses.
-- [ ] Add a visible disclosure before enabling a non-local model API because prompts and retrieved document context can leave the workstation.
-- [ ] Remove absolute privacy and hallucination claims; scope evaluation statements to the tested dataset, model, and date.
+- [x] Document local Ollama, private/corporate API, and external API as three explicit trust modes.
+- [x] Bind the Compose application port to loopback by default and require an explicit host override for LAN exposure.
+- [x] Replace wildcard CORS with configurable same-origin/local-development origins and reject untrusted browser origins on state-changing requests.
+- [x] Validate model API URLs: allow HTTP for loopback/private-network endpoints, require HTTPS for public endpoints, and reject credentials, query strings, fragments, metadata/link-local, multicast, and unspecified addresses.
+- [x] Add a visible disclosure before enabling a non-local model API because prompts and retrieved document context can leave the workstation.
+- [x] Remove absolute privacy and hallucination claims; scope evaluation statements to the tested dataset, model, and date.
 
 ### Task 10.2: Model Connection Lifecycle
 **Description:** Make runtime model selection reliable across local Ollama, corporate OpenAI-compatible services, and external APIs.
 **Actionable Steps:**
-- [ ] Preserve separate model names and base URLs when switching providers, including the internal Compose Ollama hostname.
-- [ ] Allow API services with optional credentials so trusted corporate endpoints without API keys remain supported.
-- [ ] Verify `/models` for OpenAI-compatible APIs and `/api/tags` for Ollama before reporting a successful connection.
-- [ ] Persist non-secret active model settings atomically; load secrets only from the environment or current process memory.
-- [ ] Explain restart behavior for runtime-only API keys and never persist an API key in browser storage, logs, responses, or committed files.
-- [ ] Align model, retrieval-threshold, and OCR defaults across code, `.env.example`, Compose, frontend state, and documentation.
+- [x] Preserve separate model names and base URLs when switching providers, including the internal Compose Ollama hostname.
+- [x] Allow API services with optional credentials so trusted corporate endpoints without API keys remain supported.
+- [x] Verify `/models` for OpenAI-compatible APIs and `/api/tags` for Ollama before reporting a successful connection.
+- [x] Persist non-secret active model settings atomically; load secrets only from the environment or current process memory.
+- [x] Explain restart behavior for runtime-only API keys and never persist an API key in browser storage, logs, responses, or committed files.
+- [x] Align model, retrieval-threshold, and OCR defaults across code, `.env.example`, Compose, frontend state, and documentation.
 
 ### Task 10.3: Session Isolation & Data Lifecycle
 **Description:** Ensure a single workstation user can understand, enumerate, and completely remove locally indexed data.

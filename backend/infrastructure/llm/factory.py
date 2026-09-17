@@ -15,21 +15,41 @@ from backend.core.models.domain import (
     ModelProvider,
     OllamaModel,
 )
+from backend.core.security import validate_model_api_url
+from backend.infrastructure.llm.config_store import (
+    load_model_configuration,
+    save_model_configuration,
+)
 
 load_dotenv()
 
 _configuration_lock = RLock()
-_api_key = os.getenv("OPENROUTER_API_KEY") or None
-_configuration = ModelConfigurationRequest(
-    provider=ModelProvider.API
-    if os.getenv("LLM_PROVIDER", "ollama").lower() in {"api", "openrouter"}
-    else ModelProvider.OLLAMA,
-    model_name=os.getenv("LLM_MODEL_NAME", "google/gemma-4-26b-a4b-it"),
-    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    if os.getenv("LLM_PROVIDER", "ollama").lower() in {"api", "openrouter"}
-    else os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-    api_key=_api_key,
-)
+_api_key = os.getenv("MODEL_API_KEY") or os.getenv("OPENROUTER_API_KEY") or None
+
+
+def _environment_configuration() -> ModelConfigurationRequest:
+    """Build the initial model configuration from environment variables."""
+    provider = (
+        ModelProvider.API
+        if os.getenv("LLM_PROVIDER", "ollama").lower() in {"api", "openrouter"}
+        else ModelProvider.OLLAMA
+    )
+    if provider is ModelProvider.API:
+        base_url = os.getenv("MODEL_API_BASE_URL") or os.getenv("OPENROUTER_BASE_URL")
+        base_url = base_url or "https://openrouter.ai/api/v1"
+    else:
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    return ModelConfigurationRequest(
+        provider=provider,
+        model_name=os.getenv("LLM_MODEL_NAME", "gemma3:12b"),
+        base_url=base_url,
+        api_key=_api_key,
+    )
+
+
+_configuration = load_model_configuration() or _environment_configuration()
+if _configuration.provider is ModelProvider.API:
+    _configuration = _configuration.model_copy(update={"api_key": _api_key})
 
 
 def _is_local_ollama_url(value: str) -> bool:
@@ -62,14 +82,19 @@ def get_model_configuration() -> ModelConfigurationResponse:
             provider=_configuration.provider,
             model_name=_configuration.model_name,
             base_url=_configuration.base_url,
-            api_key_configured=bool(_api_key),
+            api_key_configured=(
+                _configuration.provider is ModelProvider.API and bool(_api_key)
+            ),
         )
 
 
 def configure_model(
     configuration: ModelConfigurationRequest,
+    *,
+    verify: bool = True,
+    persist: bool = True,
 ) -> ModelConfigurationResponse:
-    """Applies a validated model connection for subsequent requests."""
+    """Apply a validated model connection for subsequent requests."""
     global _api_key, _configuration
     base_url = configuration.base_url.rstrip("/")
     if configuration.provider is ModelProvider.OLLAMA and not _is_local_ollama_url(
@@ -77,9 +102,11 @@ def configure_model(
     ):
         raise ValueError("Ollama must use loopback or the configured internal host.")
     if configuration.provider is ModelProvider.API:
+        base_url = validate_model_api_url(base_url)
         api_key = configuration.api_key or _api_key
-        _api_key = api_key
-        Settings.llm = OpenAILike(
+        if verify:
+            _verify_openai_compatible_connection(base_url, api_key)
+        next_llm = OpenAILike(
             model=configuration.model_name,
             api_key=api_key or "",
             api_base=base_url,
@@ -91,15 +118,34 @@ def configure_model(
             update={"api_key": api_key, "base_url": base_url}
         )
     else:
-        Settings.llm = Ollama(
+        if verify:
+            list_ollama_models(base_url)
+        next_llm = Ollama(
             model=configuration.model_name, base_url=base_url, request_timeout=120.0
         )
         configuration = configuration.model_copy(
             update={"api_key": None, "base_url": base_url}
         )
+    if persist:
+        save_model_configuration(configuration)
     with _configuration_lock:
+        Settings.llm = next_llm
         _configuration = configuration
+        if configuration.provider is ModelProvider.API:
+            _api_key = configuration.api_key
     return get_model_configuration()
+
+
+def _verify_openai_compatible_connection(base_url: str, api_key: str | None) -> None:
+    """Verify an OpenAI-compatible API through its model listing endpoint."""
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    response = httpx.get(
+        f"{base_url.rstrip('/')}/models",
+        headers=headers,
+        timeout=8.0,
+        follow_redirects=False,
+    )
+    response.raise_for_status()
 
 
 def list_ollama_models(base_url: str) -> list[OllamaModel]:
@@ -124,7 +170,7 @@ def setup_llm_and_embeddings() -> None:
     Settings object based on environment variables or defaults.
     """
     # LLM Setup
-    configure_model(_configuration)
+    configure_model(_configuration, verify=False, persist=False)
 
     # Embeddings Setup (using intfloat/multilingual-e5-base)
     embed_model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")

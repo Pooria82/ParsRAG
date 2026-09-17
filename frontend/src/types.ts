@@ -70,5 +70,7 @@ export interface AppSettings {
   selectedModel: string;
   apiModelName: string;
   ollamaModelName: string;
+  apiBaseUrl: string;
+  ollamaBaseUrl: string;
   backendUrl: string;
 }

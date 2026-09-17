@@ -15,6 +15,8 @@ test('recovers malformed storage and validates settings without external endpoin
   assert.equal(settings.backendUrl, '');
   assert.equal(settings.apiModelName, 'google/gemma-4-26b-a4b-it');
   assert.equal(settings.ollamaModelName, 'gemma3:12b');
+  assert.equal(settings.apiBaseUrl, 'https://openrouter.ai/api/v1');
+  assert.equal(settings.ollamaBaseUrl, 'http://localhost:11434');
   assert.equal(isLocalEndpoint('https://localhost.evil.com'), false);
   assert.equal(isLocalEndpoint('http://localhost@evil.com'), false);
   assert.equal(isLocalEndpoint('http://localhost:8000'), true);

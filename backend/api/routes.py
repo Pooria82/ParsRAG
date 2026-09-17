@@ -49,9 +49,10 @@ def update_model_configuration(
     """Applies model settings for subsequent queries."""
     try:
         return configure_model(request)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, OSError, httpx.HTTPError) as exc:
         raise HTTPException(
-            status_code=400, detail="Invalid model configuration."
+            status_code=400,
+            detail="The model connection could not be verified or saved.",
         ) from exc
 
 

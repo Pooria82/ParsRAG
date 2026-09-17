@@ -1,20 +1,20 @@
 # ParsRAG
 
-**An Offline, Privacy-First, RTL-Optimized Persian AI Assistant.**
+**An Offline-First, Privacy-Aware, RTL-Optimized Persian AI Assistant.**
 
-ParsRAG is an enterprise-grade Retrieval-Augmented Generation (RAG) system built exclusively for the Persian language. Designed for environments with strict data confidentiality (educational, research, and organizational), ParsRAG operates **100% locally**. It parses Persian PDFs with high fidelity, executes complex semantic retrieval, and reasons over local documents with zero data leakage to the internet.
+ParsRAG is a single-user Retrieval-Augmented Generation (RAG) workspace for Persian and English documents. Parsing, embeddings, and vector storage stay on the workstation. Generation can stay local through Ollama, use a private OpenAI-compatible service on a corporate network, or use an external OpenAI-compatible API when local hardware is unavailable.
 
 ---
 
 ## Key Features
 
 * **3 Intelligent RAG Modes:**
-  * **Strict RAG:** Answers solely based on ingested documents to prevent hallucination.
+  * **Strict RAG:** Answers only from retrieved document context and refuses when the configured evidence threshold is not met.
   * **Hybrid RAG:** Combines retrieved document chunks with the LLM's inherent reasoning for comprehensive answers.
   * **LLM-Only:** Bypasses the vector DB to act as a general-knowledge offline chatbot.
 * **Flawless RTL Extraction:** Utilizes PyMuPDF to extract right-to-left Persian text from digital PDFs while preserving structural integrity.
 * **Conversational Memory:** Employs a fast "Condense Question" pipeline to accurately resolve pronouns in follow-up queries.
-* **100% Air-gapped & Offline:** Powered by Ollama (Qwen 2.5) running locally. No external APIs or cloud services required.
+* **Explicit trust boundary:** Ollama supports fully local generation. API mode clearly warns that prompts and retrieved context are sent to the configured endpoint.
 
 ## Technology Stack
 
@@ -24,7 +24,7 @@ ParsRAG is built using a modern, loosely-coupled microservices architecture:
 * **API:** [FastAPI](https://fastapi.tiangolo.com/) (Robust, typed backend)
 * **RAG Orchestrator:** [LlamaIndex](https://www.llamaindex.ai/) (Advanced chunking and semantic routing)
 * **Vector Database:** [Qdrant](https://qdrant.tech/) (High-performance, Rust-based vector search)
-* **LLM Engine:** [Ollama](https://ollama.com/) (Serving Qwen 2.5 locally)
+* **LLM Engine:** [Ollama](https://ollama.com/) or an OpenAI-compatible API
 * **Parser:** PyMuPDF
 * **Infrastructure:** Docker & Docker Compose
 
@@ -45,8 +45,10 @@ ParsRAG/
    ```bash
    cp .env.example .env
    ```
-   Select `LLM_PROVIDER=ollama` for a local model or `LLM_PROVIDER=api` and set
-   `OPENROUTER_API_KEY` for an API-compatible provider. Never commit `.env`.
+   Select `LLM_PROVIDER=ollama` for a local model. For API mode set
+   `LLM_PROVIDER=api`, `MODEL_API_BASE_URL`, `LLM_MODEL_NAME`, and optionally
+   `MODEL_API_KEY`. Private services without authentication are supported. Never
+   commit `.env`.
 
 2. **Install and build the frontend:**
    ```bash
@@ -79,11 +81,31 @@ docker compose --profile local-model up --build
 ```
 
 For an API-backed model, configure `LLM_PROVIDER=api`, `LLM_MODEL_NAME`,
-`OPENROUTER_BASE_URL`, and `OPENROUTER_API_KEY`, then run:
+`MODEL_API_BASE_URL`, and optional `MODEL_API_KEY`, then run:
 
 ```bash
 docker compose up --build
 ```
+
+The application port binds to `127.0.0.1` by default. Set
+`PARSRAG_BIND_HOST=0.0.0.0` only when the workstation must be reachable on a
+trusted LAN, and set `PARSRAG_ALLOWED_ORIGINS` to the exact browser origins.
+Public model APIs require HTTPS; HTTP is accepted only for loopback and private
+network addresses. Saving model settings verifies the provider's model-list
+endpoint first. The API key stays in process memory (or the environment) and is
+never written to browser storage or `model-configuration.json`; enter it again
+after a process restart unless it is supplied through `MODEL_API_KEY`.
+
+### Model trust modes
+
+| Mode | Generation location | What can leave the workstation |
+| --- | --- | --- |
+| Local Ollama | This workstation | Nothing through the model adapter |
+| Private API | A server on your trusted network | Prompt and, in RAG modes, retrieved document excerpts |
+| External API | A third-party service | Prompt and, in RAG modes, retrieved document excerpts |
+
+Embeddings and Qdrant remain local in all three modes. Review the configured API
+operator's retention and training policy before sending confidential material.
 
 The first start may download the multilingual embedding model into the
 `model_cache` volume. Check the application at `http://127.0.0.1:8000/health`
@@ -96,9 +118,9 @@ docker compose logs -f app
 docker compose down
 ```
 
-Qdrant vectors, Ollama models, and the embedding cache survive `docker compose
-down`. Run `docker compose down -v` only when you intentionally want to delete all
-three persistent volumes.
+Qdrant vectors, Ollama models, the embedding cache, and non-secret application
+configuration survive `docker compose down`. Run `docker compose down -v` only
+when you intentionally want to delete all persistent volumes.
 
 OCR behavior is controlled with `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI`,
 `OCR_TIMEOUT_SECONDS`, and `OCR_MAX_PAGES`. Native PDF text always uses the fast

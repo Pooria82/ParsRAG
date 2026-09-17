@@ -118,3 +118,11 @@ test('settings mode selector is a keyboard-ready custom menu rather than a nativ
   assert.match(html, /class="choice-menu-trigger"/);
   assert.doesNotMatch(html, /<select/);
 });
+
+test('model settings keep provider-specific endpoints and require API disclosure', () => {
+  const source = require('node:fs').readFileSync('src/components/SettingsModal.tsx', 'utf8');
+  assert.match(source, /apiModelUrl/);
+  assert.match(source, /ollamaModelUrl/);
+  assert.match(source, /apiDisclosureAccepted/);
+  assert.match(source, /remoteApiDisclosure/);
+});

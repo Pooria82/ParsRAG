@@ -16,7 +16,9 @@ def test_configure_local_model_updates_active_runtime(
             provider=ModelProvider.OLLAMA,
             model_name="gemma3:12b",
             base_url="http://localhost:11434/",
-        )
+        ),
+        verify=False,
+        persist=False,
     )
     mock_ollama.assert_called_once_with(
         model="gemma3:12b",
@@ -37,9 +39,11 @@ def test_configure_api_model_keeps_secret_out_of_response(
         ModelConfigurationRequest(
             provider=ModelProvider.API,
             model_name="google/gemma-4-26b-a4b-it",
-            base_url="https://openrouter.ai/api/v1",
+            base_url="https://127.0.0.1/v1",
             api_key="secret-key",
-        )
+        ),
+        verify=False,
+        persist=False,
     )
     assert mock_settings.llm is mock_openai.return_value
     assert response.api_key_configured is True
@@ -98,23 +102,29 @@ def test_switching_to_ollama_does_not_forget_existing_api_key(
         ModelConfigurationRequest(
             provider=ModelProvider.API,
             model_name="api-model",
-            base_url="https://models.example/v1",
+            base_url="https://127.0.0.1/v1",
             api_key="keep-me",
-        )
+        ),
+        verify=False,
+        persist=False,
     )
     local = configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.OLLAMA,
             model_name="local-model",
             base_url="http://localhost:11434",
-        )
+        ),
+        verify=False,
+        persist=False,
     )
-    assert local.api_key_configured is True
+    assert local.api_key_configured is False
     configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.API,
             model_name="api-model",
-            base_url="https://models.example/v1",
-        )
+            base_url="https://127.0.0.1/v1",
+        ),
+        verify=False,
+        persist=False,
     )
     assert mock_openai.call_args.kwargs["api_key"] == "keep-me"

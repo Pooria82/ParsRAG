@@ -1,14 +1,14 @@
 # Product Requirements Document (PRD): ParsRAG
 
 ## 1. Executive Summary & Vision
-**ParsRAG** is a completely offline, privacy-first, RTL-optimized Persian AI assistant. Built upon local Large Language Models (LLMs), it acts as a highly secure Retrieval-Augmented Generation (RAG) system for environments with strict data confidentiality (educational, research, and organizational). The vision is to provide a FAANG-grade intelligent assistant that parses Persian text with high fidelity, executes complex semantic retrieval, and reasons over local documents—ensuring absolutely zero data leakage to the internet.
+**ParsRAG** is an offline-first, privacy-aware, RTL-optimized Persian AI assistant for single-user personal and corporate workstations. Parsing, embedding, and vector storage remain local. Generation can run through local Ollama, a private corporate OpenAI-compatible endpoint, or an explicitly enabled external API for users without suitable local hardware.
 
 ## 2. Core Objectives & Success Metrics
 To guarantee production-readiness, the system must meet the following strict criteria:
-- **Zero Data Leakage:** 100% of data processing, embedding, vector storage, and LLM inference must occur locally on the host machine.
+- **Visible Trust Boundary:** Local Ollama keeps generation on the workstation. API mode must disclose that prompts and retrieved context are sent to the configured service while embeddings and vector storage stay local.
 - **RTL & Persian Efficacy:** The system must accurately parse, chunk, and embed right-to-left Persian text (PDF/TXT) while maintaining structural integrity.
 - **Retrieval Latency:** The retrieval pipeline (Condense Question + Vector Search + Reranking) should target a sub-2-second execution time on appropriate hardware before LLM generation begins.
-- **Hallucination Prevention:** In "Strict Mode", the system must achieve a 0% hallucination rate by gracefully refusing to answer questions unsupported by the retrieved context.
+- **Grounded Strict Mode:** Strict mode must refuse when retrieved evidence does not meet the configured threshold. Evaluation results apply only to the recorded dataset, model, configuration, and run date.
 
 ## 3. Detailed Functional Requirements
 
@@ -37,7 +37,7 @@ Standard vector search fails on conversational follow-ups containing pronouns (e
 5. **Query Initiation:** The user submits a prompt and selects a Query Mode.
 6. **Query Condensation:** If chat history exists, the LLM rewrites the query into a standalone sentence.
 7. **Vector Retrieval & Reranking:** LlamaIndex queries Qdrant for Top-K nodes. `FlashRank` reranks these nodes based on semantic relevance to the rewritten query, filtering out noise.
-8. **Prompt Construction & Generation:** The reranked nodes are injected into a Persian-optimized system prompt. The LLM (via Ollama) generates a streaming response back to the UI.
+8. **Prompt Construction & Generation:** The reranked nodes are injected into a Persian-optimized system prompt. The selected Ollama or OpenAI-compatible adapter generates the response. In API mode, this step sends the prompt and retrieved excerpts to the configured endpoint.
 
 ## 5. Edge Cases & Graceful Degradation
 The backend must never crash uncontrollably. It must degrade gracefully:
@@ -49,5 +49,5 @@ The backend must never crash uncontrollably. It must degrade gracefully:
 To ensure a successful MVP, the following are strictly excluded from Phase 1 development:
 - **Optical Character Recognition (OCR):** Processing scanned images/PDFs (e.g., via Tesseract) is deferred to future phases to avoid heavy dependencies and performance bottlenecks.
 - **Multi-Tenancy & Auth:** While the architecture is stateless to support future scaling, Phase 1 is strictly a single-user local deployment. No login systems or user permission matrices will be built.
-- **Cloud Integrations:** No fallback to OpenAI, Anthropic, or external cloud vector databases. The system remains 100% air-gapped.
+- **Managed Cloud Storage:** Documents and vectors are not stored in a managed cloud database. An external model API remains an explicit user-selected generation option.
 - **GraphRAG:** Advanced knowledge graph extraction is reserved for Phase 2+.

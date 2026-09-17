@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
 from backend.core.exceptions import ParsRAGError
+from backend.core.security import TrustedOriginMiddleware, configured_browser_origins
 from backend.infrastructure.llm.factory import setup_llm_and_embeddings
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 
@@ -25,14 +26,15 @@ if os.getenv("PARSRAG_SKIP_MODEL_SETUP") != "1":
 
 app = FastAPI(title="ParsRAG API", version="1.0.0")
 
-# Allow CORS for frontend (localhost)
+trusted_origins = configured_browser_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
-    allow_credentials=True,
+    allow_origins=trusted_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(TrustedOriginMiddleware, allowed_origins=trusted_origins)
 
 
 @app.exception_handler(EmptyDocumentError)

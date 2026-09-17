@@ -23,8 +23,10 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [provider, setProvider] = useState<ModelProvider>('api');
   const [apiModelName, setApiModelName] = useState(settings.apiModelName);
   const [ollamaModelName, setOllamaModelName] = useState(settings.ollamaModelName);
-  const [modelUrl, setModelUrl] = useState('https://openrouter.ai/api/v1');
+  const [apiModelUrl, setApiModelUrl] = useState(settings.apiBaseUrl);
+  const [ollamaModelUrl, setOllamaModelUrl] = useState(settings.ollamaBaseUrl);
   const [apiKey, setApiKey] = useState('');
+  const [apiDisclosureAccepted, setApiDisclosureAccepted] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'saved' | 'error'>('idle');
@@ -32,13 +34,19 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const modelApi = useMemo(() => new ParsRagApiClient(settings.backendUrl), [settings.backendUrl]);
   const modelName = provider === 'api' ? apiModelName : ollamaModelName;
   const setModelName = (value: string) => provider === 'api' ? setApiModelName(value) : setOllamaModelName(value);
+  const modelUrl = provider === 'api' ? apiModelUrl : ollamaModelUrl;
+  const setModelUrl = (value: string) => provider === 'api' ? setApiModelUrl(value) : setOllamaModelUrl(value);
   useEffect(() => {
     if (!open || tab !== 'connection') return;
     const controller = new AbortController(); setModelStatus('idle'); setModelError(null);
     void modelApi.modelConfiguration(controller.signal).then(config => {
-      setProvider(config.provider); if (config.provider === 'api') setApiModelName(config.model_name); else setOllamaModelName(config.model_name);
-      setModelUrl(config.base_url); setKeyConfigured(config.api_key_configured);
-      onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api' ? { apiModelName: config.model_name } : { ollamaModelName: config.model_name }) });
+      setProvider(config.provider);
+      if (config.provider === 'api') { setApiModelName(config.model_name); setApiModelUrl(config.base_url); }
+      else { setOllamaModelName(config.model_name); setOllamaModelUrl(config.base_url); }
+      setKeyConfigured(config.api_key_configured);
+      onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
+        ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
+        : { ollamaModelName: config.model_name, ollamaBaseUrl: config.base_url }) });
     }).catch(() => { /* Keep editable defaults when an older or offline service cannot expose configuration. */ });
     return () => controller.abort();
   }, [open, tab, modelApi]);
@@ -94,20 +102,23 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
       {tab === 'connection' && <>
         <form className="model-settings" onSubmit={event => {
           event.preventDefault();
-          if (provider === 'api' && !apiKey.trim() && !keyConfigured) { setModelStatus('error'); setModelError(t.apiKeyRequired); return; }
+          if (provider === 'api' && !apiDisclosureAccepted) { setModelStatus('error'); setModelError(t.apiConsentRequired); return; }
           setModelStatus('loading'); setModelError(null);
           void modelApi.configureModel({ provider, model_name: modelName.trim(), base_url: modelUrl.trim(), ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
             setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved');
-            onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api' ? { apiModelName: config.model_name } : { ollamaModelName: config.model_name }) });
+            onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
+              ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
+              : { ollamaModelName: config.model_name, ollamaBaseUrl: config.base_url }) });
           }).catch(() => { setModelStatus('error'); setModelError(t.modelSaveError); });
         }}>
           <div className="setting-field"><label>{t.modelProviderLabel}</label><div className="segmented-control">
-            <label><input type="radio" name="provider" checked={provider === 'api'} onChange={() => { setProvider('api'); setModelUrl('https://openrouter.ai/api/v1'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderApi}</span></label>
-            <label><input type="radio" name="provider" checked={provider === 'ollama'} onChange={() => { setProvider('ollama'); setModelUrl('http://localhost:11434'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderOllama}</span></label>
+            <label><input type="radio" name="provider" checked={provider === 'api'} onChange={() => { setProvider('api'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderApi}</span></label>
+            <label><input type="radio" name="provider" checked={provider === 'ollama'} onChange={() => { setProvider('ollama'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderOllama}</span></label>
           </div></div>
           <div className="setting-field"><label htmlFor="model-url">{t.modelBaseUrl}</label><input key={'url-' + provider} className="text-input model-field-swap" id="model-url" dir="ltr" value={modelUrl} required onChange={event => setModelUrl(event.target.value)} /></div>
           <div className="setting-field"><label htmlFor="model-name">{t.modelName}</label><input key={'name-' + provider} className="text-input model-field-swap" id="model-name" dir="ltr" list="ollama-models" value={modelName} required onChange={event => setModelName(event.target.value)} /><datalist id="ollama-models">{models.map(model => <option value={model.name} key={model.name} />)}</datalist></div>
-          {provider === 'api' && <div className="setting-field"><label htmlFor="api-key">{t.apiKey}{keyConfigured && <small>{t.apiKeyConfigured}</small>}</label><input className="text-input" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : ''} onChange={event => setApiKey(event.target.value)} /></div>}
+          {provider === 'api' && <><div className="setting-field"><label htmlFor="api-key">{t.apiKey}{keyConfigured && <small>{t.apiKeyConfigured}</small>}</label><input className="text-input" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
+            <label className="api-disclosure"><input type="checkbox" checked={apiDisclosureAccepted} onChange={event => setApiDisclosureAccepted(event.target.checked)} /><span><strong>{t.remoteApiDisclosureTitle}</strong><small>{t.remoteApiDisclosure}</small></span></label></>}
           <div className="model-actions">{provider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button primary model-save" disabled={busy || modelStatus === 'loading' || !modelName.trim()}>{modelStatus === 'loading' ? t.saving : t.saveModel}</button></div>
           {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && modelError && <p className="inline-error" role="alert">{modelError}</p>}
         </form>

@@ -8,8 +8,9 @@ export const STORAGE = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'fa', theme: 'light', defaultMode: 'hybrid', strictThreshold: 0.8,
-  dynamicDepth: true, topK: 15, selectedModel: 'google/gemma-4-26b-a4b-it',
-  apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:12b', backendUrl: '',
+  dynamicDepth: true, topK: 15, selectedModel: 'gemma3:12b',
+  apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:12b',
+  apiBaseUrl: 'https://openrouter.ai/api/v1', ollamaBaseUrl: 'http://localhost:11434', backendUrl: '',
 };
 
 export const MAX_DOCUMENTS = 5;
@@ -51,6 +52,8 @@ export function parseSettings(raw: string | null, origin?: string): AppSettings 
       selectedModel: typeof value.selectedModel === 'string' && value.selectedModel.trim() ? value.selectedModel : DEFAULT_SETTINGS.selectedModel,
       apiModelName: typeof value.apiModelName === 'string' && value.apiModelName.trim() ? value.apiModelName : DEFAULT_SETTINGS.apiModelName,
       ollamaModelName: typeof value.ollamaModelName === 'string' && value.ollamaModelName.trim() ? value.ollamaModelName : DEFAULT_SETTINGS.ollamaModelName,
+      apiBaseUrl: typeof value.apiBaseUrl === 'string' && value.apiBaseUrl.trim() ? value.apiBaseUrl : DEFAULT_SETTINGS.apiBaseUrl,
+      ollamaBaseUrl: typeof value.ollamaBaseUrl === 'string' && value.ollamaBaseUrl.trim() ? value.ollamaBaseUrl : DEFAULT_SETTINGS.ollamaBaseUrl,
       backendUrl: typeof value.backendUrl === 'string' && isLocalEndpoint(value.backendUrl, origin)
         ? value.backendUrl.trim().replace(/\/+$/, '') : '',
     };

@@ -8,18 +8,22 @@ services:
     image: parsrag-app:local
     restart: unless-stopped
     ports:
-      - "${PARSRAG_PORT:-8000}:8000"
+      - "${PARSRAG_BIND_HOST:-127.0.0.1}:${PARSRAG_PORT:-8000}:8000"
     environment:
       ENVIRONMENT: production
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      PARSRAG_ALLOWED_ORIGINS: "${PARSRAG_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
       LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
       LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_INTERNAL_HOST: ollama
+      MODEL_API_BASE_URL: "${MODEL_API_BASE_URL:-https://openrouter.ai/api/v1}"
+      MODEL_API_KEY: "${MODEL_API_KEY:-}"
       OPENROUTER_BASE_URL: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      PARSRAG_CONFIG_PATH: /var/lib/parsrag/model-configuration.json
       EMBED_MODEL_NAME: "${EMBED_MODEL_NAME:-intfloat/multilingual-e5-base}"
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"
       OCR_ENABLED: "${OCR_ENABLED:-1}"
@@ -34,6 +38,7 @@ services:
       HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-15}"
     volumes:
       - model_cache:/home/parsrag/.cache
+      - app_config:/var/lib/parsrag
     depends_on:
       qdrant:
         condition: service_healthy
@@ -68,6 +73,7 @@ services:
 
   ollama:
     image: ollama/ollama:0.34.1
+    profiles: ["local-model"]
     restart: unless-stopped
     expose:
       - "11434"
@@ -105,6 +111,7 @@ volumes:
   qdrant_data:
   ollama_models:
   model_cache:
+  app_config:
 
 networks:
   parsrag_backend:

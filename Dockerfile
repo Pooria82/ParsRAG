@@ -43,8 +43,8 @@ COPY --from=python-dependencies /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=parsrag:parsrag backend ./backend
 COPY --from=frontend-build --chown=parsrag:parsrag /build/frontend/dist ./frontend/dist
-RUN mkdir -p "$HF_HOME" /home/parsrag/.cache/llama_index \
-    && chown -R parsrag:parsrag /home/parsrag
+RUN mkdir -p "$HF_HOME" /home/parsrag/.cache/llama_index /var/lib/parsrag \
+    && chown -R parsrag:parsrag /home/parsrag /var/lib/parsrag
 
 USER parsrag
 EXPOSE 8000

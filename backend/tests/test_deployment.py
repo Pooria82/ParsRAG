@@ -31,12 +31,14 @@ def test_compose_keeps_infrastructure_private_and_persistent() -> None:
 
     for service in ("app:", "qdrant:", "ollama:", "ollama-init:"):
         assert service in compose
-    assert '"${PARSRAG_PORT:-8000}:8000"' in compose
+    assert '"${PARSRAG_BIND_HOST:-127.0.0.1}:${PARSRAG_PORT:-8000}:8000"' in compose
     assert '"6333:6333"' not in compose
     assert '"11434:11434"' not in compose
     assert "qdrant_data:/qdrant/storage" in compose
     assert "ollama_models:/root/.ollama" in compose
     assert "model_cache:/home/parsrag/.cache" in compose
+    assert "app_config:/var/lib/parsrag" in compose
+    assert 'profiles: ["local-model"]' in compose
     assert 'HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"' in compose
     assert "parsrag_backend:" in compose
     assert "parsrag_egress:" in compose
