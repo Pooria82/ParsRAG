@@ -58,6 +58,7 @@ documents/
 
 # 9. Scratchpads & Temp Files
 scratch/
+docs/evaluation/
 tmp/
 *.tmp
 report.md

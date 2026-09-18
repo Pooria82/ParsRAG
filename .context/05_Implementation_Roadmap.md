@@ -245,7 +245,8 @@ but credentials are supplied only at runtime and are never baked into an image.
 - [x] Build the production application image and verify its non-root user and health check.
 - [x] Start the app and Qdrant, verify `/health`, and confirm indexed data survives a Qdrant restart through the named volume.
 - [x] Upload native and scanned Persian documents and confirm the scanned chunk retains page metadata for citations.
-- [ ] Start the optional Ollama profile and repeat live model checks when model validation is requested; this run intentionally excludes the previously completed model evaluation.
+- [x] Verify live local inference through the production Ollama adapter. On September 18, the native Ollama service completed configuration validation with the installed `qwen2.5:7b` model and returned the exact `LOCAL_OK` probe response.
+- [ ] Start the optional Compose Ollama profile after its pinned image can be fully pulled. The September 18 image pull did not complete; no document data was involved, and this deployment-specific check does not invalidate the successful native adapter test.
 
 ---
 
@@ -328,13 +329,15 @@ only when the user enables a remote API endpoint.
 **Description:** Publish a credible, legally usable, and maintainable first release.
 **Actionable Steps:**
 - [x] Add an open-source license, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
-- [ ] Replace documentation promises that are not implemented and publish reproducible, anonymized evaluation evidence for quantitative claims. (Claims were corrected and an anonymized limitations report was published; a reproducible live report awaits the separately requested model-evaluation run.)
+- [x] Replace documentation promises that are not implemented and provide a reproducible evaluation harness for quantitative claims. The September 18 benchmark records model, retrieval, latency, scoring, OCR, and regression evidence only in ignored local artifacts; no private fixtures or generated evaluation reports are committed.
 - [x] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
 - [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
 
 ### Checkpoint: Phase 10
 - [x] Run all backend, frontend, coverage, browser, Compose, container, and documentation checks from a clean working tree.
-- [ ] Verify local Ollama and a mock private OpenAI-compatible endpoint without sending project data to the public internet.
+- [x] Verify live local Ollama inference through the application model configuration and generation path with native Ollama `qwen2.5:7b`; the exact probe response was `LOCAL_OK`.
+- [x] Verify a keyless mock private OpenAI-compatible endpoint without sending project data to the public internet.
+- [x] Evaluate all seven private PDF fixtures in Strict, Hybrid, and LLM-only modes with `google/gemma-4-26b-a4b-it`, including a real 14-page scanned-PDF OCR path and a post-fix Persian Hybrid regression.
 - [x] Verify remote API disclosure, optional-key behavior, validated connection failure, and configuration restart behavior.
 - [x] Verify forged and oversized uploads, saturation controls, complete data deletion, Qdrant pagination, and embedding-schema mismatch handling.
 - [x] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.

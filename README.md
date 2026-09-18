@@ -1,208 +1,298 @@
-# ParsRAG
+<p align="center">
+  <img src="frontend/public/brand/parsrag-mark.svg" width="96" alt="ParsRAG logo">
+</p>
 
-**An Offline-First, Privacy-Aware, RTL-Optimized Persian AI Assistant.**
+<h1 align="center">ParsRAG</h1>
 
-ParsRAG is a single-user Retrieval-Augmented Generation (RAG) workspace for Persian and English documents. Parsing, embeddings, and vector storage stay on the workstation. Generation can stay local through Ollama, use a private OpenAI-compatible service on a corporate network, or use an external OpenAI-compatible API when local hardware is unavailable.
+<p align="center">
+  <strong>Private document intelligence, designed for Persian.</strong><br>
+  گفت‌وگوی دقیق و مستند با فایل‌های فارسی و انگلیسی
+</p>
 
----
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-167D68.svg"></a>
+  <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
+  <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
+</p>
 
-## Key Features
+ParsRAG is a single-user, offline-first workspace for asking questions across
+Persian and English documents. Parsing, OCR, embeddings, and vector search stay
+on the workstation. Generation can run locally with Ollama, on a private
+OpenAI-compatible server, or through an external API when local hardware is not
+available.
 
-* **3 Intelligent RAG Modes:**
-  * **Strict RAG:** Answers only from retrieved document context and refuses when the configured evidence threshold is not met.
-  * **Hybrid RAG:** Combines retrieved document chunks with the LLM's inherent reasoning for comprehensive answers.
-  * **LLM-Only:** Bypasses the vector DB to act as a general-knowledge offline chatbot.
-* **Flawless RTL Extraction:** Utilizes PyMuPDF to extract right-to-left Persian text from digital PDFs while preserving structural integrity.
-* **Conversational Memory:** Employs a fast "Condense Question" pipeline to accurately resolve pronouns in follow-up queries.
-* **Explicit trust boundary:** Ollama supports fully local generation. API mode clearly warns that prompts and retrieved context are sent to the configured endpoint.
+The interface is bilingual, responsive, RTL-aware, and built around sessions:
+each conversation owns its documents, sources, model mode, and deletion
+lifecycle.
 
-## Technology Stack
+## Why ParsRAG
 
-ParsRAG is built using a modern, loosely-coupled microservices architecture:
+- **Document Knowledge Only:** Strict RAG answers from retrieved evidence and
+  refuses when the evidence threshold is not met.
+- **Hybrid Reasoning:** multilingual dense retrieval is combined with reranking,
+  while strong dense anchors protect Persian evidence from weak reranker scores.
+- **Model Knowledge Only:** use the configured model as a regular assistant with
+  no Qdrant lookup or document sources.
+- **Real Persian PDF support:** native extraction preserves page metadata;
+  image-only pages use bounded Tesseract OCR with `fas+eng` language data.
+- **Useful citations:** answers return the source filename and available page,
+  slide, paragraph, or section metadata without exposing raw retrieval payloads
+  in the interface.
+- **Local data control:** sessions are isolated in Qdrant, individual documents
+  can be removed, and clear-all completes backend deletion before clearing the
+  browser workspace.
+- **Explicit model trust:** the settings UI distinguishes local Ollama, private
+  network APIs, and external APIs before document context can leave the device.
 
-* **UI:** React 18, TypeScript and Vite (bilingual RTL/LTR conversation workspace)
-* **API:** [FastAPI](https://fastapi.tiangolo.com/) (Robust, typed backend)
-* **RAG Orchestrator:** [LlamaIndex](https://www.llamaindex.ai/) (Advanced chunking and semantic routing)
-* **Vector Database:** [Qdrant](https://qdrant.tech/) (High-performance, Rust-based vector search)
-* **LLM Engine:** [Ollama](https://ollama.com/) or an OpenAI-compatible API
-* **Parser:** PyMuPDF
-* **Infrastructure:** Docker & Docker Compose
+## Three answer modes
 
-## Repository Structure
+| Mode | Document retrieval | Model knowledge | Best used for |
+| --- | --- | --- | --- |
+| **Strict** | Required | Forbidden by prompt contract | Policies, reports, research, and answers that must stay inside supplied documents |
+| **Hybrid** | Required and reranked | May supplement retrieved evidence | Explanations and synthesis that benefit from broader reasoning |
+| **LLM-only** | Bypassed | Used directly | General conversation and questions unrelated to uploaded documents |
 
-```text
-ParsRAG/
-├── .context/                  # Architecture Decision Records (ADRs) and PRDs
-├── backend/                   # FastAPI API, LlamaIndex Core, and Infrastructure
-├── frontend/                  # React UI, local font and brand assets
-├── Dockerfile                 # Multi-stage React and FastAPI production image
-└── compose.yaml               # App, Qdrant, Ollama, and persistent volumes
+For document-specific work, start with **Strict**. In the September 2026 PDF
+evaluation it answered 14/14 factual questions and refused 7/7 unrelated
+controls. LLM-only answered every request but matched only 3/7 private-document
+references, which is exactly why the modes remain separate. The reproducible
+runner lives under `backend/tests/evaluation`; private cases and run artifacts
+remain in ignored local directories.
+
+## Supported documents
+
+| Format | Native extraction | Structure metadata | OCR fallback |
+| --- | --- | --- | --- |
+| PDF | PyMuPDF | Page | Yes, for image-only pages |
+| DOCX | python-docx | Paragraph and table content | No |
+| PPTX | python-pptx | Slide and table content | No |
+
+Uploads are validated by extension and signature. The default limits are five
+files per request, 50 MB per file, and 100 MB per batch. Office archives also
+have entry-count, expanded-size, and compression-ratio protections.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI[React workspace<br>RTL / LTR] --> API[FastAPI application]
+    API --> Parse[PDF / DOCX / PPTX<br>OCR adapter]
+    Parse --> Embed[Multilingual embeddings]
+    Embed --> Q[(Qdrant<br>session-scoped vectors)]
+    API --> Router{Query strategy}
+    Q --> Router
+    Router --> Strict[Strict RAG]
+    Router --> Hybrid[Hybrid RAG]
+    Router --> Only[LLM-only]
+    Strict --> Model[Model adapter]
+    Hybrid --> Model
+    Only --> Model
+    Model --> Ollama[Local Ollama]
+    Model --> Private[Private API]
+    Model --> External[External API]
 ```
 
-## Local Development
+The backend is a modular application with Strategy, Repository, and Factory
+boundaries. Qdrant and model providers remain replaceable infrastructure
+adapters; API routes do not contain vector-store logic.
 
-1. **Create a private local configuration:**
-   ```bash
-   cp .env.example .env
-   ```
-   Select `LLM_PROVIDER=ollama` for a local model. For API mode set
-   `LLM_PROVIDER=api`, `MODEL_API_BASE_URL`, `LLM_MODEL_NAME`, and optionally
-   `MODEL_API_KEY`. Private services without authentication are supported. Never
-   commit `.env`.
+## Choose the trust boundary
 
-2. **Install and build the frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   ```
-3. **Start FastAPI from the repository root:**
-   ```bash
-   .venv/Scripts/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-   ```
-4. Open `http://127.0.0.1:8000`. FastAPI serves the production frontend build and the API from the same local origin.
+| Provider | Generation runs on | Data sent by ParsRAG |
+| --- | --- | --- |
+| Local Ollama | This workstation | Nothing through the model adapter |
+| Private API | A server you control | Prompt and retrieved excerpts in RAG modes |
+| External API | A third-party service | Prompt and retrieved excerpts in RAG modes |
 
-For frontend hot reload, run `npm run dev` inside `frontend`. The interface validates persisted state, keeps conversations in the browser, and accepts only local backend endpoints.
+Embeddings and Qdrant stay local in every mode. API keys are kept in process
+memory or environment variables. They are never written to browser storage,
+logs, API responses, or the persisted model configuration file.
 
-Native OCR is disabled by default. Install Tesseract with Persian and English
-language data and set `OCR_ENABLED=1` to process scanned PDF pages locally.
+## Quick start with Docker
 
-## Installation and resource planning
+Requirements:
 
-Source installation requires Python 3.12, Node.js 22, Qdrant, and either Ollama
-or an OpenAI-compatible endpoint. The container path additionally requires Docker
-Engine with Compose. CPU-only operation is supported but local generation and
-embedding are slower; 16 GB system RAM is a practical starting point, while GPU
-memory needs depend on the chosen Ollama model and quantization. Keep free disk
-space for the container images, embedding cache, Qdrant vectors, OCR packages,
-and optional Ollama weights; model files commonly consume several gigabytes.
+- Docker Engine with Compose
+- 16 GB system RAM recommended for comfortable local use
+- enough disk space for images, the embedding cache, Qdrant, and optional model
+  weights
 
-The first connected start may download the Hugging Face embedding model and, in
-the `local-model` profile, the selected Ollama model. For an offline site, preload
-those caches and images on a connected staging machine, export them using the
-approved Docker/Ollama procedures, transfer them through the organization's media
-control process, and start ParsRAG only after the artifacts are present. API mode
-avoids an Ollama model download but still needs the embedding model locally.
+Create the local configuration in PowerShell:
 
-The source path is intended for development and customization. The Compose path
-is the supported reproducible runtime: it builds the frontend into the FastAPI
-image and persists Qdrant, model configuration, embeddings, and optional Ollama
-weights in named volumes.
-
-## Docker Compose
-
-Docker packages the Vite build, FastAPI, Tesseract, Persian OCR data, and Python
-runtime in one non-root application image. Qdrant and Ollama are private services;
-only the application port is published.
-
-For an Ollama deployment, choose `OLLAMA_MODEL` in `.env` and start the local-model
-profile. The one-shot initializer downloads the model into its persistent volume:
-
-```bash
-docker compose --profile local-model up --build
+```powershell
+Copy-Item .env.example .env
 ```
 
-For an API-backed model, configure `LLM_PROVIDER=api`, `LLM_MODEL_NAME`,
-`MODEL_API_BASE_URL`, and optional `MODEL_API_KEY`, then run:
+### API-backed model
 
-```bash
+Set these values in `.env`:
+
+```dotenv
+LLM_PROVIDER=api
+LLM_MODEL_NAME=your-model-id
+MODEL_API_BASE_URL=https://your-provider.example/v1
+MODEL_API_KEY=your-runtime-secret
+```
+
+Private OpenAI-compatible services may use an empty key. Public endpoints must
+use HTTPS; private and loopback addresses may use HTTP.
+
+```powershell
 docker compose up --build
 ```
 
-The application port binds to `127.0.0.1` by default. Set
-`PARSRAG_BIND_HOST=0.0.0.0` only when the workstation must be reachable on a
-trusted LAN, and set `PARSRAG_ALLOWED_ORIGINS` to the exact browser origins.
-Public model APIs require HTTPS; HTTP is accepted only for loopback and private
-network addresses. Saving model settings verifies the provider's model-list
-endpoint first. The API key stays in process memory (or the environment) and is
-never written to browser storage or `model-configuration.json`; enter it again
-after a process restart unless it is supplied through `MODEL_API_KEY`.
+### Local Ollama
 
-### Model trust modes
+Choose a model that fits the target machine before first start:
 
-| Mode | Generation location | What can leave the workstation |
-| --- | --- | --- |
-| Local Ollama | This workstation | Nothing through the model adapter |
-| Private API | A server on your trusted network | Prompt and, in RAG modes, retrieved document excerpts |
-| External API | A third-party service | Prompt and, in RAG modes, retrieved document excerpts |
+```dotenv
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=gemma3:12b
+LLM_MODEL_NAME=gemma3:12b
+```
 
-Embeddings and Qdrant remain local in all three modes. Review the configured API
-operator's retention and training policy before sending confidential material.
+```powershell
+docker compose --profile local-model up --build
+```
 
-The first start may download the multilingual embedding model into the
-`model_cache` volume. `/health/live` reports that the web process is running;
-`/health/ready` returns HTTP 200 only after the model adapters and Qdrant are
-ready. The browser remains available during preparation and shows that state.
-Inspect service state with `docker compose ps`.
-`HF_HUB_DISABLE_XET=1` uses the regular HTTP download path during this bootstrap;
-set it to `0` only when the deployment has a tested Xet connection.
+The initializer downloads the selected Ollama model once into a named volume.
+Large models commonly require several gigabytes and may be impractical on a
+CPU-only workstation; those installations can use a private or external API
+instead.
 
-```bash
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Only the application port
+is published. Qdrant and Ollama stay inside the Compose network.
+
+```powershell
+docker compose ps
 docker compose logs -f app
 docker compose down
 ```
 
-Qdrant vectors, Ollama models, the embedding cache, and non-secret application
-configuration survive `docker compose down`. Run `docker compose down -v` only
-when you intentionally want to delete all persistent volumes.
+`docker compose down` preserves data volumes. Use `docker compose down -v` only
+when you intentionally want to remove Qdrant data, model configuration, caches,
+and Ollama weights.
 
-Conversation messages and UI settings are stored in browser `localStorage`.
-Document chunks are stored in Qdrant under the conversation session ID; uploads
-without a valid session ID are rejected. “Clear all local data” first removes
-every known session from Qdrant and clears browser history only after all server
-deletions succeed. Qdrant collections are named from `EMBED_MODEL_NAME`, so a
-different embedding model starts a compatible collection instead of mixing
-vector dimensions. To migrate, re-upload the source documents; to reclaim an old
-collection, delete it with Qdrant tooling after confirming it is no longer needed.
+## Native development
 
-Back up the `qdrant_data` volume together with browser storage if conversation
-recovery matters. Volume or collection deletion removes the application's access
-to those records but is not a guarantee of forensic erasure on the underlying
-disk; use the operating system's approved secure-erasure process for sensitive
-hardware disposal.
+Requirements: Python 3.12, Node.js 22, Qdrant, and either Ollama or an
+OpenAI-compatible endpoint. Tesseract with Persian and English language data is
+required only for scanned PDF OCR.
 
-OCR behavior is controlled with `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI`,
-`OCR_TIMEOUT_SECONDS`, and `OCR_MAX_PAGES`. Native PDF text always uses the fast
-path; Tesseract runs only for pages without selectable text.
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -c requirements.lock
 
-Uploads are limited to 50 MB per file, 100 MB per batch, five files per request,
-and validated by both extension and file signature. Office archives also have
-entry, expanded-size, and compression-ratio limits. `PARSRAG_INGEST_CONCURRENCY`
-and `PARSRAG_QUERY_CONCURRENCY` bound expensive work; excess requests receive
-HTTP 429 instead of exhausting workstation memory. `PARSRAG_MAX_REQUEST_BYTES`
-sets the HTTP body ceiling and defaults to 105 MiB including multipart overhead.
-Each response includes an `X-Correlation-ID`. Request logs contain that ID,
-method, path, status, and duration; prompts, document text, and credentials are
-never logged by the request middleware.
-
-The current Ollama and OpenAI-compatible adapters expose blocking generation to
-the application. “Stop receiving answer” aborts the browser request and prevents
-a late response from changing the conversation; the underlying provider may
-continue its in-flight generation until its own timeout.
-
-## Verification
-
-```bash
-cd frontend
-npm test
+Set-Location frontend
+npm ci
 npm run build
+Set-Location ..
 
-cd ..
-.venv/Scripts/python -m pytest backend/tests -q
-.venv/Scripts/python -m ruff format --check backend
-.venv/Scripts/python -m ruff check backend
-.venv/Scripts/python -m mypy --strict backend
-docker compose config -q
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-The visual identity, color tokens, motion rules and SVG usage are documented in [`frontend/BRAND.md`](frontend/BRAND.md).
-Historical evaluation evidence and its limitations are documented in
-[`docs/evaluation/phase7-summary.md`](docs/evaluation/phase7-summary.md).
+For frontend hot reload, run `npm run dev` in `frontend`. The development UI
+uses the local FastAPI endpoints configured by Vite.
 
-## Architecture & ADRs
+## Configuration reference
 
-All foundational decisions, Domain-Driven Design (DDD) specifications, and GoF patterns (Strategy, Factory, Repository) are strictly documented in the `.context/` directory. If you are contributing to this project, please review these files carefully before submitting a PR.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PARSRAG_BIND_HOST` | `127.0.0.1` | Application network binding |
+| `PARSRAG_ALLOWED_ORIGINS` | local Vite origins | Trusted browser origins |
+| `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector store connection |
+| `LLM_PROVIDER` | `ollama` | `ollama`, `api`, or `openrouter` |
+| `LLM_MODEL_NAME` | `gemma3:12b` | Provider model identifier |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama endpoint |
+| `MODEL_API_BASE_URL` | OpenRouter-compatible URL | OpenAI-compatible endpoint |
+| `MODEL_API_KEY` | empty | Optional API credential |
+| `EMBED_MODEL_NAME` | `intfloat/multilingual-e5-base` | Local embedding model |
+| `OCR_ENABLED` | `1` in the example | Enable scanned-page OCR |
+| `OCR_LANGUAGES` | `fas+eng` | Tesseract language set |
+| `STRICT_RAG_THRESHOLD` | `0.80` | Minimum Strict retrieval score |
+| `PARSRAG_INGEST_CONCURRENCY` | `1` | Simultaneous ingestion limit |
+| `PARSRAG_QUERY_CONCURRENCY` | `2` | Simultaneous query limit |
 
-## Contributing
+See [.env.example](.env.example) for every supported setting.
 
-We follow a strict **GitHub Flow** strategy and enforce **Conventional Commits**. Please refer to `.context/04_Git_and_CI.md` for branch naming rules, CI/CD pipeline requirements, and PR guidelines.
+## Runtime behavior and data
+
+- `/health/live` confirms that the web process is running.
+- `/health/ready` returns 200 only after model setup and Qdrant access succeed.
+- The UI stays available during initialization and reports the preparing state.
+- Conversation messages and UI preferences live in browser `localStorage`.
+- Parsed chunks and vectors live in Qdrant under the conversation session ID.
+- Collections are versioned from the embedding configuration to prevent vector
+  dimension mismatches.
+- Request logs contain method, path, status, duration, and correlation ID. They
+  do not contain prompts, document text, or credentials.
+
+Changing the embedding model creates a compatible collection. Re-upload source
+documents after the change, then remove old collections only after confirming
+they are no longer needed. For sensitive device disposal, follow the operating
+system or organization's secure-erasure process; deleting an application volume
+alone is not a forensic-erasure guarantee.
+
+## Quality gates
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff format --check backend
+.\.venv\Scripts\python.exe -m ruff check backend backend\tests
+.\.venv\Scripts\python.exe -m mypy backend --strict
+.\.venv\Scripts\python.exe -m pytest --cov=backend --cov-report=term
+
+Set-Location frontend
+npm test
+npm run build
+npm run test:e2e
+Set-Location ..
+
+docker compose config --quiet
+docker build --tag parsrag:verify .
+```
+
+The repository enforces a 70% backend coverage floor and includes deterministic
+tests for session isolation, pagination, parser limits, forged files, OCR,
+provider configuration, overload handling, and all three query strategies. Live
+model evaluation is opt-in and never runs in CI because it may transmit private
+document excerpts and consume provider quota.
+
+## Repository map
+
+```text
+ParsRAG/
+├── .context/                  Product, architecture, and implementation records
+├── .github/                   CI, dependency review, and contribution templates
+├── backend/
+│   ├── api/                   FastAPI routes and dependency wiring
+│   ├── core/                  Domain models, policies, and RAG strategies
+│   ├── infrastructure/        Qdrant, model providers, parsers, and OCR
+│   └── tests/                 Unit, integration, deployment, and opt-in evaluation
+├── frontend/                  React workspace, design system, and browser tests
+├── compose.yaml               Local orchestration
+└── Dockerfile                 Non-root production image
+```
+
+Private fixtures belong in ignored `testData/`; generated experiments and raw
+evaluation outputs belong in ignored `scratch/`. Neither directory is part of
+the public repository history.
+
+## Project documents
+
+- [Visual identity and motion rules](frontend/BRAND.md)
+- [Security policy](SECURITY.md)
+- [Contribution guide](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+
+## Contributing and security
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the records under `.context/`.
+Changes must pass Ruff, strict mypy, backend tests, frontend tests, and the
+production build. Report vulnerabilities privately using the process in
+[SECURITY.md](SECURITY.md); do not open a public issue containing exploit or
+sensitive document data.
+
+## License
+
+ParsRAG is available under the [MIT License](LICENSE).
