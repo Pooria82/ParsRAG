@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { normalizeMathMarkdown } from '../core/markdown';
 
 interface ProgressiveMarkdownProps {
   content: string;
@@ -45,10 +46,7 @@ export function ProgressiveMarkdown({ content, active, externalImageLabel, onCom
     return () => cancelAnimationFrame(frame);
   }, [active, content, reduceMotion]);
 
-  const visibleContent = content.slice(0, visibleLength).replace(
-    /^\$\$([^\n]+)\$\$$/gm,
-    (_match, formula: string) => `$$\n${formula}\n$$`,
-  );
+  const visibleContent = normalizeMathMarkdown(content.slice(0, visibleLength));
   return <div className={'progressive-markdown' + (active && visibleLength < content.length ? ' is-revealing' : '')}>
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]} components={{
       a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,

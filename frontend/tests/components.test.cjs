@@ -12,6 +12,7 @@ const { BrandMark } = require('./.compiled/components/BrandMark.js');
 const { Header } = require('./.compiled/components/Header.js');
 const { Sidebar } = require('./.compiled/components/Sidebar.js');
 const { DEFAULT_SETTINGS } = require('./.compiled/core/state.js');
+const { normalizeMathMarkdown } = require('./.compiled/core/markdown.js');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 const noop = () => {};
 
@@ -40,14 +41,26 @@ test('assistant markdown renders inline and display mathematics with KaTeX', () 
   assert.match(html, /<math/);
 });
 
+test('assistant markdown repairs model-produced parenthesized and escaped formulae', () => {
+  const html = render(ChatFeed, { messages: [{ id: 'math-loose', role: 'assistant', timestamp: 1,
+    content: 'حد: ( \\lim_{n \\to \\infty} P(|X_n-X| > \\epsilon) = 0 )\n\nانرژی: \\(E_k = \\frac{1}{2}mv^2\\)\n\n`(F = ma)`' }],
+    language: 'fa', isGenerating: false, activeMode: 'strict', onRetry: noop, onEditPrompt: noop,
+    onSelectVariant: noop, onRevealComplete: noop, isBusy: false });
+  assert.match(html, /class="katex"/);
+  assert.match(html, /mfrac/);
+  assert.match(html, /<code>\(F = ma\)<\/code>/);
+  assert.equal(normalizeMathMarkdown('حد: ( \\lim_{n \\to \\infty} n = 0 )'), 'حد: $\\lim_{n \\to \\infty} n = 0$');
+  assert.equal(normalizeMathMarkdown('`(F = ma)`'), '`(F = ma)`');
+});
+
 test('query progress identifies the real active pipeline stage', () => {
   const html = render(ChatFeed, { messages: [], language: 'fa', isGenerating: true,
     activeMode: 'hybrid', queryStage: 'retrieving', onRetry: noop, onEditPrompt: noop,
     onSelectVariant: noop, onRevealComplete: noop, isBusy: true });
-  assert.match(html, /درک پرسش و زمینهٔ گفت‌وگو/);
   assert.match(html, /یافتن شواهد مرتبط در اسناد/);
-  assert.match(html, /نگارش پاسخ نهایی/);
-  assert.match(html, /data-state="active"/);
+  assert.match(html, /class="query-loader"/);
+  assert.match(html, /class="query-progress-label"/);
+  assert.doesNotMatch(html, /<ol>/);
 });
 
 test('sources are compact, unique, escaped and show traceable locations', () => {

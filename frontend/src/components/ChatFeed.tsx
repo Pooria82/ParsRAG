@@ -96,11 +96,9 @@ function QueryProgress({ language, mode, stage }: { language: Language; mode: RA
   const t = translations[language];
   const stages: QueryStage[] = mode === 'llm-only' ? ['understanding', 'generating'] : ['understanding', 'retrieving', 'generating'];
   const currentIndex = Math.max(0, stages.indexOf(stage));
-  return <section className="query-progress" role="status" aria-live="polite">
-    <header><span className="assistant-avatar"><BrandMark /></span><div><strong>{t.queryStages[stages[currentIndex]]}</strong><span>{t.queryProgressHint}</span></div><span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span></header>
-    <ol>{stages.map((item, index) => <li key={item} data-state={index < currentIndex ? 'complete' : index === currentIndex ? 'active' : 'pending'}>
-      <span>{index < currentIndex ? <Check size={12} /> : index + 1}</span><b>{t.queryStages[item]}</b>
-    </li>)}</ol>
+  return <section className="query-progress" role="status" aria-live="polite" aria-label={t.queryStages[stages[currentIndex]]}>
+    <span className="query-loader" aria-hidden="true"><i /><i /><i /></span>
+    <strong className="query-progress-label" key={stage}>{t.queryStages[stages[currentIndex]]}</strong>
   </section>;
 }
 
