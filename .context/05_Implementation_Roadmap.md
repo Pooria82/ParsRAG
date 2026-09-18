@@ -246,7 +246,7 @@ but credentials are supplied only at runtime and are never baked into an image.
 - [x] Start the app and Qdrant, verify `/health`, and confirm indexed data survives a Qdrant restart through the named volume.
 - [x] Upload native and scanned Persian documents and confirm the scanned chunk retains page metadata for citations.
 - [x] Verify live local inference through the production Ollama adapter. On September 18, the native Ollama service completed configuration validation with the installed `qwen2.5:7b` model and returned the exact `LOCAL_OK` probe response.
-- [ ] Start the optional Compose Ollama profile after its pinned image can be fully pulled. The September 18 image pull did not complete; no document data was involved, and this deployment-specific check does not invalidate the successful native adapter test.
+- [x] Start the optional Compose Ollama profile, pull `qwen2.5:7b` into the persistent model volume, verify it with `ollama list`, and complete an in-container generation probe returning the exact `LOCAL_OK` response.
 
 ---
 
