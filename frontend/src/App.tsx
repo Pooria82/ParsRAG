@@ -15,7 +15,7 @@ import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectResponseVariant, validateUploads } from './core/state';
+import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -164,7 +164,7 @@ export function App() {
     try {
       const data = parseAnswer(await api.query({ ...payload, request_id: requestId }, controller.signal));
       if (controller.signal.aborted) return;
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now() };
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
       const responseMessageId = target?.assistantId ?? crypto.randomUUID();
       updateSession(session.id, s => {
         if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
@@ -182,7 +182,7 @@ export function App() {
       if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
       const content = controller.signal.reason === 'timeout' ? t.timeout
         : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content, error: true, timestamp: Date.now() };
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
       updateSession(session.id, s => {
         if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
           return { ...s, messages: s.messages.map(message => {
@@ -317,10 +317,9 @@ export function App() {
             const userIndex = active.messages.findIndex(message => message.id === messageId);
             const assistant = active.messages.slice(userIndex + 1).find(message => message.role === 'assistant');
             void send(active, content, { userId: messageId, assistantId: assistant?.id, edit: true });
-          }} onSelectVariant={(messageId, variantIndex) => updateSession(active.id, session => ({ ...session, messages: session.messages.map(message => {
-            if (message.id !== messageId || !message.variants?.[variantIndex]) return message;
-            return selectResponseVariant(message, variantIndex);
-          }) }))} />
+          }} onSelectVariant={(messageId, variantIndex) => updateSession(active.id, session => ({
+            ...session, messages: selectConversationBranch(session.messages, messageId, variantIndex), updatedAt: Date.now(),
+          }))} />
         <div className="active-composer">
           {selectedDocuments.length > 0 && active.ragMode !== 'llm-only' && <button className="active-documents" onClick={() => setDocumentsOpen(true)}><FileText size={13} />{selectedDocuments.length.toLocaleString(settings.language)} {t.selectedDocs}</button>}
           {composer}

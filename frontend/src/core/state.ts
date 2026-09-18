@@ -75,8 +75,8 @@ function parseCitations(value: unknown): Citation[] {
   return [...sources.values()];
 }
 
-function parseMessages(value: unknown): Message[] {
-  if (!Array.isArray(value)) return [];
+function parseMessages(value: unknown, depth = 0): Message[] {
+  if (!Array.isArray(value) || depth > 12) return [];
   return value.filter(isRecord).filter(m => typeof m.id === 'string'
     && typeof m.content === 'string' && ['user', 'assistant', 'system'].includes(String(m.role)))
     .map(m => {
@@ -84,6 +84,8 @@ function parseMessages(value: unknown): Message[] {
         id: variant.id as string, content: variant.content as string,
         timestamp: typeof variant.timestamp === 'number' ? variant.timestamp : 0,
         error: variant.error === true, citations: parseCitations(variant.citations),
+        prompt: typeof variant.prompt === 'string' ? variant.prompt : undefined,
+        continuation: Array.isArray(variant.continuation) ? parseMessages(variant.continuation, depth + 1) : undefined,
       })) : [];
       const activeVariant = variants.length ? Math.max(0, Math.min(variants.length - 1, typeof m.activeVariant === 'number' ? m.activeVariant : variants.length - 1)) : undefined;
       const active = activeVariant === undefined ? undefined : variants[activeVariant];
@@ -206,7 +208,7 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
 
 export function appendResponseVariant(message: Message, variant: ResponseVariant): Message {
   const variants = message.variants?.length ? [...message.variants, variant] : [
-    { id: `${message.id}-original`, content: message.content, citations: message.citations, error: message.error, timestamp: message.timestamp },
+    { id: `${message.id}-original`, content: message.content, citations: message.citations, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
     variant,
   ];
   return { ...message, content: variant.content, citations: variant.citations, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
@@ -222,9 +224,55 @@ export function prepareTurnRegeneration(messages: Message[], userId: string, ass
   if (userIndex < 0) return { history: messages, visible: messages };
   const assistantIndex = assistantId ? messages.findIndex(message => message.id === assistantId) : -1;
   const lastKept = assistantIndex > userIndex ? assistantIndex : userIndex;
+  const currentPrompt = messages[userIndex].content;
+  const assistant = assistantIndex > userIndex
+    ? snapshotActiveBranch(messages[assistantIndex], currentPrompt, messages.slice(assistantIndex + 1))
+    : undefined;
   return {
     history: messages.slice(0, userIndex),
-    visible: messages.slice(0, lastKept + 1).map(message => message.id === userId && edit
-      ? { ...message, content: prompt.trim(), timestamp: Date.now() } : message),
+    visible: messages.slice(0, lastKept + 1).map(message => {
+      if (message.id === userId && edit) return { ...message, content: prompt.trim(), timestamp: Date.now() };
+      if (assistant && message.id === assistant.id) return assistant;
+      return message;
+    }),
   };
+}
+
+function snapshotActiveBranch(message: Message, prompt: string, continuation: Message[]): Message {
+  const variants: ResponseVariant[] = message.variants?.length ? message.variants.map(variant => ({
+    ...variant, prompt: variant.prompt ?? prompt,
+  })) : [{
+    id: `${message.id}-original`, content: message.content, timestamp: message.timestamp,
+    citations: message.citations, error: message.error, prompt,
+  }];
+  const activeVariant = Math.max(0, Math.min(variants.length - 1, message.activeVariant ?? variants.length - 1));
+  variants[activeVariant] = { ...variants[activeVariant], prompt, continuation };
+  return { ...message, variants, activeVariant };
+}
+
+/** Switches one answer branch together with its originating prompt and continuation. */
+export function selectConversationBranch(messages: Message[], assistantId: string, index: number): Message[] {
+  const assistantIndex = messages.findIndex(message => message.id === assistantId && message.role === 'assistant');
+  if (assistantIndex < 0) return messages;
+  const assistant = messages[assistantIndex];
+  let userIndex = assistant.parentUserId
+    ? messages.findIndex(message => message.id === assistant.parentUserId) : -1;
+  if (userIndex < 0) {
+    for (let cursor = assistantIndex - 1; cursor >= 0; cursor -= 1) {
+      if (messages[cursor].role === 'user') { userIndex = cursor; break; }
+    }
+  }
+  if (userIndex < 0) return messages;
+  const snapshotted = snapshotActiveBranch(assistant, messages[userIndex].content, messages.slice(assistantIndex + 1));
+  const target = snapshotted.variants?.[index];
+  if (!target) return messages;
+  const prefix = messages.slice(0, assistantIndex + 1).map(message => {
+    if (message.id === messages[userIndex].id) return { ...message, content: target.prompt ?? message.content };
+    if (message.id === assistantId) return {
+      ...snapshotted, content: target.content, citations: target.citations, error: target.error,
+      timestamp: target.timestamp, activeVariant: index,
+    };
+    return message;
+  });
+  return [...prefix, ...(target.continuation ?? [])];
 }

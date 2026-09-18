@@ -26,6 +26,8 @@ export interface ResponseVariant {
   timestamp: number;
   citations?: Citation[];
   error?: boolean;
+  prompt?: string;
+  continuation?: Message[];
 }
 
 export interface Message {

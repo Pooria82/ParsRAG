@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_SETTINGS, MAX_FILE_BYTES, parseSettings, parseSessions, createSession,
-  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint, appendResponseVariant, selectResponseVariant, prepareTurnRegeneration,
+  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint, appendResponseVariant, selectResponseVariant, prepareTurnRegeneration, selectConversationBranch,
 } = require('./.compiled/core/state.js');
 
 test('recovers malformed storage and validates settings without external endpoints', () => {
@@ -47,6 +47,48 @@ test('editing a prompt branches from that turn and removes later conversation st
   assert.deepEqual(branch.history.map(message => message.id), ['u0', 'a0']);
   assert.deepEqual(branch.visible.map(message => message.id), ['u0', 'a0', 'u1', 'a1']);
   assert.equal(branch.visible[2].content, 'edited prompt');
+  assert.deepEqual(branch.visible[3].variants[0].continuation.map(message => message.id), ['u2']);
+});
+
+test('switching an answer restores its prompt and the matching conversation branch', () => {
+  const original = [
+    { id: 'u1', role: 'user', content: 'old prompt', timestamp: 1 },
+    { id: 'a1', role: 'assistant', parentUserId: 'u1', content: 'old answer', timestamp: 2,
+      variants: [{ id: 'v1', content: 'old answer', prompt: 'old prompt', timestamp: 2 }], activeVariant: 0 },
+    { id: 'u2', role: 'user', content: 'old continuation', timestamp: 3 },
+    { id: 'a2', role: 'assistant', parentUserId: 'u2', content: 'old follow-up', timestamp: 4 },
+  ];
+  const prepared = prepareTurnRegeneration(original, 'u1', 'a1', 'edited prompt', true);
+  const editedAnswer = appendResponseVariant(prepared.visible[1], {
+    id: 'v2', content: 'edited answer', prompt: 'edited prompt', continuation: [], timestamp: 5,
+  });
+  const editedBranch = [prepared.visible[0], editedAnswer,
+    { id: 'u3', role: 'user', content: 'new continuation', timestamp: 6 },
+    { id: 'a3', role: 'assistant', parentUserId: 'u3', content: 'new follow-up', timestamp: 7 }];
+
+  const restoredOriginal = selectConversationBranch(editedBranch, 'a1', 0);
+  assert.deepEqual(restoredOriginal.map(message => message.id), ['u1', 'a1', 'u2', 'a2']);
+  assert.equal(restoredOriginal[0].content, 'old prompt');
+  assert.equal(restoredOriginal[1].content, 'old answer');
+
+  const restoredEdit = selectConversationBranch(restoredOriginal, 'a1', 1);
+  assert.deepEqual(restoredEdit.map(message => message.id), ['u1', 'a1', 'u3', 'a3']);
+  assert.equal(restoredEdit[0].content, 'edited prompt');
+  assert.equal(restoredEdit[1].content, 'edited answer');
+});
+
+test('stored conversation branches recover nested prompts and continuations', () => {
+  const stored = [{ id: 'session_1', title: 'branch', createdAt: 1, updatedAt: 2, ragMode: 'hybrid', documents: [], messages: [
+    { id: 'u1', role: 'user', content: 'visible prompt', timestamp: 1 },
+    { id: 'a1', role: 'assistant', parentUserId: 'u1', content: 'visible answer', timestamp: 2, activeVariant: 1, variants: [
+      { id: 'v1', prompt: 'old prompt', content: 'old answer', timestamp: 2,
+        continuation: [{ id: 'u2', role: 'user', content: 'old follow-up', timestamp: 3 }] },
+      { id: 'v2', prompt: 'visible prompt', content: 'visible answer', timestamp: 4, continuation: [] },
+    ] },
+  ] }];
+  const parsed = parseSessions(JSON.stringify(stored))[0];
+  assert.equal(parsed.messages[1].variants[0].prompt, 'old prompt');
+  assert.equal(parsed.messages[1].variants[0].continuation[0].content, 'old follow-up');
 });
 
 test('preserves old conversations and recovers interrupted uploads', () => {
