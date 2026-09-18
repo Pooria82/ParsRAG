@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { AlertCircle, ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RotateCcw, X } from 'lucide-react';
-import type { Message, Language, RAGMode } from '../types';
+import type { Message, Language, QueryStage, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
+import { ProgressiveMarkdown } from './ProgressiveMarkdown';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
   onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
+  queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete }: ChatFeedProps) {
   const t = translations[language];
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -66,12 +66,8 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
               {message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content" dir="auto">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                    a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
-                    img: ({ alt }) => <span className="external-image-note">[{alt || t.externalImage}]</span>,
-                    table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
-                    pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
-                  }}>{message.content}</ReactMarkdown>
+                  <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
+                    externalImageLabel={t.externalImage} onComplete={onRevealComplete} />
                 </div>}
               {Boolean(message.citations?.length) && <section className="citation-summary" aria-label={t.citationsTitle}>
                 <header><FileText size={15} /><span>{t.citationsTitle}</span></header>
@@ -88,11 +84,23 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </div>
             </>}
           </article>)}
-        {isGenerating && <div className="thinking-row" role="status"><span className="assistant-avatar"><BrandMark /></span><span>{activeMode === 'llm-only' ? t.thinking : t.searchingDocs}</span><span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span></div>}
+        {isGenerating && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
       </div>
       {copyError && <p role="status" className="copy-error">{t.copyFailed}</p>}
     </div>
     {showJump && <button className="jump-button" onClick={toBottom} aria-label={t.jumpToLatest} title={t.jumpToLatest}><ArrowDown size={18} /></button>}
   </div>;
+}
+
+function QueryProgress({ language, mode, stage }: { language: Language; mode: RAGMode; stage: QueryStage }) {
+  const t = translations[language];
+  const stages: QueryStage[] = mode === 'llm-only' ? ['understanding', 'generating'] : ['understanding', 'retrieving', 'generating'];
+  const currentIndex = Math.max(0, stages.indexOf(stage));
+  return <section className="query-progress" role="status" aria-live="polite">
+    <header><span className="assistant-avatar"><BrandMark /></span><div><strong>{t.queryStages[stages[currentIndex]]}</strong><span>{t.queryProgressHint}</span></div><span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span></header>
+    <ol>{stages.map((item, index) => <li key={item} data-state={index < currentIndex ? 'complete' : index === currentIndex ? 'active' : 'pending'}>
+      <span>{index < currentIndex ? <Check size={12} /> : index + 1}</span><b>{t.queryStages[item]}</b>
+    </li>)}</ol>
+  </section>;
 }
 

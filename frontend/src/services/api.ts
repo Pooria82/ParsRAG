@@ -1,5 +1,5 @@
 export type ApiErrorCode = 'request_failed' | 'scanned_pdf';
-import type { ModelConfiguration, ModelProvider, OllamaModel } from '../types';
+import type { ModelConfiguration, ModelProvider, OllamaModel, QueryStage } from '../types';
 
 export class ApiError extends Error {
   constructor(public readonly code: ApiErrorCode, public readonly status?: number) {
@@ -52,6 +52,16 @@ export class ParsRagApiClient {
     });
     if (!response.ok) throw new ApiError('request_failed', response.status);
     return response.json() as Promise<unknown>;
+  }
+
+  async queryProgress(requestId: string, signal?: AbortSignal): Promise<QueryStage | null> {
+    const response = await fetch(this.url(`/queries/${encodeURIComponent(requestId)}/progress`), { signal });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    const payload: unknown = await response.json();
+    if (typeof payload !== 'object' || payload === null || !('stage' in payload)) return null;
+    const stage = payload.stage;
+    return stage === 'understanding' || stage === 'retrieving' || stage === 'generating' || stage === 'complete' || stage === 'failed' ? stage : null;
   }
 
   async modelConfiguration(signal?: AbortSignal): Promise<ModelConfiguration> {

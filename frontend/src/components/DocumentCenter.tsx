@@ -43,7 +43,10 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
               {doc.status === 'uploading' || doc.status === 'processing' ? <Loader2 size={12} className="spin" /> : doc.status === 'indexed' ? <Check size={12} /> : <AlertCircle size={12} />}
               {doc.status === 'uploading' ? t.docUploading : doc.status === 'processing' ? t.docProcessing : doc.status === 'indexed' ? t.docIndexed : t.docError}
               {doc.size ? <small dir="ltr">{(doc.size / 1024 / 1024).toFixed(1)} MB</small> : null}
-            </span>{doc.status === 'uploading' && <div className="upload-progress"><progress max="100" value={doc.uploadProgress ?? 0} aria-label={t.uploadProgress} /><output>{(doc.uploadProgress ?? 0).toLocaleString(language)}٪</output></div>}{doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}</div>
+            </span>
+              {(doc.status === 'uploading' || doc.status === 'processing') && <UploadJourney status={doc.status} progress={doc.uploadProgress ?? 0} language={language} />}
+              {doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}
+            </div>
             {doc.status === 'indexed' && <input type="checkbox" checked={doc.enabled !== false}
               onChange={() => onToggleDocument(doc.name)} aria-label={t.docSelected + ': ' + doc.name} />}
             {doc.status === 'indexed' && (pendingDelete === doc.name ? <span className="document-delete-confirm"><button className="button secondary" onClick={() => setPendingDelete(null)}>{t.cancel}</button><button className="button danger" disabled={isUploading} onClick={() => { onDeleteDocument(doc.name); setPendingDelete(null); }}>{t.confirmDeleteDocument}</button></span> : <button className="icon-button danger-text" disabled={isUploading} onClick={() => setPendingDelete(doc.name)} aria-label={t.deleteDocument + ': ' + doc.name}><Trash2 size={16} /></button>)}
@@ -56,5 +59,17 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
     </div>
     <footer className="documents-footer"><LockKeyhole size={15} /><span>{t.docScope}</span></footer>
   </Dialog>;
+}
+
+function UploadJourney({ status, progress, language }: { status: 'uploading' | 'processing'; progress: number; language: Language }) {
+  const t = translations[language];
+  const activeIndex = status === 'uploading' ? 0 : 1;
+  const steps = [t.uploadSteps.transfer, t.uploadSteps.processing, t.uploadSteps.ready];
+  return <div className="upload-journey" role="status" aria-label={status === 'uploading' ? `${t.uploadProgress}: ${progress}%` : t.docProcessing}>
+    {status === 'uploading' ? <div className="upload-progress"><progress max="100" value={progress} /><output>{progress.toLocaleString(language)}٪</output></div> : null}
+    <ol>{steps.map((step, index) => <li key={step} data-state={index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending'}>
+      <i aria-hidden="true">{index < activeIndex ? <Check size={10} /> : null}</i><span>{step}</span>
+    </li>)}</ol>
+  </div>;
 }
 

@@ -4,6 +4,7 @@ export type Language = 'fa' | 'en';
 
 export type Theme = 'dark' | 'light';
 export type ModelProvider = 'api' | 'ollama';
+export type QueryStage = 'understanding' | 'retrieving' | 'generating' | 'complete' | 'failed';
 
 export interface ModelConfiguration {
   provider: ModelProvider;

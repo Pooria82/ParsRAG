@@ -304,6 +304,7 @@ only when the user enables a remote API endpoint.
 - [x] Split liveness and readiness endpoints; readiness must verify model initialization and Qdrant access.
 - [x] Keep the UI available while large local embedding assets initialize and expose a clear preparing state.
 - [x] Distinguish byte upload progress from server-side parsing, OCR, embedding, and indexing progress.
+- [x] Expose short-lived, non-sensitive query progress identifiers and show understanding, retrieval, and generation as real pipeline stages.
 - [x] Propagate cancellation where the active model adapter supports it; otherwise label the action as stopping local display and prevent stale responses.
 - [x] Add structured request logging with correlation IDs while redacting prompts, document text, and credentials.
 
@@ -312,6 +313,8 @@ only when the user enables a remote API endpoint.
 **Actionable Steps:**
 - [x] Consolidate the duplicate async/sync query strategy interfaces into one contract and remove unused domain types.
 - [x] Split oversized frontend orchestration/state modules where responsibilities can be isolated without prop proliferation.
+- [x] Render assistant Markdown mathematics with KaTeX, reveal completed answers progressively with reduced-motion support, and keep direction based on response content.
+- [x] Replace the generic sidebar storage card with the active provider/model and localize technical-field placeholders without changing their input direction.
 - [x] Enforce Google-style public docstrings in Ruff and resolve the existing docstring findings.
 - [x] Add canonical `pyproject.toml` configuration for Ruff, mypy, pytest, coverage, and project metadata.
 - [x] Add collection/schema versioning notes and architecture decisions for single-user scope and remote-model trust boundaries.

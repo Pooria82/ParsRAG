@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
-import type { Language, Session, Theme } from '../types';
+import type { Language, ModelConfiguration, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { Dialog } from './Dialog';
@@ -12,6 +12,7 @@ interface SidebarProps {
   language: Language; theme: Theme; onToggleTheme: (origin: { x: number; y: number }) => void;
   onOpenSettings: () => void; isOpen: boolean; isMobile: boolean; onClose: () => void;
   connection: 'checking' | 'preparing' | 'online' | 'offline'; onRetryConnection: () => void;
+  modelRuntime?: ModelConfiguration;
   uploadingSessionId?: string;
 }
 
@@ -67,9 +68,10 @@ export function Sidebar(props: SidebarProps) {
       </section>)}
     </nav>
     <div className="sidebar-bottom">
-      <div className="workspace-note"><div className="workspace-note-icon"><BrandMark /></div><div><strong>{t.localWorkspace}</strong><span>{t.localStorage}</span></div></div>
       <div className="connection-status" data-status={props.connection}>
-        <span className="status-dot" /><span>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? t.backendOnline : t.backendOffline}</span>
+        <span className="status-dot" /><span><strong>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? t.backendOnline : t.backendOffline}</strong>
+          {props.connection === 'online' && props.modelRuntime ? <small><bdi>{props.modelRuntime.provider === 'ollama' ? t.modelProviderOllama : t.modelProviderApi}</bdi><i aria-hidden="true">·</i><bdi dir="ltr">{props.modelRuntime.model_name}</bdi></small> : null}
+        </span>
         {props.connection === 'offline' && <button onClick={props.onRetryConnection} title={t.retryConnection} aria-label={t.retryConnection}>↻</button>}
       </div>
       <div className="sidebar-footer">

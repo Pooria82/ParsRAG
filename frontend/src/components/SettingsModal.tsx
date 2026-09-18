@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, CircleHelp, Database, Moon, RefreshCw, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
-import type { AppSettings, ModelProvider, OllamaModel, RAGMode } from '../types';
+import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
@@ -11,9 +11,10 @@ interface SettingsModalProps {
   open?: boolean;
   onClose: () => void; settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => Promise<void>; busy: boolean;
+  onModelConfigured?: (configuration: ModelConfiguration) => void;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured }: SettingsModalProps) {
   const t = translations[settings.language];
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -107,6 +108,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           setModelStatus('loading'); setModelError(null);
           void modelApi.configureModel({ provider, model_name: modelName.trim(), base_url: modelUrl.trim(), ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
             setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved');
+            onModelConfigured?.(config);
             onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
               ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
               : { ollamaModelName: config.model_name, ollamaBaseUrl: config.base_url }) });
@@ -116,9 +118,9 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
             <label><input type="radio" name="provider" checked={provider === 'api'} onChange={() => { setProvider('api'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderApi}</span></label>
             <label><input type="radio" name="provider" checked={provider === 'ollama'} onChange={() => { setProvider('ollama'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderOllama}</span></label>
           </div></div>
-          <div className="setting-field"><label htmlFor="model-url">{t.modelBaseUrl}</label><input key={'url-' + provider} className="text-input model-field-swap" id="model-url" dir="ltr" value={modelUrl} required onChange={event => setModelUrl(event.target.value)} /></div>
-          <div className="setting-field"><label htmlFor="model-name">{t.modelName}</label><input key={'name-' + provider} className="text-input model-field-swap" id="model-name" dir="ltr" list="ollama-models" value={modelName} required onChange={event => setModelName(event.target.value)} /><datalist id="ollama-models">{models.map(model => <option value={model.name} key={model.name} />)}</datalist></div>
-          {provider === 'api' && <><div className="setting-field"><label htmlFor="api-key">{t.apiKey}{keyConfigured && <small>{t.apiKeyConfigured}</small>}</label><input className="text-input" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
+          <div className="setting-field"><label htmlFor="model-url">{t.modelBaseUrl}</label><input key={'url-' + provider} className="text-input model-field-swap localized-placeholder" id="model-url" dir="ltr" value={modelUrl} placeholder={t.modelUrlPlaceholder} required onChange={event => setModelUrl(event.target.value)} /></div>
+          <div className="setting-field"><label htmlFor="model-name">{t.modelName}</label><input key={'name-' + provider} className="text-input model-field-swap localized-placeholder" id="model-name" dir="ltr" list="ollama-models" value={modelName} placeholder={t.modelNamePlaceholder} required onChange={event => setModelName(event.target.value)} /><datalist id="ollama-models">{models.map(model => <option value={model.name} key={model.name} />)}</datalist></div>
+          {provider === 'api' && <><div className="setting-field"><label htmlFor="api-key">{t.apiKey}{keyConfigured && <small>{t.apiKeyConfigured}</small>}</label><input className="text-input localized-placeholder" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
             <label className="api-disclosure"><input type="checkbox" checked={apiDisclosureAccepted} onChange={event => setApiDisclosureAccepted(event.target.checked)} /><span><strong>{t.remoteApiDisclosureTitle}</strong><small>{t.remoteApiDisclosure}</small></span></label></>}
           <div className="model-actions">{provider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button primary model-save" disabled={busy || modelStatus === 'loading' || !modelName.trim()}>{modelStatus === 'loading' ? t.saving : t.saveModel}</button></div>
           {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && modelError && <p className="inline-error" role="alert">{modelError}</p>}
@@ -129,7 +131,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           onUpdateSettings({ backendUrl: endpoint.trim().replace(/\/+$/, '') }); setInvalid(false); setSaved(true);
         }}>
           <label htmlFor="backend-url">{t.backendUrlLabel}</label>
-          <input className="text-input" id="backend-url" type="text" dir="ltr" placeholder="http://localhost:8000" value={endpoint} aria-invalid={invalid} aria-describedby="endpoint-hint" disabled={busy}
+          <input className="text-input localized-placeholder" id="backend-url" type="text" dir="ltr" placeholder={t.backendUrlPlaceholder} value={endpoint} aria-invalid={invalid} aria-describedby="endpoint-hint" disabled={busy}
             onChange={e => { setEndpoint(e.target.value); setInvalid(false); setSaved(false); }} />
           <small id="endpoint-hint">{t.backendUrlHint}</small>
           {invalid && <p className="inline-error" role="alert">{t.invalidEndpoint}</p>}

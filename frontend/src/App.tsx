@@ -13,7 +13,7 @@ import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { ApiError, ParsRagApiClient } from './services/api';
-import type { AppSettings, Message, ResponseVariant, Session, SessionDocument } from './types';
+import type { AppSettings, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectResponseVariant, validateUploads } from './core/state';
 
@@ -28,8 +28,12 @@ export function App() {
   const [connection, setConnection] = useState<'checking' | 'preparing' | 'online' | 'offline'>('checking');
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
+  const [queryProgress, setQueryProgress] = useState<{ sessionId: string; stage: QueryStage }>();
+  const [revealingMessageId, setRevealingMessageId] = useState<string>();
+  const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [focusToken, setFocusToken] = useState(0);
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
+  const progressRef = useRef<AbortController>();
   const uploadRef = useRef(false);
   const healthRef = useRef<AbortController>();
   const sessionsRef = useRef(sessions);
@@ -59,7 +63,13 @@ export function App() {
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
       const status = await api.healthStatus(controller.signal);
-      if (healthRef.current === controller) setConnection(status);
+      if (healthRef.current === controller) {
+        setConnection(status);
+        if (status === 'online') {
+          try { setModelRuntime(await api.modelConfiguration(controller.signal)); }
+          catch { setModelRuntime(undefined); }
+        }
+      }
     } catch {
       if (healthRef.current === controller) setConnection('offline');
     } finally { clearTimeout(timeout); }
@@ -85,7 +95,7 @@ export function App() {
     })();
     return () => { controller.abort(); clearTimeout(timeout); };
   }, [active.id, api, connection, uploadingId, updateSession]);
-  useEffect(() => () => queryRef.current?.controller.abort(), []);
+  useEffect(() => () => { queryRef.current?.controller.abort(); progressRef.current?.abort(); }, []);
 
   const newChat = useCallback(() => {
     const blank = sessionsRef.current.find(s => !s.messages.length && !s.documents.length && !s.draft?.trim());
@@ -110,7 +120,9 @@ export function App() {
     const current = queryRef.current;
     if (!current) return;
     current.controller.abort('user');
+    progressRef.current?.abort(); progressRef.current = undefined;
     queryRef.current = null; setGeneratingId(undefined);
+    setQueryProgress(undefined);
     updateSession(current.sessionId, s => ({ ...s, messages: [...s.messages, {
       id: crypto.randomUUID(), role: 'system', content: t.stopped, timestamp: Date.now(),
     }] }));
@@ -125,8 +137,11 @@ export function App() {
     const historySession = prepared ? { ...session, messages: prepared.history } : session;
     const payload = buildQuery(historySession, settings, prompt);
     const controller = new AbortController();
+    const progressController = new AbortController();
+    const requestId = crypto.randomUUID();
     queryRef.current = { controller, sessionId: session.id };
-    setGeneratingId(session.id); setNotice(null);
+    progressRef.current?.abort(); progressRef.current = progressController;
+    setGeneratingId(session.id); setQueryProgress({ sessionId: session.id, stage: 'understanding' }); setNotice(null);
     const userMessage: Message = { id: target?.userId ?? crypto.randomUUID(), role: 'user', content: prompt.trim(), timestamp: Date.now() };
     updateSession(session.id, s => ({
       ...s, messages: target ? prepareTurnRegeneration(s.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)).visible : [...s.messages, userMessage],
@@ -135,10 +150,22 @@ export function App() {
       updatedAt: Date.now(),
     }));
     const timeout = setTimeout(() => controller.abort('timeout'), 180000);
+    const pollProgress = async () => {
+      if (progressController.signal.aborted) return;
+      try {
+        const stage = await api.queryProgress(requestId, progressController.signal);
+        if (stage && stage !== 'complete' && stage !== 'failed' && !progressController.signal.aborted) {
+          setQueryProgress({ sessionId: session.id, stage });
+        }
+      } catch { /* The answer request remains authoritative if progress polling is interrupted. */ }
+      if (!progressController.signal.aborted) setTimeout(() => void pollProgress(), 350);
+    };
+    void pollProgress();
     try {
-      const data = parseAnswer(await api.query(payload, controller.signal));
+      const data = parseAnswer(await api.query({ ...payload, request_id: requestId }, controller.signal));
       if (controller.signal.aborted) return;
       const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now() };
+      const responseMessageId = target?.assistantId ?? crypto.randomUUID();
       updateSession(session.id, s => {
         if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
           return { ...s, messages: s.messages.map(message => {
@@ -146,9 +173,10 @@ export function App() {
             return appendResponseVariant(message, variant);
           }), updatedAt: Date.now() };
         }
-        const assistant: Message = { id: crypto.randomUUID(), role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+        const assistant: Message = { id: responseMessageId, role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
         return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
       });
+      setRevealingMessageId(responseMessageId);
       setConnection('online');
     } catch (error: unknown) {
       if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
@@ -168,6 +196,9 @@ export function App() {
       void checkHealth();
     } finally {
       clearTimeout(timeout);
+      progressController.abort();
+      if (progressRef.current === progressController) progressRef.current = undefined;
+      setQueryProgress(current => current?.sessionId === session.id ? undefined : current);
       if (queryRef.current?.controller === controller) { queryRef.current = null; setGeneratingId(undefined); }
     }
   };
@@ -220,7 +251,7 @@ export function App() {
       if (session.documents.length || session.messages.length) {
         await api.deleteSession(id, AbortSignal.timeout(15000));
       }
-      if (queryRef.current?.sessionId === id) { queryRef.current.controller.abort('deleted'); queryRef.current = null; setGeneratingId(undefined); }
+      if (queryRef.current?.sessionId === id) { queryRef.current.controller.abort('deleted'); progressRef.current?.abort(); queryRef.current = null; setGeneratingId(undefined); setQueryProgress(undefined); }
       const remaining = sessionsRef.current.filter(s => s.id !== id);
       if (!remaining.length) remaining.push(createSession(settings.language, settings.defaultMode));
       setSessions(remaining);
@@ -265,7 +296,7 @@ export function App() {
       language={settings.language} theme={settings.theme}
       onToggleTheme={origin => transitionTheme(settings.theme === 'dark' ? 'light' : 'dark', origin)}
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
-      connection={connection} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
+      connection={connection} modelRuntime={modelRuntime} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
     <main className="workspace">
       <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
@@ -275,6 +306,8 @@ export function App() {
         setFocusToken(value => value + 1);
       }} /> : <>
         <ChatFeed key={active.id} messages={active.messages} language={settings.language} isGenerating={generatingId === active.id} activeMode={active.ragMode}
+          queryStage={queryProgress?.sessionId === active.id ? queryProgress.stage : undefined}
+          revealingMessageId={revealingMessageId} onRevealComplete={() => setRevealingMessageId(undefined)}
           isBusy={busy} onRetry={messageId => {
             const assistant = active.messages.find(message => message.id === messageId);
             const assistantIndex = active.messages.findIndex(message => message.id === messageId);
@@ -303,6 +336,7 @@ export function App() {
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />
     <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
+      onModelConfigured={setModelRuntime}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);
         else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);

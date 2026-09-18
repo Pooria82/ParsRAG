@@ -30,6 +30,26 @@ test('assistant response direction follows its content instead of interface lang
   assert.match(persianInEnglish, /class="prose-content" dir="auto"/);
 });
 
+test('assistant markdown renders inline and display mathematics with KaTeX', () => {
+  const html = render(ChatFeed, { messages: [{ id: 'math', role: 'assistant', timestamp: 1,
+    content: 'رابطه $L_i = R_{i-1}$ است.\n\n$$R_i = L_{i-1} \\oplus F(R_{i-1}, K_i)$$' }],
+    language: 'fa', isGenerating: false, activeMode: 'strict', onRetry: noop, onEditPrompt: noop,
+    onSelectVariant: noop, onRevealComplete: noop, isBusy: false });
+  assert.match(html, /class="katex"/);
+  assert.match(html, /class="katex-display"/);
+  assert.match(html, /<math/);
+});
+
+test('query progress identifies the real active pipeline stage', () => {
+  const html = render(ChatFeed, { messages: [], language: 'fa', isGenerating: true,
+    activeMode: 'hybrid', queryStage: 'retrieving', onRetry: noop, onEditPrompt: noop,
+    onSelectVariant: noop, onRevealComplete: noop, isBusy: true });
+  assert.match(html, /درک پرسش و زمینهٔ گفت‌وگو/);
+  assert.match(html, /یافتن شواهد مرتبط در اسناد/);
+  assert.match(html, /نگارش پاسخ نهایی/);
+  assert.match(html, /data-state="active"/);
+});
+
 test('sources are compact, unique, escaped and show traceable locations', () => {
   const html = render(ChatFeed, { messages: [{ id: 'm2', role: 'assistant', content: 'پاسخ', timestamp: 1,
     citations: [{ filename: '<img src=x onerror=alert(1)>', locations: [{ kind: 'page', start: 3 }] }] }],
@@ -80,6 +100,16 @@ test('document controls allow clearing the final source and deleting an indexed 
   assert.match(html, /Delete document: a.pdf/);
 });
 
+test('document processing shows transfer, extraction and ready stages', () => {
+  const html = render(DocumentCenter, { isOpen: true, onClose: noop,
+    documents: [{ name: 'scan.pdf', status: 'processing', size: 1000 }], onUploadFiles: noop,
+    onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'fa',
+    isUploading: true, activeMode: 'strict', error: null });
+  assert.match(html, /انتقال فایل/);
+  assert.match(html, /استخراج و ایندکس/);
+  assert.match(html, /آمادهٔ پرسش/);
+});
+
 test('settings render labeled native choices and modal semantics in both languages', () => {
   for (const language of ['fa', 'en']) {
     const html = render(SettingsModal, { onClose: noop, settings: { ...DEFAULT_SETTINGS, language }, onUpdateSettings: noop, onClearAllData: noop, busy: false });
@@ -111,6 +141,17 @@ test('brand controls are real buttons that start a new conversation', () => {
   assert.match(sidebar, /<button class="sidebar-brand"[^>]*title="New conversation"/);
 });
 
+test('sidebar replaces the generic local note with active model runtime details', () => {
+  const html = render(Sidebar, { sessions: [], activeSessionId: '', onSelectSession: noop,
+    onNewChat: noop, onDeleteSession: async () => true, onRenameSession: noop, language: 'fa',
+    theme: 'light', onToggleTheme: noop, onOpenSettings: noop, isOpen: true, isMobile: false,
+    onClose: noop, connection: 'online', modelRuntime: { provider: 'ollama', model_name: 'qwen2.5:7b',
+      base_url: 'http://ollama:11434', api_key_configured: false }, onRetryConnection: noop });
+  assert.match(html, /Ollama محلی/);
+  assert.match(html, /qwen2.5:7b/);
+  assert.doesNotMatch(html, /فضای کار محلی|تاریخچه در این مرورگر/);
+});
+
 test('settings mode selector is a keyboard-ready custom menu rather than a native select', () => {
   const html = render(ChoiceMenu, { label: 'Answer mode', value: 'hybrid', onChange: noop,
     options: [{ value: 'hybrid', label: 'Hybrid' }, { value: 'strict', label: 'Strict' }] });
@@ -125,6 +166,8 @@ test('model settings keep provider-specific endpoints and require API disclosure
   assert.match(source, /ollamaModelUrl/);
   assert.match(source, /apiDisclosureAccepted/);
   assert.match(source, /remoteApiDisclosure/);
+  assert.match(source, /localized-placeholder/);
+  assert.match(source, /modelNamePlaceholder/);
 });
 
 test('clear-all waits for backend deletion and preserves browser state on failure', () => {
