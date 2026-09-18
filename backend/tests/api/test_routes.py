@@ -133,6 +133,47 @@ def test_query_success(
 
 @patch("backend.api.routes.CondenseQuestionPipeline")
 @patch("backend.api.routes.get_query_strategy")
+def test_query_exposes_non_sensitive_progress(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    """A caller-supplied opaque ID exposes stages without query content."""
+    request_id = "4df43765-52bf-4d3e-b8df-530596aacd84"
+    mock_condenser_cls.return_value.condense.return_value = "condensed query"
+
+    def execute_with_progress(**kwargs: object) -> QueryResponse:
+        progress = kwargs["progress"]
+        assert callable(progress)
+        progress("retrieving")
+        progress("generating")
+        return QueryResponse(answer="Answer", source_nodes=[])
+
+    mock_get_strategy.return_value.execute.side_effect = execute_with_progress
+    response = client.post(
+        "/query",
+        json={
+            "prompt": "Question",
+            "mode": "hybrid",
+            "session_id": "session-123",
+            "request_id": request_id,
+        },
+    )
+
+    assert response.status_code == 200
+    progress_response = client.get(f"/queries/{request_id}/progress")
+    assert progress_response.status_code == 200
+    assert progress_response.json() == {"stage": "complete"}
+    assert "Question" not in progress_response.text
+
+
+def test_unknown_query_progress_is_not_found() -> None:
+    """Unknown progress identifiers do not create registry entries."""
+    response = client.get("/queries/4df43765-52bf-4d3e-b8df-530596aacd85/progress")
+
+    assert response.status_code == 404
+
+
+@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.routes.get_query_strategy")
 def test_query_with_custom_top_k(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:

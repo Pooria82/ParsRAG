@@ -60,9 +60,11 @@ def test_strict_rag_above_threshold(mock_settings: MagicMock) -> None:
     mock_settings.llm = mock_llm
 
     strategy = StrictRAGStrategy(mock_repo)
-    result = strategy.execute("test query", [])
+    stages: list[str] = []
+    result = strategy.execute("test query", [], progress=stages.append)
 
     assert result.answer == "The correct answer."
+    assert stages == ["retrieving", "generating"]
     mock_llm.complete.assert_called_once()
 
 
@@ -73,9 +75,11 @@ def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_settings.llm = mock_llm
 
     strategy = LLMOnlyStrategy()
-    result = strategy.execute("query", [])
+    stages: list[str] = []
+    result = strategy.execute("query", [], progress=stages.append)
 
     assert result.answer == "General answer"
+    assert stages == ["generating"]
     mock_llm.complete.assert_called_once()
 
 
@@ -103,9 +107,11 @@ def test_hybrid_rag_strategy(
     mock_settings.llm = mock_llm
 
     strategy = HybridRAGStrategy(mock_repo)
-    result = strategy.execute("query", [])
+    stages: list[str] = []
+    result = strategy.execute("query", [], progress=stages.append)
 
     assert result.answer == "Hybrid answer"
+    assert stages == ["retrieving", "generating"]
     assert [node.text for node in result.source_nodes] == ["raw text", "reranked text"]
     mock_repo.similarity_search.assert_called_once()
     mock_rerank.postprocess_nodes.assert_called_once()

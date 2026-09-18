@@ -7,6 +7,7 @@ from llama_index.core.prompts import PromptTemplate
 from backend.core.exceptions import VectorDBConnectionError
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.query_progress import ProgressCallback
 from backend.core.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.base_strategy import RAGStrategy
 from backend.core.strategies.multi_doc_utils import (
@@ -78,6 +79,7 @@ class StrictRAGStrategy(RAGStrategy):
         session_id: str | None = None,
         top_k: int | None = None,
         file_filter: list[str] | None = None,
+        progress: ProgressCallback | None = None,
     ) -> QueryResponse:
         """Executes the strict RAG pipeline.
 
@@ -87,10 +89,14 @@ class StrictRAGStrategy(RAGStrategy):
             session_id (str | None, optional): The session ID for context filtering.
             top_k (int | None, optional): Optional override for retrieval depth.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
+            progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
 
         Returns:
             QueryResponse: The generated answer or a refusal if context is insufficient.
         """
+        if progress:
+            progress("retrieving")
+
         # 1. Discover session files to determine single-file vs multi-file path
         available_files: list[str] = []
         if session_id:
@@ -159,6 +165,8 @@ class StrictRAGStrategy(RAGStrategy):
         context_str = format_multi_doc_context(filtered_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
 
+        if progress:
+            progress("generating")
         response = self.llm.complete(prompt)
         return QueryResponse(
             answer=str(response).strip(),

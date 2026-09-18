@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -60,6 +61,10 @@ class QueryRequest(BaseModel):
     )
     mode: QueryMode = Field(
         default=QueryMode.HYBRID, description="The RAG execution mode"
+    )
+    request_id: UUID | None = Field(
+        default=None,
+        description="Optional opaque identifier used to read non-sensitive progress state",
     )
 
     @field_validator("mode", mode="before")

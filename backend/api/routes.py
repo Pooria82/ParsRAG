@@ -3,6 +3,7 @@ import os
 import re
 import zipfile
 from pathlib import PurePath
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -21,6 +22,7 @@ from backend.core.models.domain import (
     QueryRequest,
     QueryResponse,
 )
+from backend.core.query_progress import get_query_stage, set_query_stage
 from backend.core.runtime import runtime_state
 from backend.infrastructure.llm.factory import (
     configure_model,
@@ -272,21 +274,51 @@ def query_rag(
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""
-    with _query_limiter.slot():
-        llama_chat_history = [
-            LlamaChatMessage(role=msg.role, content=msg.content)
-            for msg in request.chat_history
-        ]
-        condenser = CondenseQuestionPipeline()
-        condensed_query = condenser.condense(request.prompt, llama_chat_history)
-        strategy = get_query_strategy(request.mode, repo=repo)
-        return strategy.execute(
-            query=condensed_query,
-            chat_history=llama_chat_history,
-            session_id=request.session_id,
-            top_k=request.top_k,
-            file_filter=request.file_filter,
-        )
+    request_id = str(request.request_id) if request.request_id else None
+    try:
+        with _query_limiter.slot():
+            if request_id:
+                set_query_stage(request_id, "understanding")
+            llama_chat_history = [
+                LlamaChatMessage(role=msg.role, content=msg.content)
+                for msg in request.chat_history
+            ]
+            condenser = CondenseQuestionPipeline()
+            condensed_query = condenser.condense(request.prompt, llama_chat_history)
+            strategy = get_query_strategy(request.mode, repo=repo)
+            if request_id:
+                response = strategy.execute(
+                    query=condensed_query,
+                    chat_history=llama_chat_history,
+                    session_id=request.session_id,
+                    top_k=request.top_k,
+                    file_filter=request.file_filter,
+                    progress=lambda stage: set_query_stage(request_id, stage),
+                )
+            else:
+                response = strategy.execute(
+                    query=condensed_query,
+                    chat_history=llama_chat_history,
+                    session_id=request.session_id,
+                    top_k=request.top_k,
+                    file_filter=request.file_filter,
+                )
+            if request_id:
+                set_query_stage(request_id, "complete")
+            return response
+    except Exception:
+        if request_id:
+            set_query_stage(request_id, "failed")
+        raise
+
+
+@router.get("/queries/{request_id}/progress")
+def read_query_progress(request_id: UUID) -> dict[str, str]:
+    """Return a query's coarse stage without prompts, answers, or document data."""
+    stage = get_query_stage(str(request_id))
+    if stage is None:
+        raise HTTPException(status_code=404, detail="Query progress was not found.")
+    return {"stage": stage}
 
 
 @router.get("/sessions/{session_id}/files", response_model=list[str])

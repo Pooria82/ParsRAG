@@ -3,6 +3,7 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
 from backend.core.models.domain import QueryResponse
+from backend.core.query_progress import ProgressCallback
 from backend.core.strategies.base_strategy import RAGStrategy
 
 LLM_ONLY_PROMPT_TEMPLATE = """\
@@ -38,6 +39,7 @@ class LLMOnlyStrategy(RAGStrategy):
         session_id: str | None = None,
         top_k: int | None = None,
         file_filter: list[str] | None = None,
+        progress: ProgressCallback | None = None,
     ) -> QueryResponse:
         """Executes the LLM-only pipeline.
 
@@ -47,12 +49,15 @@ class LLMOnlyStrategy(RAGStrategy):
             session_id (str | None, optional): Ignored in this strategy.
             top_k (int | None, optional): Ignored in this strategy.
             file_filter (list[str] | None, optional): Ignored in this strategy.
+            progress (ProgressCallback | None, optional): Reports model generation.
 
         Returns:
             QueryResponse: The LLM's raw answer.
         """
         # Note: In a chat scenario, you could pass the full chat history directly to self.llm.chat()
         # but since the query is already condensed, we just pass the query.
+        if progress:
+            progress("generating")
         prompt = self.prompt_template.format(query=query)
         response = self.llm.complete(prompt)
         return QueryResponse(answer=str(response).strip())
