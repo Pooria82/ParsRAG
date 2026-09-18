@@ -44,6 +44,12 @@ def test_compose_keeps_infrastructure_private_and_persistent() -> None:
     assert "parsrag_egress:" in compose
     assert "internal: true" in compose
 
+    ollama_service = compose.split("\n  ollama:\n", maxsplit=1)[1].split(
+        "\n  ollama-init:\n", maxsplit=1
+    )[0]
+    assert "- parsrag_backend" in ollama_service
+    assert "- parsrag_egress" in ollama_service
+
 
 def test_docker_context_excludes_secrets_and_local_test_data() -> None:
     """Secrets, caches, and user documents cannot enter the build context."""
