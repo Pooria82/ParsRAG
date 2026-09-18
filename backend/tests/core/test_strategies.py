@@ -4,7 +4,11 @@ from llama_index.core.llms import ChatMessage, MessageRole
 
 from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.models.domain import ExtractedNode
-from backend.core.strategies.hybrid_rag import HybridRAGStrategy
+from backend.core.strategies.hybrid_rag import (
+    HybridRAGStrategy,
+    _merge_evidence,
+    _select_dense_anchors,
+)
 from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 
@@ -102,7 +106,7 @@ def test_hybrid_rag_strategy(
     result = strategy.execute("query", [])
 
     assert result.answer == "Hybrid answer"
-    assert len(result.source_nodes) == 1
+    assert [node.text for node in result.source_nodes] == ["raw text", "reranked text"]
     mock_repo.similarity_search.assert_called_once()
     mock_rerank.postprocess_nodes.assert_called_once()
     mock_llm.complete.assert_called_once()
@@ -185,6 +189,44 @@ def test_hybrid_rag_expanded_candidate_pool(
     mock_repo.similarity_search.assert_called_with(
         "query", top_k=30, session_id=None, file_filter=None
     )
+
+
+def test_hybrid_dense_anchors_preserve_multilingual_hits_across_files() -> None:
+    """A weak monolingual reranker cannot discard the strongest vector evidence."""
+    dense = [
+        ExtractedNode(
+            text="پاسخ مستقیم الف",
+            score=0.94,
+            metadata={"filename": "الف.pdf", "page": 1},
+        ),
+        ExtractedNode(
+            text="پاسخ مستقیم ب",
+            score=0.91,
+            metadata={"filename": "ب.pdf", "page": 4},
+        ),
+        ExtractedNode(
+            text="پاسخ دوم الف",
+            score=0.90,
+            metadata={"filename": "الف.pdf", "page": 2},
+        ),
+    ]
+    reranked = [
+        ExtractedNode(
+            text="متن کم‌ارتباط",
+            score=1.0,
+            metadata={"filename": "الف.pdf", "page": 20},
+        )
+    ]
+
+    anchors = _select_dense_anchors(dense, limit=3)
+    merged = _merge_evidence(dense, reranked, limit=3)
+
+    assert [node.text for node in anchors[:2]] == ["پاسخ مستقیم الف", "پاسخ مستقیم ب"]
+    assert [node.text for node in merged] == [
+        "پاسخ مستقیم الف",
+        "پاسخ مستقیم ب",
+        "پاسخ دوم الف",
+    ]
 
 
 def test_strict_rag_prompt_has_dynamic_language_and_code_rules() -> None:

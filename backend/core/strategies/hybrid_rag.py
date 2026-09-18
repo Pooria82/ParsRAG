@@ -48,6 +48,62 @@ Query: {query}
 Answer:"""
 
 
+def _node_identity(node: ExtractedNode) -> tuple[str, str, object]:
+    """Build a stable identity for deduplicating dense and reranked evidence."""
+    return (
+        node.text,
+        str(node.metadata.get("filename", "")),
+        node.metadata.get("page", node.metadata.get("section")),
+    )
+
+
+def _select_dense_anchors(
+    nodes: list[ExtractedNode], *, limit: int
+) -> list[ExtractedNode]:
+    """Keep the strongest multilingual vector hits across distinct files."""
+    if limit <= 0:
+        return []
+    ranked = sorted(nodes, key=lambda node: node.score or 0.0, reverse=True)
+    anchors: list[ExtractedNode] = []
+    used_files: set[str] = set()
+    for node in ranked:
+        filename = str(node.metadata.get("filename", ""))
+        if filename and filename not in used_files:
+            anchors.append(node)
+            used_files.add(filename)
+            if len(anchors) == limit:
+                return anchors
+    used_nodes = {_node_identity(node) for node in anchors}
+    for node in ranked:
+        if _node_identity(node) not in used_nodes:
+            anchors.append(node)
+            used_nodes.add(_node_identity(node))
+            if len(anchors) == limit:
+                break
+    return anchors
+
+
+def _merge_evidence(
+    dense_nodes: list[ExtractedNode],
+    reranked_nodes: list[ExtractedNode],
+    *,
+    limit: int,
+) -> list[ExtractedNode]:
+    """Protect multilingual dense hits while retaining cross-encoder ordering."""
+    anchors = _select_dense_anchors(dense_nodes, limit=min(3, limit))
+    merged: list[ExtractedNode] = []
+    seen: set[tuple[str, str, object]] = set()
+    for node in [*anchors, *reranked_nodes]:
+        identity = _node_identity(node)
+        if identity in seen:
+            continue
+        merged.append(node)
+        seen.add(identity)
+        if len(merged) == limit:
+            break
+    return merged
+
+
 class HybridRAGStrategy(RAGStrategy):
     """Executes a hybrid RAG strategy with fallback, reranking, and multi-file support.
 
@@ -166,14 +222,20 @@ class HybridRAGStrategy(RAGStrategy):
         )
 
         # 5. Build Grouped Multi-Document Context
-        final_source_nodes: list[ExtractedNode] = []
+        reranked_source_nodes: list[ExtractedNode] = []
         for n in reranked_nodes:
             text = n.get_content()
             metadata = n.node.metadata if hasattr(n.node, "metadata") else {}
             score = n.score
-            final_source_nodes.append(
+            reranked_source_nodes.append(
                 ExtractedNode(text=text, metadata=metadata, score=score)
             )
+
+        final_source_nodes = _merge_evidence(
+            extracted_nodes,
+            reranked_source_nodes,
+            limit=rerank_n,
+        )
 
         context_str = format_multi_doc_context(final_source_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)

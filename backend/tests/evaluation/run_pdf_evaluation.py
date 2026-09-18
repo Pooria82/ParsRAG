@@ -130,6 +130,7 @@ def run_evaluation(
     expected_model: str,
     delay_seconds: float,
     attempts: int,
+    case_ids: set[str] | None = None,
 ) -> dict[str, object]:
     """Ingest private PDFs, run all modes, and persist detailed local evidence."""
     load_dotenv()
@@ -140,6 +141,11 @@ def run_evaluation(
             f"Expected model {expected_model!r}, got {configuration.model_name!r}."
         )
     cases = cast(list[DocumentCase], json.loads(cases_path.read_text(encoding="utf-8")))
+    if case_ids:
+        cases = [case for case in cases if case["id"] in case_ids]
+        missing = case_ids - {case["id"] for case in cases}
+        if missing:
+            raise ValueError(f"Unknown case IDs: {', '.join(sorted(missing))}")
     repository = QdrantRepository(
         host=os.getenv("QDRANT_HOST", "localhost"),
         port=int(os.getenv("QDRANT_PORT", "6333")),
@@ -244,6 +250,7 @@ def main() -> None:
     parser.add_argument("--model", default="google/gemma-4-26b-a4b-it")
     parser.add_argument("--delay-seconds", type=float, default=2.0)
     parser.add_argument("--attempts", type=int, default=3)
+    parser.add_argument("--case-id", action="append", default=[])
     args = parser.parse_args()
     payload = run_evaluation(
         args.cases,
@@ -252,6 +259,7 @@ def main() -> None:
         expected_model=args.model,
         delay_seconds=max(0.0, args.delay_seconds),
         attempts=max(1, args.attempts),
+        case_ids=set(args.case_id),
     )
     print(
         json.dumps(

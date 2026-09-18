@@ -36,6 +36,7 @@ def test_score_answer_requires_fact_and_provenance_matches() -> None:
     assert score.fact_coverage == 2 / 3
     assert score.expected_file_cited is True
     assert score.expected_page_cited is True
+    assert score.passes() is True
 
 
 def test_strict_refusal_recognizes_bilingual_contract() -> None:

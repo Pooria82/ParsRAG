@@ -26,6 +26,13 @@ class AnswerScore:
     expected_file_cited: bool
     expected_page_cited: bool
 
+    def passes(self, *, require_page: bool = True) -> bool:
+        """Apply the benchmark's documented two-thirds evidence policy."""
+        provenance_ok = self.expected_file_cited and (
+            self.expected_page_cited or not require_page
+        )
+        return self.fact_coverage >= (2 / 3) and provenance_ok
+
 
 _PERSIAN_TRANSLATION = str.maketrans({"ي": "ی", "ك": "ک", "ۀ": "ه"})
 _REFUSAL_MARKERS = (
