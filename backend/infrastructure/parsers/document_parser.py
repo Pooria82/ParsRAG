@@ -1,5 +1,7 @@
 import io
+import json
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from typing import Any
 
 import fitz  # type: ignore  # PyMuPDF
@@ -9,12 +11,16 @@ from docx.oxml.text.paragraph import CT_P
 from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from backend.core.exceptions import EmptyDocumentError
+from backend.core.upload_policy import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 from backend.infrastructure.parsers.ocr import (
     OCRError,
+    OCRImageLimitError,
     OCRPageLimitError,
     OCRSettings,
+    extract_image_text,
     extract_page_text,
 )
 
@@ -34,8 +40,38 @@ class ParsedSection:
     metadata: dict[str, int]
 
 
+class _VisibleTextExtractor(HTMLParser):
+    """Collect visible text from simple HTML without executing or retaining markup."""
+
+    def __init__(self) -> None:
+        """Initialize an empty text collector."""
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._ignored_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Ignore executable/style blocks and separate structural elements."""
+        del attrs
+        if tag in {"script", "style"}:
+            self._ignored_depth += 1
+        elif tag in {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4"}:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        """Restore collection after ignored blocks and preserve block boundaries."""
+        if tag in {"script", "style"} and self._ignored_depth:
+            self._ignored_depth -= 1
+        elif tag in {"p", "div", "li", "tr", "h1", "h2", "h3", "h4"}:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        """Collect text outside ignored elements."""
+        if not self._ignored_depth:
+            self.parts.append(data)
+
+
 def parse_document(file_bytes: bytes, filename: str) -> str:
-    """Extracts text content from a PDF, DOCX, or PPTX file byte stream.
+    """Extract text content from one supported knowledge-file byte stream.
 
     Preserves chronological document structure and converts tables into
     well-formatted Markdown with row-level header associations.
@@ -51,17 +87,13 @@ def parse_document(file_bytes: bytes, filename: str) -> str:
         EmptyDocumentError: If the document contains no text.
         ValueError: If the file format is unsupported.
     """
-    lower_name = filename.lower()
-    if lower_name.endswith(".pdf"):
-        return _parse_pdf(file_bytes)
-    elif lower_name.endswith(".docx"):
-        return _parse_docx(file_bytes)
-    elif lower_name.endswith(".pptx"):
-        return _parse_pptx(file_bytes)
-    else:
-        raise ValueError(
-            "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
+    sections = parse_document_sections(file_bytes, filename)
+    if filename.lower().endswith(".pptx"):
+        return "\n\n".join(
+            f"--- اسلاید {section.metadata['slide']} ---\n\n{section.text}"
+            for section in sections
         )
+    return "\n\n".join(section.text for section in sections)
 
 
 def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSection]:
@@ -73,13 +105,17 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
         sections = _parse_docx_sections(file_bytes)
     elif lower_name.endswith(".pptx"):
         sections = _parse_pptx_sections(file_bytes)
+    elif lower_name.endswith(IMAGE_EXTENSIONS):
+        sections = _parse_image_sections(file_bytes)
+    elif lower_name.endswith(TEXT_EXTENSIONS):
+        sections = _parse_text_sections(file_bytes, lower_name)
     else:
-        raise ValueError(
-            "Unsupported file format. Only PDF, DOCX, and PPTX are supported."
-        )
+        raise ValueError("Unsupported file format.")
     if not sections:
         if lower_name.endswith(".pdf"):
             raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
+        if lower_name.endswith(IMAGE_EXTENSIONS):
+            raise EmptyDocumentError("Image-based documents require enabled OCR.")
         raise EmptyDocumentError("The document contains no text.")
     return sections
 
@@ -90,13 +126,26 @@ def _parse_docx_sections(file_bytes: bytes) -> list[ParsedSection]:
         document = Document(io.BytesIO(file_bytes))
     except Exception as exc:
         raise ValueError("Corrupted or invalid DOCX document.") from exc
+    settings = OCRSettings.from_environment()
     sections: list[ParsedSection] = []
     paragraph = 0
+    ocr_images = 0
     for section_index, child in enumerate(
         document.element.body.iterchildren(), start=1
     ):
         if isinstance(child, CT_P):
-            value = Paragraph(child, document).text.strip()
+            paragraph_object = Paragraph(child, document)
+            parts = (
+                [paragraph_object.text.strip()] if paragraph_object.text.strip() else []
+            )
+            if settings.enabled:
+                for image in _docx_paragraph_images(paragraph_object, document):
+                    text, ocr_images = _extract_embedded_image(
+                        image, settings, ocr_images, "Word"
+                    )
+                    if text:
+                        parts.append(text)
+            value = "\n\n".join(parts).strip()
             if value:
                 paragraph += 1
                 sections.append(ParsedSection(value, {"paragraph": paragraph}))
@@ -113,17 +162,95 @@ def _parse_pptx_sections(file_bytes: bytes) -> list[ParsedSection]:
         presentation = Presentation(io.BytesIO(file_bytes))
     except Exception as exc:
         raise ValueError("Corrupted or invalid PPTX document.") from exc
+    settings = OCRSettings.from_environment()
     sections: list[ParsedSection] = []
+    ocr_images = 0
     for slide_index, slide in enumerate(presentation.slides, start=1):
         parts: list[str] = []
         for shape in slide.shapes:
             if getattr(shape, "has_table", False):
                 parts.append(_format_pptx_table(shape.table))
+            elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and settings.enabled:
+                text, ocr_images = _extract_embedded_image(
+                    shape.image.blob, settings, ocr_images, "PowerPoint"
+                )
+                if text:
+                    parts.append(text)
             elif hasattr(shape, "text") and shape.text and shape.text.strip():
                 parts.append(shape.text.strip())
         if text := "\n\n".join(part for part in parts if part).strip():
             sections.append(ParsedSection(text, {"slide": slide_index}))
     return sections
+
+
+def _docx_paragraph_images(paragraph: Paragraph, document: Any) -> list[bytes]:
+    """Return image blobs referenced by one Word paragraph in document order."""
+    images: list[bytes] = []
+    relationship_ids = paragraph._p.xpath(".//a:blip/@r:embed")
+    for relationship_id in relationship_ids:
+        related_part = document.part.related_parts.get(relationship_id)
+        blob = getattr(related_part, "blob", None)
+        if isinstance(blob, bytes):
+            images.append(blob)
+    return images
+
+
+def _extract_embedded_image(
+    image: bytes, settings: OCRSettings, processed: int, source: str
+) -> tuple[str, int]:
+    """OCR one bounded Office image and return its text and updated counter."""
+    next_count = processed + 1
+    if next_count > settings.max_images:
+        raise OCRImageLimitError(
+            f"Documents are limited to {settings.max_images} OCR images."
+        )
+    try:
+        return extract_image_text(image, settings), next_count
+    except OCRError as exc:
+        raise ValueError(
+            f"An embedded {source} image could not be processed: {exc}"
+        ) from exc
+
+
+def _parse_image_sections(file_bytes: bytes) -> list[ParsedSection]:
+    """Extract OCR text from a standalone raster image."""
+    settings = OCRSettings.from_environment()
+    if not settings.enabled:
+        return []
+    try:
+        text = extract_image_text(file_bytes, settings)
+    except OCRError as exc:
+        raise ValueError(f"The image could not be processed: {exc}") from exc
+    return [ParsedSection(text, {"page": 1})] if text else []
+
+
+def _decode_text(file_bytes: bytes) -> str:
+    """Decode bounded text formats as UTF-8 while rejecting binary payloads."""
+    if b"\x00" in file_bytes:
+        raise ValueError("The text file contains binary data.")
+    try:
+        return file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Text files must use UTF-8 encoding.") from exc
+
+
+def _parse_text_sections(file_bytes: bytes, filename: str) -> list[ParsedSection]:
+    """Parse structured and plain UTF-8 knowledge formats."""
+    text = _decode_text(file_bytes)
+    if filename.endswith(".json"):
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("The JSON document is invalid.") from exc
+        text = json.dumps(value, ensure_ascii=False, indent=2)
+    elif filename.endswith((".html", ".htm", ".xml")):
+        parser = _VisibleTextExtractor()
+        parser.feed(text)
+        text = "\n".join(
+            line.strip() for line in "".join(parser.parts).splitlines() if line.strip()
+        )
+    text = text.strip()
+    return [ParsedSection(text, {"section": 1})] if text else []
 
 
 def _clean_cell_text(text: str) -> str:
@@ -218,14 +345,6 @@ def _format_pptx_table(table: Any) -> str:
     return _format_table_grid(grid_rows)
 
 
-def _parse_pdf(file_bytes: bytes) -> str:
-    """Extracts native and OCR text from PDF bytes."""
-    sections = _parse_pdf_sections(file_bytes)
-    if not sections:
-        raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
-    return "\n\n".join(section.text for section in sections)
-
-
 def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
     """Extracts ordered PDF pages, using OCR only for scanned pages."""
     try:
@@ -260,54 +379,3 @@ def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
     finally:
         document.close()
     return sections
-
-
-def _parse_docx(file_bytes: bytes) -> str:
-    """Extracts text and tables sequentially from DOCX bytes."""
-    try:
-        doc = Document(io.BytesIO(file_bytes))
-    except Exception as e:
-        raise ValueError("Corrupted or invalid DOCX document.") from e
-
-    parts: list[str] = []
-    for child in doc.element.body.iterchildren():
-        if isinstance(child, CT_P):
-            p = Paragraph(child, doc)
-            if p.text and p.text.strip():
-                parts.append(p.text.strip())
-        elif isinstance(child, CT_Tbl):
-            t = Table(child, doc)
-            tbl_str = _format_docx_table(t)
-            if tbl_str and tbl_str.strip():
-                parts.append(tbl_str.strip())
-
-    text = "\n\n".join(parts)
-    if not text.strip():
-        raise EmptyDocumentError("The DOCX document contains no text.")
-
-    return text.strip()
-
-
-def _parse_pptx(file_bytes: bytes) -> str:
-    """Extracts text and tables from PPTX bytes."""
-    try:
-        prs = Presentation(io.BytesIO(file_bytes))
-    except Exception as e:
-        raise ValueError("Corrupted or invalid PPTX document.") from e
-
-    parts: list[str] = []
-    for slide_idx, slide in enumerate(prs.slides, start=1):
-        parts.append(f"--- اسلاید {slide_idx} ---")
-        for shape in slide.shapes:
-            if getattr(shape, "has_table", False):
-                tbl_str = _format_pptx_table(shape.table)
-                if tbl_str:
-                    parts.append(tbl_str)
-            elif hasattr(shape, "text") and shape.text and shape.text.strip():
-                parts.append(shape.text.strip())
-
-    text = "\n\n".join(parts)
-    if not text.strip():
-        raise EmptyDocumentError("The PPTX document contains no text.")
-
-    return text.strip()

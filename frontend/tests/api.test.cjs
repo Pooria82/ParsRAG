@@ -21,7 +21,19 @@ test('API client distinguishes model preparation from an offline service', async
   assert.equal(await new ParsRagApiClient('').healthStatus(), 'preparing');
 });
 
-test('API client classifies scanned PDFs for localized UI handling', async () => {
+test('API client discovers ingestion capabilities from the backend', async () => {
+  global.fetch = async () => new Response(JSON.stringify({ ingestion: {
+    max_files_per_session: 10, max_file_size_bytes: 104857600,
+    max_batch_size_bytes: 524288000, supported_extensions: ['.pdf', '.png'], ocr_enabled: true,
+  } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+  const capabilities = await new ParsRagApiClient('').capabilities();
+
+  assert.equal(capabilities.ingestion.max_files_per_session, 10);
+  assert.deepEqual(capabilities.ingestion.supported_extensions, ['.pdf', '.png']);
+});
+
+test('API client classifies OCR failures for localized UI handling', async () => {
   global.XMLHttpRequest = class {
     upload = {}; status = 422; responseText = JSON.stringify({ detail: 'Scanned PDFs are not supported' });
     open() {} abort() { this.onabort?.(); }
@@ -30,7 +42,7 @@ test('API client classifies scanned PDFs for localized UI handling', async () =>
   const client = new ParsRagApiClient('http://localhost:8000');
   await assert.rejects(() => client.ingest(new File(['scan'], 'scan.pdf'), 'session-1'), error => {
     assert.equal(error instanceof ApiError, true);
-    assert.equal(error.code, 'scanned_pdf');
+    assert.equal(error.code, 'ocr_unavailable');
     assert.equal(error.status, 422);
     return true;
   });

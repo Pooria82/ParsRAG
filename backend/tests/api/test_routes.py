@@ -30,6 +30,18 @@ def test_health_endpoints_separate_liveness_and_readiness(
     assert len(ready.headers["x-correlation-id"]) == 36
 
 
+def test_capabilities_expose_server_side_upload_contract() -> None:
+    """The frontend can discover limits and formats from the running backend."""
+    response = client.get("/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()["ingestion"]
+    assert payload["max_files_per_session"] == 10
+    assert payload["max_file_size_bytes"] == 100 * 1024 * 1024
+    assert ".json" in payload["supported_extensions"]
+    assert ".png" in payload["supported_extensions"]
+
+
 def test_ingest_success() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo

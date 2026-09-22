@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { AlertCircle, Check, FileText, FolderOpen, Loader2, LockKeyhole, Plus, Trash2, Upload } from 'lucide-react';
-import type { SessionDocument, Language, RAGMode } from '../types';
+import type { SessionDocument, IngestionCapabilities, Language, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
-import { FILE_ACCEPT, MAX_DOCUMENTS } from '../core/state';
+import { DEFAULT_INGESTION_CAPABILITIES } from '../core/state';
 import { Dialog } from './Dialog';
 
 interface DocumentCenterProps {
@@ -10,17 +10,22 @@ interface DocumentCenterProps {
   onUploadFiles: (files: File[]) => void; onRemoveFailed: (name: string) => void;
   onToggleDocument: (name: string) => void; onDeleteDocument: (name: string) => void; language: Language; isUploading: boolean;
   activeMode: RAGMode; error: string | null;
+  capabilities?: IngestionCapabilities;
 }
 
-export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, language, isUploading, activeMode, error }: DocumentCenterProps) {
+export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES }: DocumentCenterProps) {
   const t = translations[language];
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const full = documents.length >= MAX_DOCUMENTS;
+  const full = documents.length >= capabilities.max_files_per_session;
+  const sizeLabel = `${Math.round(capabilities.max_file_size_bytes / 1024 / 1024).toLocaleString(language)} MB`;
+  const limitLabel = capabilities.max_files_per_session.toLocaleString(language);
+  const limitReached = t.docLimitReached.replace('{count}', limitLabel);
+  const dropzoneDetails = t.docDropzoneSub.replace('{size}', sizeLabel).replace('{count}', limitLabel);
   return <Dialog open={isOpen} onClose={onClose} title={t.docCenterTitle} subtitle={t.docCenterDesc} closeLabel={t.close} className="documents-dialog">
     <div className="documents-body">
-      <input type="file" ref={fileInput} className="visually-hidden" tabIndex={-1} accept={FILE_ACCEPT} multiple aria-label={t.attach}
+      <input type="file" ref={fileInput} className="visually-hidden" tabIndex={-1} accept={capabilities.supported_extensions.join(',')} multiple aria-label={t.attach}
         onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) onUploadFiles(files); event.target.value = ''; }} />
       {!documents.length && <div className="document-empty"><span className="document-empty-art"><FileText size={34} /><span><Plus size={15} /></span></span><h3>{t.docEmptyTitle}</h3><p>{t.docEmptyDesc}</p></div>}
       <button className={'dropzone ' + (dragging ? 'is-dragging' : '')} disabled={full || isUploading}
@@ -29,13 +34,13 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
         onDrop={event => { event.preventDefault(); setDragging(false); if (!full && !isUploading) onUploadFiles(Array.from(event.dataTransfer.files)); }}>
         {isUploading ? <Loader2 className="spin" size={25} /> : <Upload size={25} />}
-        <strong>{full ? t.docLimitReached : isUploading ? t.docUploading : t.docDropzonePrompt}</strong>
+        <strong>{full ? limitReached : isUploading ? t.docUploading : t.docDropzonePrompt}</strong>
         {!full && !isUploading && <span className="browse-link">{t.docBrowse}</span>}
-        <small>{t.docDropzoneSub}</small>
+        <small>{dropzoneDetails}</small>
       </button>
       {error && <p className="inline-error" role="alert"><AlertCircle size={16} />{error}</p>}
       {documents.length > 0 && <>
-        <div className="document-list-heading"><span>{t.documents}</span><span>{documents.length.toLocaleString(language)} / {(5).toLocaleString(language)}</span></div>
+        <div className="document-list-heading"><span>{t.documents}</span><span>{documents.length.toLocaleString(language)} / {limitLabel}</span></div>
         <div className="document-list">
           {documents.map(doc => <div className={'document-row status-' + doc.status} key={doc.name}>
             <span className="document-file-icon"><FileText size={21} /><small>{doc.name.split('.').pop()?.toUpperCase()}</small></span>

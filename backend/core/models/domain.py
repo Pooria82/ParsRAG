@@ -51,6 +51,22 @@ class ConversationTitleResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=80)
 
 
+class IngestionCapabilities(BaseModel):
+    """Runtime upload contract advertised to browser clients."""
+
+    max_files_per_session: int = Field(..., ge=1)
+    max_file_size_bytes: int = Field(..., ge=1)
+    max_batch_size_bytes: int = Field(..., ge=1)
+    supported_extensions: list[str]
+    ocr_enabled: bool
+
+
+class AppCapabilitiesResponse(BaseModel):
+    """Discoverable server capabilities that keep clients in sync."""
+
+    ingestion: IngestionCapabilities
+
+
 class OllamaModel(BaseModel):
     """One locally installed Ollama model."""
 
@@ -103,8 +119,8 @@ class QueryRequest(BaseModel):
     file_filter: list[Annotated[str, Field(min_length=1, max_length=255)]] | None = (
         Field(
             default=None,
-            max_length=5,
-            description="Optional list of filenames to restrict the query to (up to 5)",
+            max_length=50,
+            description="Optional list of filenames to restrict the query to",
         )
     )
 

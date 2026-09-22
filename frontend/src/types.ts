@@ -15,6 +15,16 @@ export interface ModelConfiguration {
 
 export interface OllamaModel { name: string; size?: number | null }
 
+export interface IngestionCapabilities {
+  max_files_per_session: number;
+  max_file_size_bytes: number;
+  max_batch_size_bytes: number;
+  supported_extensions: string[];
+  ocr_enabled: boolean;
+}
+
+export interface AppCapabilities { ingestion: IngestionCapabilities }
+
 export interface Citation {
   filename: string;
   locations: Array<{ kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }>;

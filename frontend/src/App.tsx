@@ -13,9 +13,9 @@ import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { ApiError, ParsRagApiClient } from './services/api';
-import type { AppSettings, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
+import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { appendResponseVariant, buildQuery, createSession, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -31,6 +31,7 @@ export function App() {
   const [queryProgress, setQueryProgress] = useState<{ sessionId: string; stage: QueryStage }>();
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
+  const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
   const [focusToken, setFocusToken] = useState(0);
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
   const progressRef = useRef<AbortController>();
@@ -66,8 +67,13 @@ export function App() {
       if (healthRef.current === controller) {
         setConnection(status);
         if (status === 'online') {
-          try { setModelRuntime(await api.modelConfiguration(controller.signal)); }
-          catch { setModelRuntime(undefined); }
+          try {
+            const [configuration, capabilities] = await Promise.all([
+              api.modelConfiguration(controller.signal), api.capabilities(controller.signal),
+            ]);
+            setModelRuntime(configuration);
+            setIngestionCapabilities(capabilities.ingestion);
+          } catch { setModelRuntime(undefined); }
         }
       }
     } catch {
@@ -214,7 +220,7 @@ export function App() {
   const upload = async (files: File[]) => {
     if (uploadRef.current || queryRef.current) return;
     const sessionId = active.id;
-    const validation = validateUploads(files, active.documents);
+    const validation = validateUploads(files, active.documents, ingestionCapabilities);
     setUploadError(validation.rejected.length ? {
       sessionId, text: validation.rejected.map(issue => issue.name + ': ' + t.uploadErrors[issue.reason]).join('\n'),
     } : null);
@@ -226,7 +232,7 @@ export function App() {
     try {
       for (const file of acceptedFiles) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 180000);
+        const timeout = setTimeout(() => controller.abort(), 600000);
         try {
           await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
             ? { ...d, status: 'processing', uploadProgress: undefined }
@@ -234,8 +240,8 @@ export function App() {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined } : d) }));
         } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
-            ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'scanned_pdf'
-              ? settings.language === 'fa' ? 'پردازش OCR این PDF اسکن‌شده در دسترس نیست یا غیرفعال شده است.' : 'OCR for this scanned PDF is unavailable or disabled.'
+            ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'ocr_unavailable'
+              ? settings.language === 'fa' ? 'OCR این فایل تصویری در دسترس نیست یا غیرفعال شده است.' : 'OCR for this image-based file is unavailable or disabled.'
               : t.uploadFailed,
           } : d) }));
         } finally { clearTimeout(timeout); }
@@ -335,6 +341,7 @@ export function App() {
       </>}
     </main>
     <DocumentCenter isOpen={documentsOpen} onClose={() => setDocumentsOpen(false)} documents={active.documents}
+      capabilities={ingestionCapabilities}
       onUploadFiles={files => void upload(files)} language={settings.language} isUploading={busy} activeMode={active.ragMode}
       error={uploadError?.sessionId === active.id ? uploadError.text : null}
       onRemoveFailed={name => updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name || d.status !== 'error') }))}

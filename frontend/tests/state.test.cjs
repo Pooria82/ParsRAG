@@ -108,16 +108,17 @@ test('preserves old conversations and recovers interrupted uploads', () => {
   assert.equal(session.ragMode, 'strict');
 });
 
-test('validates formats, size, duplicate names, empty files and five-document limit', () => {
+test('validates broad formats, size, duplicate names, empty files and ten-document limit', () => {
   const files = [
-    { name: 'ok.PPTX', size: 100 }, { name: 'old.txt', size: 10 },
+    { name: 'ok.PPTX', size: 100 }, { name: 'notes.md', size: 10 }, { name: 'scan.PNG', size: 20 },
+    { name: 'malware.exe', size: 10 },
     { name: 'huge.pdf', size: MAX_FILE_BYTES + 1 }, { name: 'empty.pdf', size: 0 },
     { name: 'ok.PPTX', size: 100 },
   ];
   const result = validateUploads(files, []);
-  assert.deepEqual(result.accepted, [0]);
+  assert.deepEqual(result.accepted, [0, 1, 2]);
   assert.deepEqual(result.rejected.map(r => r.reason), ['format', 'size', 'empty', 'duplicate']);
-  assert.equal(validateUploads([{ name: 'six.pdf', size: 1 }], Array.from({ length: 5 }, (_, i) => ({ name: `${i}.pdf` }))).rejected[0].reason, 'limit');
+  assert.equal(validateUploads([{ name: 'eleven.pdf', size: 1 }], Array.from({ length: 10 }, (_, i) => ({ name: `${i}.pdf` }))).rejected[0].reason, 'limit');
 });
 
 test('builds all three API modes with scoped documents and clean conversational memory', () => {

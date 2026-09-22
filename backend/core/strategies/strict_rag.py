@@ -55,7 +55,7 @@ class StrictRAGStrategy(RAGStrategy):
 
     This strategy only uses retrieved context to answer the user's question.
     Supports targeted single-document queries and balanced multi-document
-    retrieval across up to 5 files per session.
+    retrieval across up to 10 files per session.
     """
 
     def __init__(

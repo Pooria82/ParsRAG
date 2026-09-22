@@ -20,6 +20,7 @@ from backend.core.security import (
     TrustedOriginMiddleware,
     configured_browser_origins,
 )
+from backend.core.upload_policy import UploadPolicy
 from backend.infrastructure.llm.factory import setup_llm_and_embeddings
 from backend.infrastructure.parsers.document_parser import EmptyDocumentError
 
@@ -69,7 +70,12 @@ app.add_middleware(RequestContextMiddleware)
 app.add_middleware(TrustedOriginMiddleware, allowed_origins=trusted_origins)
 app.add_middleware(
     ContentLengthLimitMiddleware,
-    max_bytes=int(os.getenv("PARSRAG_MAX_REQUEST_BYTES", str(105 * 1024 * 1024))),
+    max_bytes=int(
+        os.getenv(
+            "PARSRAG_MAX_REQUEST_BYTES",
+            str(UploadPolicy.from_environment().max_batch_bytes + 10 * 1024 * 1024),
+        )
+    ),
 )
 
 

@@ -1,5 +1,5 @@
-export type ApiErrorCode = 'request_failed' | 'scanned_pdf';
-import type { ModelConfiguration, ModelProvider, OllamaModel, QueryStage } from '../types';
+export type ApiErrorCode = 'request_failed' | 'ocr_unavailable';
+import type { AppCapabilities, ModelConfiguration, ModelProvider, OllamaModel, QueryStage } from '../types';
 
 export class ApiError extends Error {
   constructor(public readonly code: ApiErrorCode, public readonly status?: number) {
@@ -41,6 +41,12 @@ export class ParsRagApiClient {
     const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}/files`), { signal });
     if (!response.ok) throw new ApiError('request_failed', response.status);
     return response.json() as Promise<unknown>;
+  }
+
+  async capabilities(signal?: AbortSignal): Promise<AppCapabilities> {
+    const response = await fetch(this.url('/capabilities'), { signal });
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    return response.json() as Promise<AppCapabilities>;
   }
 
   async query(payload: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -110,7 +116,8 @@ export class ParsRagApiClient {
         if (request.status >= 200 && request.status < 300) { onProgress?.(100); resolve(); return; }
         let detail = '';
         try { const value: unknown = JSON.parse(request.responseText); if (typeof value === 'object' && value !== null && 'detail' in value && typeof value.detail === 'string') detail = value.detail; } catch { /* invalid server body */ }
-        reject(new ApiError(detail.includes('Scanned PDFs') ? 'scanned_pdf' : 'request_failed', request.status));
+        const ocrFailure = /OCR|Tesseract|image-based|scanned PDF/i.test(detail);
+        reject(new ApiError(ocrFailure ? 'ocr_unavailable' : 'request_failed', request.status));
       };
       request.onerror = () => reject(new ApiError('request_failed'));
       request.onabort = () => reject(new DOMException('Aborted', 'AbortError'));

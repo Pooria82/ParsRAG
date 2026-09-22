@@ -3,9 +3,11 @@
 import os
 import subprocess
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Protocol
 
 import fitz  # type: ignore  # PyMuPDF has no complete type information.
+from PIL import Image, UnidentifiedImageError
 
 
 class PixmapLike(Protocol):
@@ -38,6 +40,10 @@ class OCRPageLimitError(OCRError):
     """Raised when a document contains too many scanned pages."""
 
 
+class OCRImageLimitError(OCRError):
+    """Raised when a document contains too many images requiring OCR."""
+
+
 def _environment_int(name: str, default: int, minimum: int, maximum: int) -> int:
     """Reads a bounded integer setting and falls back safely."""
     try:
@@ -56,6 +62,9 @@ class OCRSettings:
     dpi: int
     timeout_seconds: int
     max_pages: int
+    max_images: int = 30
+    max_image_pixels: int = 40_000_000
+    min_image_pixels: int = 10_000
 
     @classmethod
     def from_environment(cls) -> "OCRSettings":
@@ -67,6 +76,13 @@ class OCRSettings:
             dpi=_environment_int("OCR_DPI", 300, 150, 600),
             timeout_seconds=_environment_int("OCR_TIMEOUT_SECONDS", 45, 1, 300),
             max_pages=_environment_int("OCR_MAX_PAGES", 30, 1, 200),
+            max_images=_environment_int("OCR_MAX_IMAGES", 30, 1, 500),
+            max_image_pixels=_environment_int(
+                "OCR_MAX_IMAGE_PIXELS", 40_000_000, 1_000_000, 200_000_000
+            ),
+            min_image_pixels=_environment_int(
+                "OCR_MIN_IMAGE_PIXELS", 10_000, 1, 1_000_000
+            ),
         )
 
 
@@ -102,14 +118,19 @@ def extract_page_text(
     active = settings or OCRSettings.from_environment()
     pixmap = page.get_pixmap(dpi=active.dpi, colorspace=fitz.csRGB, alpha=False)
     image = pixmap.tobytes("png")
+    return _run_tesseract(image, active)
+
+
+def _run_tesseract(image: bytes, settings: OCRSettings) -> str:
+    """Run bounded Tesseract recognition for normalized PNG bytes."""
     command = [
         "tesseract",
         "stdin",
         "stdout",
         "-l",
-        active.languages,
+        settings.languages,
         "--dpi",
-        str(active.dpi),
+        str(settings.dpi),
     ]
     try:
         result = subprocess.run(
@@ -117,7 +138,7 @@ def extract_page_text(
             input=image,
             capture_output=True,
             check=False,
-            timeout=active.timeout_seconds,
+            timeout=settings.timeout_seconds,
         )
     except FileNotFoundError as exc:
         raise OCRUnavailableError("Tesseract OCR is not installed.") from exc
@@ -126,5 +147,24 @@ def extract_page_text(
             "Tesseract OCR timed out while processing a page."
         ) from exc
     if result.returncode != 0:
-        raise OCRError("Tesseract OCR could not process the scanned page.")
+        raise OCRError("Tesseract OCR could not process the image.")
     return normalize_ocr_text(result.stdout.decode("utf-8", errors="replace"))
+
+
+def extract_image_text(image_bytes: bytes, settings: OCRSettings | None = None) -> str:
+    """Validate, normalize, and OCR a standalone or embedded raster image."""
+    active = settings or OCRSettings.from_environment()
+    try:
+        with Image.open(BytesIO(image_bytes)) as source:
+            width, height = source.size
+            pixels = width * height
+            if pixels > active.max_image_pixels:
+                raise OCRError("The image exceeds the configured OCR pixel limit.")
+            if pixels < active.min_image_pixels:
+                return ""
+            normalized = source.convert("RGB")
+            output = BytesIO()
+            normalized.save(output, format="PNG", optimize=True)
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError("The file is not a valid image.") from exc
+    return _run_tesseract(output.getvalue(), active)

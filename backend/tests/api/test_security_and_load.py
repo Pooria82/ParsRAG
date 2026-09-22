@@ -42,34 +42,17 @@ def test_ingest_unsupported_file_extension() -> None:
     assert "Unsupported file format" in response.json()["detail"]
 
 
-def test_ingest_oversized_file() -> None:
-    """Ensure files exceeding 50MB are rejected with HTTP 413."""
-    # Create fake oversized bytes (51 MB)
-    mock_file = MagicMock()
-    mock_file.filename = "large.docx"
-    mock_file.file.read.return_value = b"0" * (51 * 1024 * 1024)
-
-    with patch("fastapi.UploadFile", return_value=mock_file):
-        response = client.post(
-            "/ingest",
-            files={
-                "file": (
-                    "large.docx",
-                    b"0" * 100,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
-            data={"session_id": "session-123"},
-        )
-    # Testing standard client with oversized bytes directly
-    oversized_bytes = b"0" * (51 * 1024 * 1024)
+def test_ingest_oversized_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure files exceeding the configured limit are rejected with HTTP 413."""
+    monkeypatch.setenv("PARSRAG_MAX_FILE_BYTES", str(1024 * 1024))
+    oversized_bytes = b"0" * (1024 * 1024 + 1)
     response = client.post(
         "/ingest",
-        files={"file": ("oversized.docx", oversized_bytes, "application/octet-stream")},
+        files={"file": ("oversized.txt", oversized_bytes, "text/plain")},
         data={"session_id": "session-123"},
     )
     assert response.status_code == 413
-    assert "exceeds the 50MB limit" in response.json()["detail"]
+    assert "exceeds the 1MB limit" in response.json()["detail"]
 
 
 def test_ingest_corrupted_document() -> None:
@@ -115,7 +98,7 @@ def test_declared_request_body_limit_is_rejected_before_parsing() -> None:
     """Oversized declared bodies never reach multipart parsing."""
     response = client.post(
         "/ingest",
-        headers={"Content-Length": str(110_100_481)},
+        headers={"Content-Length": str(600 * 1024 * 1024)},
         files={"file": ("tiny.pdf", b"%PDF-tiny", "application/pdf")},
         data={"session_id": "session-123"},
     )

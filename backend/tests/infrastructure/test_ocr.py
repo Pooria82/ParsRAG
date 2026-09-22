@@ -1,14 +1,17 @@
 """Tests for the bounded Tesseract OCR infrastructure adapter."""
 
 import subprocess
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image
 
 from backend.infrastructure.parsers.ocr import (
     OCRSettings,
     OCRTimeoutError,
     OCRUnavailableError,
+    extract_image_text,
     extract_page_text,
     normalize_ocr_text,
 )
@@ -75,3 +78,28 @@ def test_tesseract_timeout_has_specific_error(mock_run: MagicMock) -> None:
 
     with pytest.raises(OCRTimeoutError, match="timed out"):
         extract_page_text(page, OCRSettings(True, "fas+eng", 300, 1, 1))
+
+
+@patch("backend.infrastructure.parsers.ocr.subprocess.run")
+def test_extract_image_text_validates_and_normalizes_raster(
+    mock_run: MagicMock,
+) -> None:
+    """Standalone and embedded images are normalized before Tesseract runs."""
+    source = BytesIO()
+    Image.new("RGB", (640, 480), "white").save(source, format="JPEG")
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout=" متن تصویر ".encode(), stderr=b""
+    )
+
+    result = extract_image_text(
+        source.getvalue(), OCRSettings(True, "fas+eng", 300, 12, 5)
+    )
+
+    assert result == "متن تصویر"
+    assert mock_run.call_args.kwargs["input"].startswith(b"\x89PNG")
+
+
+def test_extract_image_text_rejects_invalid_raster() -> None:
+    """Forged image extensions cannot send arbitrary bytes to Tesseract."""
+    with pytest.raises(ValueError, match="valid image"):
+        extract_image_text(b"not-an-image", OCRSettings(True, "fas+eng", 300, 12, 5))

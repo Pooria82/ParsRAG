@@ -1,11 +1,18 @@
+import json
 import os
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from docx import Document
+from PIL import Image
+from pptx import Presentation
+from pptx.util import Inches
 
 from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.document_parser import (
     EmptyDocumentError,
+    ParsedSection,
     parse_document,
     parse_document_sections,
 )
@@ -145,3 +152,83 @@ def test_real_docx_parsing() -> None:
     text = parse_document(file_bytes, "نیازمندی‌های تست.docx")
     assert len(text) > 0
     assert "تست" in text
+
+
+@pytest.mark.parametrize(
+    ("filename", "payload", "expected"),
+    [
+        ("notes.txt", "متن ساده".encode(), "متن ساده"),
+        ("guide.md", "# راهنما\n\nجزئیات".encode(), "# راهنما"),
+        (
+            "data.json",
+            json.dumps({"name": "پارس‌رگ"}, ensure_ascii=False).encode(),
+            "پارس‌رگ",
+        ),
+        ("table.csv", b"name,value\nalpha,42", "alpha"),
+        ("page.html", b"<h1>Title</h1><p>Body</p>", "Title"),
+    ],
+)
+def test_textual_formats_are_parsed(
+    filename: str, payload: bytes, expected: str
+) -> None:
+    """Common UTF-8 knowledge formats are accepted without lossy conversion."""
+    sections = parse_document_sections(payload, filename)
+
+    assert expected in sections[0].text
+    assert sections[0].metadata == {"section": 1}
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_standalone_image_uses_ocr(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raster image is a first-class OCR document."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    mock_extract.return_value = "متن روی تصویر"
+
+    sections = parse_document_sections(b"image", "scan.png")
+
+    assert sections == [ParsedSection("متن روی تصویر", {"page": 1})]
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_docx_embedded_image_is_ocred_when_enabled(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pictures embedded in Word contribute OCR text at their paragraph location."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    mock_extract.return_value = "نوشته داخل تصویر ورد"
+    image = BytesIO()
+    Image.new("RGB", (400, 200), "white").save(image, format="PNG")
+    document = Document()
+    document.add_picture(BytesIO(image.getvalue()))
+    payload = BytesIO()
+    document.save(payload)
+
+    sections = parse_document_sections(payload.getvalue(), "image-only.docx")
+
+    assert sections[0].text == "نوشته داخل تصویر ورد"
+    assert sections[0].metadata == {"paragraph": 1}
+    mock_extract.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_pptx_picture_is_ocred_with_slide_metadata(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pictures embedded in PowerPoint keep their slide citation after OCR."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    mock_extract.return_value = "نوشته داخل تصویر پاورپوینت"
+    image = BytesIO()
+    Image.new("RGB", (400, 200), "white").save(image, format="PNG")
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_picture(BytesIO(image.getvalue()), Inches(1), Inches(1))
+    payload = BytesIO()
+    presentation.save(payload)
+
+    sections = parse_document_sections(payload.getvalue(), "image-only.pptx")
+
+    assert sections[0].text == "نوشته داخل تصویر پاورپوینت"
+    assert sections[0].metadata == {"slide": 1}
+    mock_extract.assert_called_once()

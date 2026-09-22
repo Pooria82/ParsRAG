@@ -107,7 +107,8 @@ test('stop control replaces submission during a pending answer', () => {
 test('document controls allow clearing the final source and deleting an indexed document', () => {
   const html = render(DocumentCenter, { isOpen: false, onClose: noop, documents: [{ name: 'a.pdf', status: 'indexed' }],
     onUploadFiles: noop, onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'en', isUploading: false, activeMode: 'strict', error: null });
-  assert.match(html, /accept=".pdf,.docx,.pptx"/);
+  assert.match(html, /accept=".pdf,.docx,.pptx,.png/);
+  assert.match(html, /10/);
   assert.match(html, /type="checkbox"/);
   assert.doesNotMatch(html, /type="checkbox"[^>]*disabled=""/);
   assert.match(html, /Delete document: a.pdf/);

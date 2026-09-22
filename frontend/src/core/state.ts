@@ -1,4 +1,4 @@
-import type { AppSettings, Citation, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument } from '../types';
+import type { AppSettings, Citation, IngestionCapabilities, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument } from '../types';
 
 export const STORAGE = {
   sessions: 'parsrag_sessions_v1',
@@ -13,9 +13,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
   apiBaseUrl: 'https://openrouter.ai/api/v1', ollamaBaseUrl: 'http://localhost:11434', backendUrl: '',
 };
 
-export const MAX_DOCUMENTS = 5;
-export const MAX_FILE_BYTES = 50 * 1024 * 1024;
-export const FILE_ACCEPT = '.pdf,.docx,.pptx';
+export const DEFAULT_INGESTION_CAPABILITIES: IngestionCapabilities = {
+  max_files_per_session: 10,
+  max_file_size_bytes: 100 * 1024 * 1024,
+  max_batch_size_bytes: 500 * 1024 * 1024,
+  supported_extensions: [
+    '.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff',
+    '.txt', '.md', '.markdown', '.json', '.csv', '.tsv', '.html', '.htm', '.xml', '.yaml', '.yml',
+    '.log', '.py', '.js', '.jsx', '.ts', '.tsx', '.css', '.sql', '.toml', '.ini', '.cfg',
+  ],
+  ocr_enabled: true,
+};
+export const MAX_DOCUMENTS = DEFAULT_INGESTION_CAPABILITIES.max_files_per_session;
+export const MAX_FILE_BYTES = DEFAULT_INGESTION_CAPABILITIES.max_file_size_bytes;
+export const FILE_ACCEPT = DEFAULT_INGESTION_CAPABILITIES.supported_extensions.join(',');
 export const MODES: RAGMode[] = ['hybrid', 'strict', 'llm-only'];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -154,17 +165,22 @@ export function fallbackConversationTitle(prompt: string): string {
 }
 
 export type UploadIssue = 'format' | 'size' | 'empty' | 'duplicate' | 'limit';
-export function validateUploads(files: Pick<File, 'name' | 'size'>[], documents: SessionDocument[]) {
+export function validateUploads(
+  files: Pick<File, 'name' | 'size'>[],
+  documents: SessionDocument[],
+  capabilities = DEFAULT_INGESTION_CAPABILITIES,
+) {
   const accepted: number[] = [];
   const rejected: { name: string; reason: UploadIssue }[] = [];
   const names = new Set(documents.map(d => d.name));
   files.forEach((file, index) => {
     let reason: UploadIssue | undefined;
-    if (!/\.(pdf|docx|pptx)$/i.test(file.name)) reason = 'format';
-    else if (file.size > MAX_FILE_BYTES) reason = 'size';
+    const lowerName = file.name.toLocaleLowerCase('en-US');
+    if (!capabilities.supported_extensions.some(extension => lowerName.endsWith(extension))) reason = 'format';
+    else if (file.size > capabilities.max_file_size_bytes) reason = 'size';
     else if (file.size === 0) reason = 'empty';
     else if (names.has(file.name)) reason = 'duplicate';
-    else if (documents.length + accepted.length >= MAX_DOCUMENTS) reason = 'limit';
+    else if (documents.length + accepted.length >= capabilities.max_files_per_session) reason = 'limit';
     if (reason) rejected.push({ name: file.name, reason });
     else { accepted.push(index); names.add(file.name); }
   });

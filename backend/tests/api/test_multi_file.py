@@ -15,7 +15,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 def test_multi_file_ingest_success() -> None:
-    """Verifies that uploading up to 5 files in a single batch succeeds."""
+    """Verifies that uploading multiple files in a single batch succeeds."""
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
@@ -79,7 +79,7 @@ def test_multi_file_ingest_success() -> None:
 
 
 def test_multi_file_ingest_exceeds_limit() -> None:
-    """Verifies that uploading more than 5 files returns HTTP 400."""
+    """Verifies that uploading more than 10 files returns HTTP 400."""
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
@@ -92,7 +92,7 @@ def test_multi_file_ingest_exceeds_limit() -> None:
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ),
         )
-        for i in range(1, 7)  # 6 files
+        for i in range(1, 12)
     ]
 
     response = client.post(
@@ -103,9 +103,28 @@ def test_multi_file_ingest_exceeds_limit() -> None:
 
     assert response.status_code == 400
     assert (
-        "A maximum of 5 files can be uploaded per request" in response.json()["detail"]
+        "A maximum of 10 files can be uploaded per request" in response.json()["detail"]
     )
 
+    app.dependency_overrides.clear()
+
+
+def test_ingest_enforces_capacity_across_separate_requests() -> None:
+    """Existing session files count toward the ten-file capacity."""
+    mock_repo = MagicMock()
+    mock_repo.get_session_files.return_value = [
+        f"existing-{index}.pdf" for index in range(10)
+    ]
+    app.dependency_overrides[get_document_repository] = lambda: mock_repo
+
+    response = client.post(
+        "/ingest",
+        files={"file": ("extra.txt", b"content", "text/plain")},
+        data={"session_id": "full-session"},
+    )
+
+    assert response.status_code == 400
+    assert "at most 10 files" in response.json()["detail"]
     app.dependency_overrides.clear()
 
 

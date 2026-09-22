@@ -15,9 +15,11 @@ from backend.core.capacity import WorkLimiter
 from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import (
+    AppCapabilitiesResponse,
     ConversationTitleRequest,
     ConversationTitleResponse,
     DeleteDocumentRequest,
+    IngestionCapabilities,
     ModelConfigurationRequest,
     ModelConfigurationResponse,
     OllamaModel,
@@ -26,6 +28,13 @@ from backend.core.models.domain import (
 )
 from backend.core.query_progress import get_query_stage, set_query_stage
 from backend.core.runtime import runtime_state
+from backend.core.upload_policy import (
+    IMAGE_EXTENSIONS,
+    OFFICE_EXTENSIONS,
+    SUPPORTED_EXTENSIONS,
+    TEXT_EXTENSIONS,
+    UploadPolicy,
+)
 from backend.infrastructure.llm.factory import (
     configure_model,
     generate_conversation_title,
@@ -37,9 +46,6 @@ from backend.infrastructure.parsers.document_parser import parse_document_sectio
 
 router = APIRouter()
 
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
-MAX_BATCH_SIZE_BYTES = 100 * 1024 * 1024
-MAX_FILES_PER_BATCH = 5
 MAX_ARCHIVE_ENTRIES = 10_000
 MAX_ARCHIVE_EXPANDED_BYTES = 200 * 1024 * 1024
 MAX_ARCHIVE_RATIO = 200
@@ -51,23 +57,30 @@ _ingest_limiter = WorkLimiter(
 _query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
 
 
-def _read_bounded(upload: UploadFile, remaining_batch_bytes: int) -> bytes:
+def _read_bounded(
+    upload: UploadFile, remaining_batch_bytes: int, policy: UploadPolicy
+) -> bytes:
     """Read one upload in chunks while enforcing file and batch limits."""
-    chunks: list[bytes] = []
+    buffer = io.BytesIO()
     size = 0
     while chunk := upload.file.read(READ_CHUNK_BYTES):
         size += len(chunk)
-        if size > MAX_FILE_SIZE_BYTES:
+        if size > policy.max_file_bytes:
+            limit_mb = policy.max_file_bytes // 1024 // 1024
             raise HTTPException(
                 status_code=413,
-                detail=f"File '{upload.filename}' exceeds the 50MB limit.",
+                detail=f"File '{upload.filename}' exceeds the {limit_mb}MB limit.",
             )
         if size > remaining_batch_bytes:
             raise HTTPException(
-                status_code=413, detail="The upload batch exceeds the 100MB limit."
+                status_code=413,
+                detail=(
+                    "The upload batch exceeds the configured "
+                    f"{policy.max_batch_bytes // 1024 // 1024}MB limit."
+                ),
             )
-        chunks.append(chunk)
-    return b"".join(chunks)
+        buffer.write(chunk)
+    return buffer.getvalue()
 
 
 def _validate_archive(data: bytes, extension: str) -> None:
@@ -117,12 +130,15 @@ def _validate_file(upload: UploadFile, data: bytes) -> None:
         if not data.startswith(b"%PDF-"):
             raise ValueError("The file content does not match its PDF extension.")
         return
-    if extension in {".docx", ".pptx"}:
+    if extension in OFFICE_EXTENSIONS:
         if not data.startswith(b"PK"):
             raise ValueError("The file content does not match its Office extension.")
         _validate_archive(data, extension)
         return
-    raise ValueError("Unsupported file format. Only PDF, DOCX, and PPTX are allowed.")
+    if extension in (*IMAGE_EXTENSIONS, *TEXT_EXTENSIONS):
+        return
+    supported = ", ".join(SUPPORTED_EXTENSIONS)
+    raise ValueError(f"Unsupported file format. Supported extensions: {supported}.")
 
 
 def require_runtime_ready() -> None:
@@ -136,6 +152,22 @@ def require_runtime_ready() -> None:
 def health_check() -> dict[str, str]:
     """Report process liveness without waiting for model initialization."""
     return {"status": "ok"}
+
+
+@router.get("/capabilities", response_model=AppCapabilitiesResponse)
+def read_capabilities() -> AppCapabilitiesResponse:
+    """Return the active ingestion contract for runtime-synchronized clients."""
+    policy = UploadPolicy.from_environment()
+    return AppCapabilitiesResponse(
+        ingestion=IngestionCapabilities(
+            max_files_per_session=policy.max_files_per_session,
+            max_file_size_bytes=policy.max_file_bytes,
+            max_batch_size_bytes=policy.max_batch_bytes,
+            supported_extensions=list(policy.supported_extensions),
+            ocr_enabled=os.getenv("OCR_ENABLED", "0").strip().lower()
+            in {"1", "true", "yes", "on"},
+        )
+    )
 
 
 @router.get("/health/ready", response_model=None)
@@ -201,7 +233,7 @@ def ingest_document(
     session_id: str = Form(...),
     repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
-    """Ingests 1 to 5 documents, parses them, chunks them, and saves them to Qdrant."""
+    """Ingest a bounded set of supported files into one isolated session."""
     # 1. Validate session_id
     if not SESSION_ID_REGEX.match(session_id):
         raise HTTPException(
@@ -222,20 +254,45 @@ def ingest_document(
             detail="No file provided.",
         )
 
-    if len(upload_list) > MAX_FILES_PER_BATCH:
+    policy = UploadPolicy.from_environment()
+    if len(upload_list) > policy.max_files_per_session:
         raise HTTPException(
             status_code=400,
-            detail=f"A maximum of {MAX_FILES_PER_BATCH} files can be uploaded per request.",
+            detail=(
+                f"A maximum of {policy.max_files_per_session} files can be uploaded "
+                "per request."
+            ),
+        )
+
+    incoming_names = [item.filename or "" for item in upload_list]
+    if len(set(incoming_names)) != len(incoming_names):
+        raise HTTPException(
+            status_code=400, detail="Duplicate filenames are not allowed."
+        )
+    existing_names = set(repo.get_session_files(session_id))
+    duplicates = existing_names.intersection(incoming_names)
+    if duplicates:
+        raise HTTPException(
+            status_code=409,
+            detail=f"The session already contains: {', '.join(sorted(duplicates))}.",
+        )
+    if len(existing_names) + len(incoming_names) > policy.max_files_per_session:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"A session can contain at most {policy.max_files_per_session} files."
+            ),
         )
 
     with _ingest_limiter.slot():
-        return _ingest_documents(upload_list, session_id, repo)
+        return _ingest_documents(upload_list, session_id, repo, policy)
 
 
 def _ingest_documents(
     upload_list: list[UploadFile],
     session_id: str,
     repo: AbstractDocumentRepository,
+    policy: UploadPolicy,
 ) -> dict[str, str]:
     """Perform bounded parsing, chunking, and persistence for one upload batch."""
     total_chunks = 0
@@ -250,7 +307,9 @@ def _ingest_documents(
                 detail="Missing filename.",
             )
 
-        file_bytes = _read_bounded(upload_item, MAX_BATCH_SIZE_BYTES - total_bytes)
+        file_bytes = _read_bounded(
+            upload_item, policy.max_batch_bytes - total_bytes, policy
+        )
         total_bytes += len(file_bytes)
 
         try:
@@ -259,16 +318,13 @@ def _ingest_documents(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-        nodes = []
         for section in sections:
-            nodes.extend(
-                chunk_text(
-                    section.text,
-                    metadata={"filename": upload_item.filename, **section.metadata},
-                )
+            nodes = chunk_text(
+                section.text,
+                metadata={"filename": upload_item.filename, **section.metadata},
             )
-        repo.save_nodes(nodes, session_id=session_id)
-        total_chunks += len(nodes)
+            repo.save_nodes(nodes, session_id=session_id)
+            total_chunks += len(nodes)
         ingested_names.append(upload_item.filename)
 
     if len(ingested_names) == 1:
