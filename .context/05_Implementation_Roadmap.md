@@ -338,6 +338,20 @@ only when the user enables a remote API endpoint.
 - [x] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
 - [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
 
+### Task 10.9: Multi-Format Ingestion & Hardware-Aware Runtime
+**Description:** Expand safe document ingestion while keeping CPU-only machines usable and accelerating model workloads on supported GPUs.
+**Actionable Steps:**
+- [x] Replace duplicated upload constants with one bounded backend policy and expose the effective limits and extensions through `/capabilities`.
+- [x] Raise the default capacity to 10 documents per session, 100 MiB per file, and 500 MiB per batch while preserving request-body, archive, duplicate-name, and session-total validation.
+- [x] Add structured parsing for Markdown, JSON, CSV, HTML/XML, YAML, configuration, log, and common source-code files.
+- [x] Add bounded OCR for standalone images and images embedded in DOCX/PPTX while retaining native text extraction as the preferred path.
+- [x] Stream ingestion into bounded Qdrant upsert batches and configure embedding batches, CPU threads, OCR dimensions, and container memory ceilings through `.env`.
+- [x] Add CPU, NVIDIA CUDA, and Linux AMD ROCm Compose paths; accelerate both local embeddings and Ollama when the selected overlay exposes a supported GPU.
+- [x] Add a low-VRAM NVIDIA overlay that prioritizes full GPU generation by running embeddings on CPU and reducing the default Ollama context.
+- [x] Synchronize `.env.example`, Compose defaults, backend capabilities, frontend validation, and localized upload guidance.
+- [x] Add complete English and Persian deployment documentation covering API, CPU, NVIDIA, AMD, Ollama provisioning, resource tuning, persistence, and verification.
+- [x] Add deterministic parser, OCR, upload-policy, batching, device-selection, Compose-overlay, and development-proxy tests.
+
 ### Checkpoint: Phase 10
 - [x] Run all backend, frontend, coverage, browser, Compose, container, and documentation checks from a clean working tree.
 - [x] Verify live local Ollama inference through the application model configuration and generation path with native Ollama `qwen2.5:7b`; the exact probe response was `LOCAL_OK`.
@@ -346,3 +360,5 @@ only when the user enables a remote API endpoint.
 - [x] Verify remote API disclosure, optional-key behavior, validated connection failure, and configuration restart behavior.
 - [x] Verify forged and oversized uploads, saturation controls, complete data deletion, Qdrant pagination, and embedding-schema mismatch handling.
 - [x] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.
+- [x] Verify 10-file session limits, 100 MiB file limits, broad text/image parsing, embedded Office OCR, bounded vector upserts, and runtime capability discovery.
+- [x] Validate base, NVIDIA, low-VRAM NVIDIA, and AMD Compose configurations; verify the CUDA app detects the RTX 3060 and `qwen2.5:7b` returns `GPU_OK` at 100% GPU with the 6 GB low-VRAM overlay.
