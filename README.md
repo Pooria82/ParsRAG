@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-167D68.svg"></a>
+  <a href="LICENSE"><img alt="License: source available" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
   <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
@@ -319,8 +319,16 @@ committed.
 - [Implementation roadmap](.context/05_Implementation_Roadmap.md)
 - [Security policy](SECURITY.md)
 - [Contribution guide](CONTRIBUTING.md)
+- [How to cite ParsRAG](CITATION.cff)
 - [Changelog](CHANGELOG.md)
 
 ## License
 
-ParsRAG is available under the [MIT License](LICENSE).
+ParsRAG is **source-available, not open source**. The
+[ParsRAG Source-Available License](LICENSE) permits downloading and running an
+unmodified official release for personal, academic, research, educational, and
+internal organizational use. Redistribution, rebranding, hosted-service use,
+and unauthorized modifications are prohibited. Changes may be prepared for a
+pull request to this repository under the
+[Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md). Contact the
+copyright holder for any additional permission.

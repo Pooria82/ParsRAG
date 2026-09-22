@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="مجوز MIT" src="https://img.shields.io/badge/license-MIT-167D68.svg"></a>
+  <a href="LICENSE"><img alt="مجوز دسترسی به کد منبع" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
   <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
@@ -316,8 +316,15 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 - [نقشه راه پیاده‌سازی](.context/05_Implementation_Roadmap.md)
 - [سیاست امنیت](SECURITY.md)
 - [راهنمای مشارکت](CONTRIBUTING.md)
+- [روش استناد به پارس‌رگ](CITATION.cff)
 - [فهرست تغییرات](CHANGELOG.md)
 
 ## مجوز
 
-پارس‌رگ تحت [مجوز MIT](LICENSE) منتشر می‌شود.
+پارس‌رگ یک نرم‌افزار **source-available است و متن‌باز محسوب نمی‌شود**.
+[مجوز پارس‌رگ](LICENSE) دانلود و اجرای نسخه رسمی و تغییریافته‌نشده را برای
+استفاده شخصی، دانشگاهی، پژوهشی، آموزشی و داخلی سازمان مجاز می‌کند. بازنشر،
+تغییر برند، ارائه به‌عنوان سرویس و تغییر بدون اجازه ممنوع است. تغییرات فقط برای
+ارسال Pull Request به همین مخزن و مطابق
+[توافق مشارکت‌کنندگان](CONTRIBUTOR_LICENSE_AGREEMENT.md) قابل آماده‌سازی هستند.
+برای هر استفاده دیگر باید از صاحب اثر اجازه کتبی گرفته شود.

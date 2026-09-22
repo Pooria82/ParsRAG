@@ -24,17 +24,18 @@ condensation and the three query modes remain the source of truth.
   keyboard-operable controls, reduced motion and responsive layouts.
 - Preserve existing local conversation/settings storage keys. Validate stored
   data and handle persistence failures without crashing the UI.
-- Use the existing JSON query endpoint honestly: show a pending indicator and
-  abort the browser request on Stop. This cannot cancel backend inference.
-- Offer only PDF, DOCX and PPTX uploads, matching the current parser (50 MiB,
-  five documents). Upload files separately so per-file results are accurate.
-- There is no single-file deletion endpoint. Indexed documents remain listed;
-  retrieval selection uses the supported `file_filter` contract. Full session
-  deletion uses the existing endpoint and reports failures instead of claiming
-  successful server cleanup. Browser-history clearing is explicitly local.
-- Do not expose model selection or strict-threshold inputs as functional
-  controls: the current query API cannot apply either. Settings explain that
-  the backend configures them; default mode and retrieval depth remain editable.
+- Show backend query stages while work is in progress, progressively reveal the
+  completed response, and abort the browser request on Stop. Browser abort does
+  not claim that an already-running backend inference was cancelled.
+- Discover upload capabilities from the backend. The current defaults allow ten
+  documents, 100 MiB per file, and 500 MiB per batch across PDF, Office, image,
+  text, data, markup, configuration, log, and common source-code formats.
+- Support single-document deletion, deselect-all retrieval, and complete session
+  deletion. Report server failures instead of claiming cleanup. Clearing browser
+  conversation history remains an explicit local action.
+- Expose persisted model-runtime settings for local Ollama and OpenAI-compatible
+  private or external APIs. Never return, log, or store API-key contents in the
+  browser; report only whether a process-memory or environment credential exists.
 - Development uses Vite on port 3000 with a same-origin API proxy. Production
   uses the FastAPI origin. UI preferences and chat history remain in the browser.
 

@@ -9,3 +9,4 @@
 - [ ] Browser smoke test passes when UI behavior changed
 - [ ] Trust boundary, storage, and documentation impacts were reviewed
 - [ ] No secrets, private documents, generated data, or model weights are included
+- [ ] I own this contribution and agree to `CONTRIBUTOR_LICENSE_AGREEMENT.md`

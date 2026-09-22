@@ -6,7 +6,7 @@
 ## 2. Core Objectives & Success Metrics
 To guarantee production-readiness, the system must meet the following strict criteria:
 - **Visible Trust Boundary:** Local Ollama keeps generation on the workstation. API mode must disclose that prompts and retrieved context are sent to the configured service while embeddings and vector storage stay local.
-- **RTL & Persian Efficacy:** The system must accurately parse, chunk, and embed right-to-left Persian text (PDF/TXT) while maintaining structural integrity.
+- **RTL & Persian Efficacy:** The system must accurately parse, OCR, chunk, and embed right-to-left Persian content across documents, images, structured text, and common source formats while maintaining structural integrity.
 - **Retrieval Latency:** The retrieval pipeline (Condense Question + Vector Search + Reranking) should target a sub-2-second execution time on appropriate hardware before LLM generation begins.
 - **Grounded Strict Mode:** Strict mode must refuse when retrieved evidence does not meet the configured threshold. Evaluation results apply only to the recorded dataset, model, configuration, and run date.
 
@@ -30,8 +30,8 @@ Standard vector search fails on conversational follow-ups containing pronouns (e
 - This rewritten query is then used for semantic vector retrieval.
 
 ## 4. User & Data Flow (Step-by-Step)
-1. **Ingestion Trigger:** The user uploads a PDF/TXT file via the async Chainlit UI.
-2. **Parsing (RTL Optimized):** `PyMuPDF` extracts the raw Persian text, preserving RTL reading order.
+1. **Ingestion Trigger:** The user uploads up to ten supported files through the React workspace.
+2. **Parsing (RTL Optimized):** Format-specific parsers extract native text and metadata. Bounded Persian/English OCR processes scanned PDF pages, standalone images, and embedded Office images only when needed.
 3. **Smart Chunking:** LlamaIndex's `SentenceSplitter` (configured for Persian sentence boundaries) chunks the text (e.g., 500-1000 characters, 150 overlap).
 4. **Embedding & Storage:** Chunks are vectorized using a multilingual embedding model and persisted into Qdrant Local.
 5. **Query Initiation:** The user submits a prompt and selects a Query Mode.
@@ -41,13 +41,13 @@ Standard vector search fails on conversational follow-ups containing pronouns (e
 
 ## 5. Edge Cases & Graceful Degradation
 The backend must never crash uncontrollably. It must degrade gracefully:
-- **Scanned/Image-Only PDFs:** If `PyMuPDF` detects zero selectable text layers, the ingestion pipeline immediately halts for that document. A clear UI warning is surfaced to the user stating that scanned documents are not supported.
+- **Scanned/Image-Only Content:** The parser applies bounded OCR and records page, slide, or image provenance. Unsupported or unreadable content returns a localized per-file error without terminating the upload batch.
 - **Empty Retrieval (Strict Mode):** If the vector search + reranking returns no relevant chunks above the similarity threshold, the LLM generation is bypassed. The system returns a hardcoded/templated localized response: *"No relevant information found in the documents."*
 - **LLM Timeout / Out of Memory (OOM):** Inference limits must be strictly enforced. If Ollama times out or the host machine runs out of VRAM/RAM, the backend intercepts the `500 Internal Server Error` or timeout exception, returning a graceful UI alert: *"The model took too long to respond or ran out of memory. Please try a shorter query or clear your session."*
 
 ## 6. Out of Scope (Phase 1)
 To ensure a successful MVP, the following are strictly excluded from Phase 1 development:
-- **Optical Character Recognition (OCR):** Processing scanned images/PDFs (e.g., via Tesseract) is deferred to future phases to avoid heavy dependencies and performance bottlenecks.
+- **Unbounded OCR and media understanding:** OCR is supported within configured page, image, pixel, memory, and concurrency limits. General video/audio understanding and unrestricted vision-model processing remain outside this release.
 - **Multi-Tenancy & Auth:** While the architecture is stateless to support future scaling, Phase 1 is strictly a single-user local deployment. No login systems or user permission matrices will be built.
 - **Managed Cloud Storage:** Documents and vectors are not stored in a managed cloud database. An external model API remains an explicit user-selected generation option.
 - **GraphRAG:** Advanced knowledge graph extraction is reserved for Phase 2+.

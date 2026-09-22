@@ -333,10 +333,10 @@ only when the user enables a remote API endpoint.
 ### Task 10.8: Public Repository & Release Readiness
 **Description:** Publish a credible, legally usable, and maintainable first release.
 **Actionable Steps:**
-- [x] Add an open-source license, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
+- [x] Replace the permissive development license with an owner-controlled source-available license, contributor agreement, copyright notice, citation metadata, CODEOWNERS rule, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
 - [x] Replace documentation promises that are not implemented and provide a reproducible evaluation harness for quantitative claims. The September 18 benchmark records model, retrieval, latency, scoring, OCR, and regression evidence only in ignored local artifacts; no private fixtures or generated evaluation reports are committed.
 - [x] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
-- [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag.
+- [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag after the release checks pass.
 
 ### Task 10.9: Multi-Format Ingestion & Hardware-Aware Runtime
 **Description:** Expand safe document ingestion while keeping CPU-only machines usable and accelerating model workloads on supported GPUs.

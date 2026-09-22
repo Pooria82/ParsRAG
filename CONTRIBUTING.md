@@ -5,6 +5,14 @@ Create work from `develop`, keep commits focused, and use Conventional Commits.
 Never commit `.env`, API keys, indexed data, model weights, private documents, or
 artifacts from `scratch/` and `testData/`.
 
+Contributions must be proposed through a pull request to the official repository
+at <https://github.com/Pooria82/ParsRAG>. By submitting a contribution, you
+confirm that you own it and accept
+[`CONTRIBUTOR_LICENSE_AGREEMENT.md`](CONTRIBUTOR_LICENSE_AGREEMENT.md). The
+project owner must review every change. The repository license does not permit
+publishing, deploying, or distributing a modified ParsRAG version while a pull
+request is under review.
+
 ## Local checks
 
 ```powershell

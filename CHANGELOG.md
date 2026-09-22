@@ -5,6 +5,8 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-22
+
 ### Added
 
 - Offline-first React workspace with Persian and English direction support.
@@ -36,3 +38,11 @@ and this project uses Semantic Versioning.
 
 - Loopback network defaults, trusted browser origins, validated model API URLs,
   bounded uploads and archives, concurrency limits, and non-persistent API keys.
+
+### Legal
+
+- Established owner-controlled source-available terms, an upstream-only
+  contribution path, citation metadata, and explicit copyright notices.
+
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.1.0
