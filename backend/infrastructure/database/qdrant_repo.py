@@ -120,23 +120,29 @@ class QdrantRepository(AbstractDocumentRepository):
             return
 
         try:
-            texts = [node.text for node in nodes]
-            embeddings = Settings.embed_model.get_text_embedding_batch(texts)
-
-            points = []
-            for node, emb in zip(nodes, embeddings, strict=True):
-                payload = node.metadata.copy()
-                payload["text"] = node.text
-                payload["session_id"] = session_id
-
-                points.append(
-                    qmodels.PointStruct(
-                        id=str(uuid.uuid4()), vector=emb, payload=payload
-                    )
+            try:
+                configured_batch_size = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "64"))
+            except ValueError:
+                configured_batch_size = 64
+            batch_size = min(512, max(1, configured_batch_size))
+            for offset in range(0, len(nodes), batch_size):
+                batch = nodes[offset : offset + batch_size]
+                embeddings = Settings.embed_model.get_text_embedding_batch(
+                    [node.text for node in batch]
                 )
-
-            # Batched upserts for high throughput
-            self.client.upsert(collection_name=self.collection_name, points=points)
+                points = []
+                for node, embedding in zip(batch, embeddings, strict=True):
+                    payload = node.metadata.copy()
+                    payload["text"] = node.text
+                    payload["session_id"] = session_id
+                    points.append(
+                        qmodels.PointStruct(
+                            id=str(uuid.uuid4()),
+                            vector=embedding,
+                            payload=payload,
+                        )
+                    )
+                self.client.upsert(collection_name=self.collection_name, points=points)
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to save nodes in Qdrant: {exc}"

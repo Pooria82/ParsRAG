@@ -7,7 +7,25 @@ from backend.infrastructure.llm.factory import (
     configure_model,
     generate_conversation_title,
     list_ollama_models,
+    resolve_embedding_device,
 )
+
+
+def test_embedding_device_auto_prefers_cuda_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GPU-enabled images move embedding work off system RAM and CPU."""
+    monkeypatch.setenv("EMBED_DEVICE", "auto")
+    with patch(
+        "backend.infrastructure.llm.factory.torch.cuda.is_available", return_value=True
+    ):
+        assert resolve_embedding_device() == "cuda"
+
+
+def test_embedding_device_can_be_forced_to_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CPU mode stays deterministic even on a GPU host."""
+    monkeypatch.setenv("EMBED_DEVICE", "cpu")
+    assert resolve_embedding_device() == "cpu"
 
 
 @patch("backend.infrastructure.llm.factory.Ollama")

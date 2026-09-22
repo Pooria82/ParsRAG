@@ -1,0 +1,12 @@
+services:
+  app:
+    environment:
+      # Preserve scarce VRAM for generation while retaining the CUDA-capable image.
+      EMBED_DEVICE: cpu
+      EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
+
+  ollama:
+    environment:
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_LOW_VRAM_CONTEXT_LENGTH:-2048}"
+      # Use all available VRAM before considering layer offload.
+      LLAMA_ARG_FIT_TARGET: "${OLLAMA_LOW_VRAM_FIT_TARGET:-0}"

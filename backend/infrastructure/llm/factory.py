@@ -6,6 +6,7 @@ from typing import Literal
 from urllib.parse import urlparse
 
 import httpx
+import torch
 from dotenv import load_dotenv
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # type: ignore
@@ -28,6 +29,27 @@ load_dotenv()
 
 _configuration_lock = RLock()
 _api_key = os.getenv("MODEL_API_KEY") or os.getenv("OPENROUTER_API_KEY") or None
+
+
+def _bounded_environment_int(
+    name: str, default: int, minimum: int, maximum: int
+) -> int:
+    """Read one performance setting inside a safe inclusive range."""
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return min(maximum, max(minimum, value))
+
+
+def resolve_embedding_device() -> str:
+    """Resolve auto embedding placement against devices visible to the container."""
+    configured = os.getenv("EMBED_DEVICE", "auto").strip().lower()
+    if configured == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if configured not in {"cpu", "cuda", "mps"}:
+        raise ValueError("EMBED_DEVICE must be auto, cpu, cuda, or mps.")
+    return configured
 
 
 def _environment_configuration() -> ModelConfigurationRequest:
@@ -205,6 +227,17 @@ def setup_llm_and_embeddings() -> None:
     # LLM Setup
     configure_model(_configuration, verify=False, persist=False)
 
-    # Embeddings Setup (using intfloat/multilingual-e5-base)
+    # Embeddings use a bounded batch size and move to CUDA when the GPU image is used.
     embed_model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")
-    Settings.embed_model = HuggingFaceEmbedding(model_name=embed_model_name)
+    device = resolve_embedding_device()
+    default_batch_size = 32 if device == "cuda" else 8
+    embed_batch_size = _bounded_environment_int(
+        "EMBED_BATCH_SIZE", default_batch_size, 1, 128
+    )
+    Settings.embed_model = HuggingFaceEmbedding(
+        model_name=embed_model_name,
+        device=device,
+        embed_batch_size=embed_batch_size,
+        cache_folder=os.getenv("EMBED_CACHE_DIR") or None,
+        show_progress_bar=False,
+    )

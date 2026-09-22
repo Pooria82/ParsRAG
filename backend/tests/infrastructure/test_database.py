@@ -41,6 +41,33 @@ def test_qdrant_save_nodes(
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
 @patch("backend.infrastructure.database.qdrant_repo.Settings")
+def test_qdrant_save_nodes_bounds_embedding_and_upsert_batches(
+    mock_settings: MagicMock,
+    mock_qdrant_client_cls: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Large documents cannot create one unbounded embedding allocation."""
+    monkeypatch.setenv("QDRANT_UPSERT_BATCH_SIZE", "2")
+    mock_client = mock_qdrant_client_cls.return_value
+    mock_settings.embed_model.get_text_embedding_batch.side_effect = lambda texts: [
+        [0.1] * 3 for _ in texts
+    ]
+    repo = QdrantRepository(collection_name="bounded", vector_size=3)
+    nodes = [ExtractedNode(text=f"chunk-{index}") for index in range(5)]
+
+    repo.save_nodes(nodes, session_id="session")
+
+    assert [
+        len(call.kwargs["points"]) for call in mock_client.upsert.call_args_list
+    ] == [2, 2, 1]
+    assert [
+        len(call.args[0])
+        for call in mock_settings.embed_model.get_text_embedding_batch.call_args_list
+    ] == [2, 2, 1]
+
+
+@patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
+@patch("backend.infrastructure.database.qdrant_repo.Settings")
 def test_qdrant_similarity_search(
     mock_settings: MagicMock, mock_qdrant_client_cls: MagicMock
 ) -> None:

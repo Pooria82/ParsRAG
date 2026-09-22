@@ -11,6 +11,7 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm AS python-dependencies
 ARG TORCH_VERSION=2.5.1
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     VIRTUAL_ENV=/opt/venv
@@ -18,7 +19,7 @@ RUN python -m venv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY requirements-runtime.txt requirements.lock /tmp/
 RUN pip install --upgrade pip \
-    && pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}" \
+    && pip install --index-url "${TORCH_INDEX_URL}" "torch==${TORCH_VERSION}" \
     && pip install -r /tmp/requirements-runtime.txt -c /tmp/requirements.lock
 
 FROM python:3.12-slim-bookworm AS runtime
