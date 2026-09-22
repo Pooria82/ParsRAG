@@ -2,8 +2,10 @@
 
 ## Supported versions
 
-Security fixes are applied to the latest revision on `develop` until the first
-tagged release. After releases begin, this table will identify supported tags.
+| Version | Supported |
+| --- | --- |
+| 0.1.x | Yes |
+| Earlier snapshots | No |
 
 ## Reporting a vulnerability
 
@@ -19,3 +21,12 @@ the remediation plan after triage.
 ParsRAG 0.x is designed for one user on a workstation. Exposing it to a shared or
 untrusted network without an authenticated reverse proxy is outside the supported
 security boundary.
+
+## Documented transitive advisory
+
+`llama-index-core` requires NLTK. ParsRAG pins NLTK 3.10.3 but does not call the
+model import/export APIs affected by `PYSEC-2026-3740` / `CVE-2026-81726`, does
+not use NLTK as a filesystem sandbox, and does not pass upload paths to those
+APIs. CI therefore suppresses only this advisory while retaining all other
+`pip-audit` findings as release blockers. The suppression must be removed when
+NLTK publishes a patched version or if ParsRAG starts using an affected API.
