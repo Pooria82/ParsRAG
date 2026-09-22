@@ -33,10 +33,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
 .coverage
+.coverage.*
 coverage.xml
+htmlcov/
+build/
+*.egg-info/
 .chainlit/
 
 # 6. OS & IDE
@@ -46,7 +52,7 @@ coverage.xml
 .agents/
 *.swp
 
-# 7. Raw Data & Uploads
+# 7. Private Data & Uploads
 data/
 uploads/
 documents/
@@ -56,16 +62,16 @@ documents/
 *.docx
 *.pptx
 
-# 9. Scratchpads & Temp Files
+# 8. Scratchpads & Generated Evaluation Files
 scratch/
 docs/evaluation/
 tmp/
 *.tmp
+*.log
 report.md
 testData/
-data/
 
-# 10. Node / Frontend
+# 9. Node / Frontend
 node_modules/
 **/node_modules/
 dist/
