@@ -308,3 +308,19 @@ def test_update_model_configuration(mock_configure: MagicMock) -> None:
     )
     assert response.status_code == 200
     assert response.json()["provider"] == "ollama"
+
+
+@patch("backend.api.routes.generate_conversation_title")
+def test_generate_conversation_title(mock_generate: MagicMock) -> None:
+    """The title endpoint validates input and returns only the generated label."""
+    runtime_state.mark_ready()
+    mock_generate.return_value = "ساختار رمزنگاری فیستل"
+
+    response = client.post(
+        "/conversations/title",
+        json={"prompt": "ساختار فیستل چیست؟", "language": "fa"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"title": "ساختار رمزنگاری فیستل"}
+    mock_generate.assert_called_once_with("ساختار فیستل چیست؟", "fa")

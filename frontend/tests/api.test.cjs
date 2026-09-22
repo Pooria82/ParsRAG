@@ -75,3 +75,15 @@ test('reads and saves model configuration without exposing API credentials', asy
   assert.equal(requests[1].init.method, 'PUT');
   assert.deepEqual(JSON.parse(requests[1].init.body), { provider: 'ollama', model_name: 'gemma3:12b', base_url: 'http://localhost:11434' });
 });
+
+test('requests a generated conversation title after the first prompt', async () => {
+  let request;
+  global.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return new Response(JSON.stringify({ title: 'ساختار رمزنگاری فیستل' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const title = await new ParsRagApiClient('').conversationTitle('فیستل چیست؟', 'fa');
+  assert.equal(title, 'ساختار رمزنگاری فیستل');
+  assert.equal(request.url, '/conversations/title');
+  assert.deepEqual(JSON.parse(request.init.body), { prompt: 'فیستل چیست؟', language: 'fa' });
+});

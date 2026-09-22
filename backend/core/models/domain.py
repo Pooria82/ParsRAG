@@ -38,6 +38,19 @@ class ModelConfigurationResponse(BaseModel):
     api_key_configured: bool
 
 
+class ConversationTitleRequest(BaseModel):
+    """Validated input for generating a short conversation title."""
+
+    prompt: str = Field(..., min_length=1, max_length=12_000)
+    language: Literal["fa", "en"] = "fa"
+
+
+class ConversationTitleResponse(BaseModel):
+    """A bounded title suitable for conversation navigation."""
+
+    title: str = Field(..., min_length=1, max_length=80)
+
+
 class OllamaModel(BaseModel):
     """One locally installed Ollama model."""
 

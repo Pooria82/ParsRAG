@@ -15,6 +15,8 @@ from backend.core.capacity import WorkLimiter
 from backend.core.condenser import CondenseQuestionPipeline
 from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import (
+    ConversationTitleRequest,
+    ConversationTitleResponse,
     DeleteDocumentRequest,
     ModelConfigurationRequest,
     ModelConfigurationResponse,
@@ -26,6 +28,7 @@ from backend.core.query_progress import get_query_stage, set_query_stage
 from backend.core.runtime import runtime_state
 from backend.infrastructure.llm.factory import (
     configure_model,
+    generate_conversation_title,
     get_model_configuration,
     list_ollama_models,
 )
@@ -166,6 +169,17 @@ def update_model_configuration(
             status_code=400,
             detail="The model connection could not be verified or saved.",
         ) from exc
+
+
+@router.post("/conversations/title", response_model=ConversationTitleResponse)
+def create_conversation_title(
+    request: ConversationTitleRequest,
+    _ready: None = Depends(require_runtime_ready),
+) -> ConversationTitleResponse:
+    """Generate a bounded title after the first successful conversation turn."""
+    with _query_limiter.slot():
+        title = generate_conversation_title(request.prompt, request.language)
+    return ConversationTitleResponse(title=title)
 
 
 @router.get("/models/ollama", response_model=list[OllamaModel])

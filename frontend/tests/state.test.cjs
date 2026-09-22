@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_SETTINGS, MAX_FILE_BYTES, parseSettings, parseSessions, createSession,
-  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint, appendResponseVariant, selectResponseVariant, prepareTurnRegeneration, selectConversationBranch,
+  validateUploads, buildQuery, parseAnswer, mergeRemoteDocuments, isLocalEndpoint, appendResponseVariant, selectResponseVariant, prepareTurnRegeneration, selectConversationBranch, fallbackConversationTitle,
 } = require('./.compiled/core/state.js');
 
 test('recovers malformed storage and validates settings without external endpoints', () => {
@@ -22,6 +22,11 @@ test('recovers malformed storage and validates settings without external endpoin
   assert.equal(isLocalEndpoint('http://localhost:8000'), true);
   assert.equal(isLocalEndpoint('http://[::1]:8000'), true);
   assert.equal(isLocalEndpoint('http://192.168.1.10:8000', 'http://192.168.1.10:8000'), true);
+});
+
+test('builds a clean local title while generated naming is pending', () => {
+  assert.equal(fallbackConversationTitle('  **تحلیل   ساختار فیستل**  '), 'تحلیل ساختار فیستل');
+  assert.match(fallbackConversationTitle('این یک پرسش بسیار طولانی درباره ساختار و کاربرد الگوریتم‌های رمزنگاری مدرن است'), /…$/);
 });
 
 test('keeps regenerated answers as navigable response variants', () => {

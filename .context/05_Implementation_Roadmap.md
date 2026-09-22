@@ -277,6 +277,7 @@ only when the user enables a remote API endpoint.
 - [x] Verify `/models` for OpenAI-compatible APIs and `/api/tags` for Ollama before reporting a successful connection.
 - [x] Persist non-secret active model settings atomically; load secrets only from the environment or current process memory.
 - [x] Explain restart behavior for runtime-only API keys and never persist an API key in browser storage, logs, responses, or committed files.
+- [x] Report whether an API credential exists in service memory even while Ollama is active, without returning the credential itself.
 - [x] Align model, retrieval-threshold, and OCR defaults across code, `.env.example`, Compose, frontend state, and documentation.
 
 ### Task 10.3: Session Isolation & Data Lifecycle
@@ -314,6 +315,7 @@ only when the user enables a remote API endpoint.
 - [x] Consolidate the duplicate async/sync query strategy interfaces into one contract and remove unused domain types.
 - [x] Split oversized frontend orchestration/state modules where responsibilities can be isolated without prop proliferation.
 - [x] Render assistant Markdown mathematics with KaTeX, reveal completed answers progressively with reduced-motion support, and keep direction based on response content.
+- [x] Preserve prompt edits as navigable conversation branches and generate a concise model-backed title after the first successful turn.
 - [x] Replace the generic sidebar storage card with the active provider/model and localize technical-field placeholders without changing their input direction.
 - [x] Enforce Google-style public docstrings in Ruff and resolve the existing docstring findings.
 - [x] Add canonical `pyproject.toml` configuration for Ruff, mypy, pytest, coverage, and project metadata.

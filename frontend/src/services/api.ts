@@ -54,6 +54,18 @@ export class ParsRagApiClient {
     return response.json() as Promise<unknown>;
   }
 
+  async conversationTitle(prompt: string, language: 'fa' | 'en', signal?: AbortSignal): Promise<string> {
+    const response = await fetch(this.url('/conversations/title'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, language }), signal,
+    });
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    const payload: unknown = await response.json();
+    if (typeof payload !== 'object' || payload === null || !('title' in payload)
+      || typeof payload.title !== 'string' || !payload.title.trim()) throw new ApiError('request_failed');
+    return payload.title.trim();
+  }
+
   async queryProgress(requestId: string, signal?: AbortSignal): Promise<QueryStage | null> {
     const response = await fetch(this.url(`/queries/${encodeURIComponent(requestId)}/progress`), { signal });
     if (response.status === 404) return null;

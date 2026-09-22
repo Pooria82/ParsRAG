@@ -181,6 +181,8 @@ test('model settings keep provider-specific endpoints and require API disclosure
   assert.match(source, /remoteApiDisclosure/);
   assert.match(source, /localized-placeholder/);
   assert.match(source, /modelNamePlaceholder/);
+  assert.match(source, /apiKeyAvailable/);
+  assert.match(source, /apiKeyMissing/);
 });
 
 test('clear-all waits for backend deletion and preserves browser state on failure', () => {

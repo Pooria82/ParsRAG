@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.core.models.domain import ModelConfigurationRequest, ModelProvider
-from backend.infrastructure.llm.factory import configure_model, list_ollama_models
+from backend.infrastructure.llm.factory import (
+    configure_model,
+    generate_conversation_title,
+    list_ollama_models,
+)
 
 
 @patch("backend.infrastructure.llm.factory.Ollama")
@@ -151,7 +155,7 @@ def test_switching_to_ollama_does_not_forget_existing_api_key(
         verify=False,
         persist=False,
     )
-    assert local.api_key_configured is False
+    assert local.api_key_configured is True
     configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.API,
@@ -162,3 +166,21 @@ def test_switching_to_ollama_does_not_forget_existing_api_key(
         persist=False,
     )
     assert mock_openai.call_args.kwargs["api_key"] == "keep-me"
+
+
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_generated_conversation_title_is_bounded_and_sanitized(
+    mock_settings: MagicMock,
+) -> None:
+    """Only one clean navigation label is returned from model output."""
+    mock_settings.llm.complete.return_value = (
+        "عنوان: **تحلیل ساختار رمزنگاری فیستل**!\nتوضیح اضافه"
+    )
+
+    title = generate_conversation_title("فیستل چیست؟", "fa")
+
+    assert title == "تحلیل ساختار رمزنگاری فیستل"
+    prompt = mock_settings.llm.complete.call_args.args[0]
+    assert "untrusted topic text" in prompt
+    assert '"فیستل چیست؟"' in prompt
+    assert mock_settings.llm.complete.call_args.kwargs == {"max_tokens": 32}

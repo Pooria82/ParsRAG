@@ -145,6 +145,14 @@ export function createSession(language: Language, mode: RAGMode): Session {
   };
 }
 
+/** Builds a readable local fallback while model-generated naming runs. */
+export function fallbackConversationTitle(prompt: string): string {
+  const cleaned = prompt.replace(/[`*_#>\[\]()]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= 48) return cleaned;
+  const shortened = cleaned.slice(0, 48).replace(/\s+\S*$/, '').trim();
+  return `${shortened || cleaned.slice(0, 48)}…`;
+}
+
 export type UploadIssue = 'format' | 'size' | 'empty' | 'duplicate' | 'limit';
 export function validateUploads(files: Pick<File, 'name' | 'size'>[], documents: SessionDocument[]) {
   const accepted: number[] = [];

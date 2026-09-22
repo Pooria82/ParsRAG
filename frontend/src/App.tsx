@@ -15,7 +15,7 @@ import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { appendResponseVariant, buildQuery, createSession, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { appendResponseVariant, buildQuery, createSession, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -134,6 +134,8 @@ export function App() {
       setNotice(t.uploadFirst); setDocumentsOpen(true); return;
     }
     const prepared = target ? prepareTurnRegeneration(session.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)) : null;
+    const firstTurn = !target && session.messages.length === 0;
+    const fallbackTitle = fallbackConversationTitle(prompt);
     const historySession = prepared ? { ...session, messages: prepared.history } : session;
     const payload = buildQuery(historySession, settings, prompt);
     const controller = new AbortController();
@@ -146,7 +148,7 @@ export function App() {
     updateSession(session.id, s => ({
       ...s, messages: target ? prepareTurnRegeneration(s.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)).visible : [...s.messages, userMessage],
       draft: target ? s.draft : '',
-      title: s.messages.length ? s.title : prompt.trim().slice(0, 48) + (prompt.trim().length > 48 ? '…' : ''),
+      title: s.messages.length ? s.title : fallbackTitle,
       updatedAt: Date.now(),
     }));
     const timeout = setTimeout(() => controller.abort('timeout'), 180000);
@@ -178,6 +180,12 @@ export function App() {
       });
       setRevealingMessageId(responseMessageId);
       setConnection('online');
+      if (firstTurn) {
+        void api.conversationTitle(prompt.trim(), settings.language, AbortSignal.timeout(120000)).then(title => {
+          updateSession(session.id, current => current.title === fallbackTitle
+            ? { ...current, title, updatedAt: Date.now() } : current);
+        }).catch(() => { /* The local fallback remains valid when title generation is unavailable. */ });
+      }
     } catch (error: unknown) {
       if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
       const content = controller.signal.reason === 'timeout' ? t.timeout
