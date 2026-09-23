@@ -1,5 +1,10 @@
+import io
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
@@ -74,6 +79,48 @@ def test_ingest_success() -> None:
     app.dependency_overrides.clear()
 
 
+def test_concurrent_uploads_recheck_session_duplicates() -> None:
+    """A second upload must observe the first commit before entering ingestion."""
+    from backend.api import routes
+    from backend.core.capacity import WorkLimiter
+
+    first_entered = Event()
+    release_first = Event()
+    filenames: list[str] = []
+    repo = MagicMock()
+    repo.get_session_files.side_effect = lambda _session: list(filenames)
+
+    def ingest_batch(*args: object) -> dict[str, str]:
+        first_entered.set()
+        assert release_first.wait(timeout=5)
+        filenames.append("same.pdf")
+        return {"message": "ingested"}
+
+    def submit() -> dict[str, str]:
+        return routes.ingest_document(
+            _ready=None,
+            file=UploadFile(file=io.BytesIO(b"%PDF-1.4"), filename="same.pdf"),
+            files=None,
+            session_id="concurrent-session",
+            repo=repo,
+        )
+
+    with (
+        patch.object(routes, "_ingest_limiter", WorkLimiter(2, "ingestion")),
+        patch.object(routes, "_ingest_documents", side_effect=ingest_batch),
+        ThreadPoolExecutor(max_workers=2) as pool,
+    ):
+        first = pool.submit(submit)
+        assert first_entered.wait(timeout=5)
+        second = pool.submit(submit)
+        release_first.set()
+        assert first.result(timeout=5) == {"message": "ingested"}
+        with pytest.raises(HTTPException) as error:
+            second.result(timeout=5)
+    assert error.value.status_code == 409
+    assert len(filenames) == 1
+
+
 def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
@@ -141,6 +188,34 @@ def test_query_success(
         top_k=None,
         file_filter=None,
     )
+
+
+@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.routes.get_query_strategy")
+def test_query_correlation_id_reaches_execution_context(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    """Downstream work can correlate logs with the response header."""
+    from backend.core.security import current_correlation_id
+
+    seen: list[str | None] = []
+
+    def condense(*_args: object) -> str:
+        seen.append(current_correlation_id())
+        return "query"
+
+    def execute(**_kwargs: object) -> QueryResponse:
+        seen.append(current_correlation_id())
+        return QueryResponse(answer="Answer", source_nodes=[])
+
+    mock_condenser_cls.return_value.condense.side_effect = condense
+    mock_get_strategy.return_value.execute.side_effect = execute
+    response = client.post(
+        "/query", json={"prompt": "Question", "mode": "hybrid", "session_id": "s"}
+    )
+    assert response.status_code == 200
+    assert seen == [response.headers["x-correlation-id"]] * 2
+    assert current_correlation_id() is None
 
 
 @patch("backend.api.routes.CondenseQuestionPipeline")

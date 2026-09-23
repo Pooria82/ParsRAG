@@ -1,8 +1,10 @@
 import io
+import logging
 import os
 import re
 import zipfile
 from pathlib import PurePath
+from threading import Lock
 from uuid import UUID
 
 import httpx
@@ -28,6 +30,7 @@ from backend.core.models.domain import (
 )
 from backend.core.query_progress import get_query_stage, set_query_stage
 from backend.core.runtime import runtime_state
+from backend.core.security import current_correlation_id
 from backend.core.upload_policy import (
     IMAGE_EXTENSIONS,
     OFFICE_EXTENSIONS,
@@ -45,6 +48,7 @@ from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.document_parser import parse_document_sections
 
 router = APIRouter()
+logger = logging.getLogger("parsrag.operations")
 
 MAX_ARCHIVE_ENTRIES = 10_000
 MAX_ARCHIVE_EXPANDED_BYTES = 200 * 1024 * 1024
@@ -55,6 +59,12 @@ _ingest_limiter = WorkLimiter(
     int(os.getenv("PARSRAG_INGEST_CONCURRENCY", "1")), "ingestion"
 )
 _query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
+_session_ingest_locks = tuple(Lock() for _ in range(64))
+
+
+def _session_ingest_lock(session_id: str) -> Lock:
+    """Serialize mutations of one session without retaining unbounded lock keys."""
+    return _session_ingest_locks[hash(session_id) % len(_session_ingest_locks)]
 
 
 def _read_bounded(
@@ -269,22 +279,26 @@ def ingest_document(
         raise HTTPException(
             status_code=400, detail="Duplicate filenames are not allowed."
         )
-    existing_names = set(repo.get_session_files(session_id))
-    duplicates = existing_names.intersection(incoming_names)
-    if duplicates:
-        raise HTTPException(
-            status_code=409,
-            detail=f"The session already contains: {', '.join(sorted(duplicates))}.",
+    with _ingest_limiter.slot(), _session_ingest_lock(session_id):
+        existing_names = set(repo.get_session_files(session_id))
+        duplicates = existing_names.intersection(incoming_names)
+        if duplicates:
+            raise HTTPException(
+                status_code=409,
+                detail=f"The session already contains: {', '.join(sorted(duplicates))}.",
+            )
+        if len(existing_names) + len(incoming_names) > policy.max_files_per_session:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"A session can contain at most {policy.max_files_per_session} files."
+                ),
+            )
+        logger.info(
+            "ingest_started correlation_id=%s file_count=%d",
+            current_correlation_id(),
+            len(incoming_names),
         )
-    if len(existing_names) + len(incoming_names) > policy.max_files_per_session:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"A session can contain at most {policy.max_files_per_session} files."
-            ),
-        )
-
-    with _ingest_limiter.slot():
         return _ingest_documents(upload_list, session_id, repo, policy)
 
 
@@ -347,6 +361,11 @@ def query_rag(
     request_id = str(request.request_id) if request.request_id else None
     try:
         with _query_limiter.slot():
+            logger.info(
+                "query_started correlation_id=%s mode=%s",
+                current_correlation_id(),
+                request.mode,
+            )
             if request_id:
                 set_query_stage(request_id, "understanding")
             llama_chat_history = [
@@ -375,6 +394,11 @@ def query_rag(
                 )
             if request_id:
                 set_query_stage(request_id, "complete")
+            logger.info(
+                "query_complete correlation_id=%s source_count=%d",
+                current_correlation_id(),
+                len(response.source_nodes),
+            )
             return response
     except Exception:
         if request_id:
@@ -416,7 +440,8 @@ def delete_session(
             status_code=400,
             detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",
         )
-    repo.delete_session(session_id)
+    with _session_ingest_lock(session_id):
+        repo.delete_session(session_id)
     return {"message": f"Session '{session_id}' deleted successfully."}
 
 
@@ -429,5 +454,6 @@ def delete_session_document(
     """Deletes one indexed document without affecting the rest of the session."""
     if not SESSION_ID_REGEX.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
-    repo.delete_document(session_id, request.filename)
+    with _session_ingest_lock(session_id):
+        repo.delete_document(session_id, request.filename)
     return {"message": f"Document '{request.filename}' deleted successfully."}

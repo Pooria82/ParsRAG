@@ -41,6 +41,8 @@ def test_ocr_text_normalization_preserves_paragraphs() -> None:
 def test_extract_page_text_invokes_tesseract(mock_run: MagicMock) -> None:
     """The adapter sends an in-memory PNG to Tesseract without temp files."""
     page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
     page.get_pixmap.return_value.tobytes.return_value = b"png"
     mock_run.return_value = subprocess.CompletedProcess(
         args=[], returncode=0, stdout="متن  اسکن‌شده\n".encode(), stderr=b""
@@ -61,6 +63,8 @@ def test_extract_page_text_invokes_tesseract(mock_run: MagicMock) -> None:
 def test_missing_tesseract_has_specific_error(mock_run: MagicMock) -> None:
     """Missing system OCR is distinguished from an invalid document."""
     page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
     page.get_pixmap.return_value.tobytes.return_value = b"png"
 
     with pytest.raises(OCRUnavailableError, match="not installed"):
@@ -74,6 +78,8 @@ def test_missing_tesseract_has_specific_error(mock_run: MagicMock) -> None:
 def test_tesseract_timeout_has_specific_error(mock_run: MagicMock) -> None:
     """A stalled OCR process cannot block ingestion indefinitely."""
     page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
     page.get_pixmap.return_value.tobytes.return_value = b"png"
 
     with pytest.raises(OCRTimeoutError, match="timed out"):
@@ -103,3 +109,13 @@ def test_extract_image_text_rejects_invalid_raster() -> None:
     """Forged image extensions cannot send arbitrary bytes to Tesseract."""
     with pytest.raises(ValueError, match="valid image"):
         extract_image_text(b"not-an-image", OCRSettings(True, "fas+eng", 300, 12, 5))
+
+
+def test_pdf_ocr_rejects_oversized_page_before_rasterization() -> None:
+    """A large PDF page cannot allocate a Pixmap beyond the pixel budget."""
+    page = MagicMock()
+    page.rect.width = 20_000
+    page.rect.height = 20_000
+    with pytest.raises(ValueError, match="OCR pixel limit"):
+        extract_page_text(page, OCRSettings(True, "fas+eng", 600, 12, 5))
+    page.get_pixmap.assert_not_called()

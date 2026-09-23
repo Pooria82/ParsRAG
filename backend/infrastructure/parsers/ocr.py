@@ -4,6 +4,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from io import BytesIO
+from math import ceil, isfinite
 from typing import Protocol
 
 import fitz  # type: ignore  # PyMuPDF has no complete type information.
@@ -19,6 +20,8 @@ class PixmapLike(Protocol):
 
 class RasterizablePage(Protocol):
     """Minimal PDF page boundary required for rasterization."""
+
+    rect: object
 
     def get_pixmap(self, *, dpi: int, colorspace: object, alpha: bool) -> PixmapLike:
         """Renders the page into a pixel map."""
@@ -116,6 +119,13 @@ def extract_page_text(
         OCRError: If Tesseract returns a non-zero exit status.
     """
     active = settings or OCRSettings.from_environment()
+    width = float(page.rect.width)  # type: ignore[attr-defined]
+    height = float(page.rect.height)  # type: ignore[attr-defined]
+    if not isfinite(width) or not isfinite(height) or width <= 0 or height <= 0:
+        raise OCRError("The PDF page dimensions are invalid for OCR.")
+    pixels = ceil(width * active.dpi / 72) * ceil(height * active.dpi / 72)
+    if pixels > active.max_image_pixels:
+        raise OCRError("The PDF page exceeds the configured OCR pixel limit.")
     pixmap = page.get_pixmap(dpi=active.dpi, colorspace=fitz.csRGB, alpha=False)
     image = pixmap.tobytes("png")
     return _run_tesseract(image, active)
