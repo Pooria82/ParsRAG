@@ -18,7 +18,8 @@
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
 </p>
 
-ParsRAG is a bilingual, offline-first workspace for document Q&A. Parsing,
+ParsRAG is a bilingual, offline-first retrieval-augmented generation (RAG)
+workspace for Persian and English document Q&A. Parsing,
 OCR, embeddings, and vector search run on the host. Generation can use local
 Ollama, a private OpenAI-compatible endpoint, or an external API when local
 hardware is unavailable. Every conversation has its own documents, retrieval
@@ -46,14 +47,21 @@ running application. No private documents or API credentials appear in these ima
 - **Traceable sources:** unique filenames plus page, slide, paragraph, or
   section locations when the parser can determine them.
 - **Local lifecycle:** Qdrant data is isolated by conversation; users can remove
-  one document, deselect all documents, or delete an entire session.
+  one document, deselect all documents, reuse an indexed document in another
+  conversation without uploading it again, or delete an entire session.
+- **Precise prompts:** mention one or several uploaded files with `@` to bind
+  parts of a question to those sources; use `/` for quick prompt and mode actions.
 - **Adaptive compute:** CPU is the portable default; optional Compose overlays
   accelerate both embeddings and Ollama on NVIDIA or supported AMD hosts.
 - **Resource controls:** bounded uploads, OCR dimensions, parser archives,
   concurrency, embedding batches, Qdrant upserts, and container memory.
-- **Polished bilingual UI:** RTL/LTR content direction, model settings,
+- **Polished bilingual UI:** RTL/LTR content direction, four color palettes,
+  a skippable and replayable first-run tour, model settings,
   progressive answers, real processing stages, math rendering, prompt editing,
   retries, and conversation branches.
+
+Maintainers can use the [repository discovery settings](docs/repository-discovery.md)
+for the GitHub About panel after publishing changes.
 
 ## Answer modes
 
@@ -268,6 +276,22 @@ load its weights.
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
 
+## Windows, macOS, and Linux
+
+The CPU Docker Compose configuration is the portable baseline on all three
+systems. Start with `docker compose up -d --build`; add
+`--profile local-model` for the containerized Ollama service. On macOS, use
+the CPU container profile or run Ollama natively and configure its reachable
+endpoint in the app. Docker Desktop does not expose a Mac GPU to the Linux
+Ollama container, so the NVIDIA/AMD GPU overlays are for supported Windows
+and Linux hosts only. A private or external OpenAI-compatible API also works
+on machines without a local model. See the [Docker GPU guidance](https://docs.docker.com/guides/rag-ollama/).
+
+CI runs backend and frontend checks on Windows, macOS, and Linux; the Docker
+image and browser flow are checked on Linux. A local Windows run and CI provide
+different evidence: verify the first install on your own target machine,
+especially OCR language packs and GPU access.
+
 ## Native development
 
 Requirements: Python 3.12, Node.js 22, Qdrant, and either Ollama or an
@@ -286,8 +310,20 @@ Set-Location ..
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
+On macOS or Linux, replace the Python commands with:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-runtime.txt -c requirements.lock
+.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Install and build the frontend with `cd frontend && npm ci && npm run build`
+on either platform. Start Qdrant separately and point the application at your
+Ollama or compatible API endpoint before testing `/health/ready`.
+
 For hot reload, run `npm run dev` inside `frontend`. Vite proxies all API route
-families to `http://localhost:8000` when the frontend backend URL is blank. Set
+families to `http://127.0.0.1:8000` when the frontend backend URL is blank. Set
 `ENVIRONMENT=development` only in a local development `.env` when needed.
 
 ## Health, persistence, and offline use

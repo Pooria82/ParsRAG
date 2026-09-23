@@ -33,6 +33,15 @@ condensation and the three query modes remain the source of truth.
 - Support single-document deletion, deselect-all retrieval, and complete session
   deletion. Report server failures instead of claiming cleanup. Clearing browser
   conversation history remains an explicit local action.
+- Allow users to reuse indexed vectors from a prior local conversation in a new
+  one without retaining original upload bytes. The source conversation must
+  still exist; deleting it removes that reuse option.
+- Resolve `@{filename}` mentions only against documents in the current session
+  and its active file filter. Associate adjacent question segments with their
+  named documents; never turn a mention into access to another session.
+- Offer local `/` composer actions without running hidden commands. Show a
+  skippable first-run tour, keep a replay control in settings, and store the
+  selected color palette alongside the existing browser preferences.
 - Expose persisted model-runtime settings for local Ollama and OpenAI-compatible
   private or external APIs. Never return, log, or store API-key contents in the
   browser; report only whether a process-memory or environment credential exists.
