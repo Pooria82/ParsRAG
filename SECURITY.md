@@ -36,3 +36,10 @@ uploads SARIF for visibility into findings without a published fix; these are
 not release blockers until an upgrade is possible. This includes the NLTK
 advisory above and unfixed Debian packages in the base image. Review the
 findings on every release and upgrade the base image when fixes are published.
+
+The CPU and NVIDIA application images use Debian Trixie and PyTorch 2.13. The
+AMD/ROCm overlay remains on PyTorch 2.6 for hardware compatibility pending
+validation of a newer ROCm stack. Its PyTorch advisories remain open and should
+be reviewed before AMD deployments. Debian Trixie's `libxml2` remains necessary
+for Tesseract OCR; `CVE-2026-6653` has no stable Trixie fix as of 2026-09-24.
+Do not dismiss that finding merely because the application has no direct XML API.
