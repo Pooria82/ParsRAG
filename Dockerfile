@@ -9,7 +9,7 @@ COPY frontend/public ./public
 COPY frontend/src ./src
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS python-dependencies
+FROM python:3.14-slim-bookworm AS python-dependencies
 ARG TORCH_VERSION=2.6.0
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -23,7 +23,7 @@ RUN pip install --upgrade 'pip>=26.1.2' 'setuptools>=78.1.1' \
     && pip install -r /tmp/requirements-runtime.txt -c /tmp/requirements.lock
 RUN pip uninstall --yes pip
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
