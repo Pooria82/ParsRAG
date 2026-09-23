@@ -313,3 +313,59 @@ def test_strict_tagged_questions_search_each_named_file(
         "a.pdf",
         "b.pdf",
     }
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_tagged_question_refuses_when_one_named_file_lacks_evidence(
+    mock_settings: MagicMock,
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="A", score=0.93, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="B", score=0.46, metadata={"filename": "b.pdf"})],
+    ]
+
+    result = StrictRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        document_segments=[("a.pdf", "costs"), ("b.pdf", "schedule")],
+    )
+
+    assert result.source_nodes == []
+    assert "Insufficient evidence" in result.answer
+    mock_settings.llm.complete.assert_not_called()
+
+
+@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
+@patch("backend.core.strategies.hybrid_rag.Settings")
+def test_hybrid_tagged_question_keeps_each_named_file_when_top_k_is_one(
+    mock_settings: MagicMock, mock_rerank_cls: MagicMock
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="costs", score=0.91, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="dates", score=0.86, metadata={"filename": "b.pdf"})],
+    ]
+    mock_rerank_cls.return_value.postprocess_nodes.return_value = []
+    mock_settings.llm.complete.return_value = "answer"
+
+    result = HybridRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        top_k=1,
+        document_segments=[("a.pdf", "costs"), ("b.pdf", "dates")],
+    )
+
+    assert {node.metadata["filename"] for node in result.source_nodes} == {
+        "a.pdf",
+        "b.pdf",
+    }
+    assert [call.args[0] for call in repo.similarity_search.call_args_list] == [
+        "costs",
+        "dates",
+    ]
+    assert mock_rerank_cls.call_args_list[-1].kwargs["top_n"] == 2

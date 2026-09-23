@@ -39,8 +39,8 @@ def test_query_routes_explicit_document_segments(
         assert mock_get_strategy.return_value.execute.call_args.kwargs[
             "document_segments"
         ] == [
-            ("a.pdf", "Compare costs and"),
-            ("b.pdf", "Compare schedule"),
+            ("a.pdf", "Compare costs"),
+            ("b.pdf", "schedule"),
         ]
         rejected = client.post(
             "/query",

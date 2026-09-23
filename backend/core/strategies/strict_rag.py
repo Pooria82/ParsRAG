@@ -12,6 +12,7 @@ from backend.core.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.base_strategy import RAGStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
+    has_tagged_evidence,
     include_tagged_anchors,
     resolve_target_files,
     retrieve_document_nodes,
@@ -147,12 +148,22 @@ class StrictRAGStrategy(RAGStrategy):
                 answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
                 source_nodes=[],
             )
+        if document_segments and not has_tagged_evidence(
+            nodes, document_segments, self.threshold
+        ):
+            return QueryResponse(
+                answer="برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد. (Insufficient evidence across the mentioned documents.)",
+                source_nodes=[],
+            )
 
         # 4. Adaptive Relevance Filtering
         relevance_cutoff = max(0.55, highest_score * 0.70)
-        filtered_nodes = [
-            n for n in nodes if n.score is not None and n.score >= relevance_cutoff
-        ]
+        cutoff = (
+            max(relevance_cutoff, self.threshold)
+            if document_segments
+            else relevance_cutoff
+        )
+        filtered_nodes = [n for n in nodes if n.score is not None and n.score >= cutoff]
         if not filtered_nodes:
             filtered_nodes = [nodes[0]]
         if document_segments:

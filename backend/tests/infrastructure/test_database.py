@@ -275,3 +275,7 @@ def test_document_copy_is_searchable_in_target_session() -> None:
     assert target[0].id != source[0].id
     assert target[0].vector == pytest.approx(source[0].vector)
     assert target[0].payload == {**(source[0].payload or {}), "session_id": "target"}
+
+    repo.delete_session("source")
+    assert repo.get_session_files("source") == []
+    assert repo.get_session_files("target") == ["guide.pdf"]

@@ -19,11 +19,27 @@ client = TestClient(app, raise_server_exceptions=False)
 def test_tagged_prompt_keeps_each_question_with_its_document() -> None:
     prompt = "مقایسه کن: @{الف.pdf} هزینه چقدر است؟ @{ب.pdf} زمان چقدر است؟"
     assert parse_tagged_segments(prompt, ["الف.pdf", "ب.pdf"]) == [
-        ("الف.pdf", "مقایسه کن: هزینه چقدر است؟"),
-        ("ب.pdf", "مقایسه کن: زمان چقدر است؟"),
+        ("الف.pdf", "مقایسه کن: هزینه چقدر است"),
+        ("ب.pdf", "زمان چقدر است؟"),
     ]
+    assert parse_tagged_segments(
+        "در @{الف.pdf} هزینه را بگو و در @{ب.pdf} زمان را بگو",
+        ["الف.pdf", "ب.pdf"],
+    ) == [
+        ("الف.pdf", "در هزینه را بگو"),
+        ("ب.pdf", "در زمان را بگو"),
+    ]
+    assert parse_tagged_segments(
+        r"@{گزارش \{نهایی\}.pdf} بودجه را بگو", ["گزارش {نهایی}.pdf"]
+    ) == [("گزارش {نهایی}.pdf", "بودجه را بگو")]
     with pytest.raises(ValueError, match="not indexed"):
         parse_tagged_segments("@{secret.pdf} متن", ["الف.pdf"])
+    with pytest.raises(ValueError, match="malformed"):
+        parse_tagged_segments("@{الف.pdf متن", ["الف.pdf"])
+    with pytest.raises(ValueError, match="malformed"):
+        parse_tagged_segments("@{الف.pdf} هزینه و @{ب.pdf زمان", ["الف.pdf", "ب.pdf"])
+    with pytest.raises(ValueError, match="Too many"):
+        parse_tagged_segments(" ".join(["@{الف.pdf} سوال"] * 21), ["الف.pdf"])
 
 
 def test_multi_file_ingest_success() -> None:

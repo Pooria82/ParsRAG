@@ -34,7 +34,14 @@ _GENERIC_FILENAME_WORDS = {
     "report",
     "doc",
 }
-_MENTION = re.compile(r"@\{([^{}]{1,255})\}")
+_MENTION = re.compile(r"@\{((?:\\[{}]|[^{}]){1,510})\}")
+_CLAUSE_BREAK = re.compile(r"\s+(?:و|and)\s+|[؟?!؛;.\n]+\s*", re.IGNORECASE)
+MAX_TAGGED_SEGMENTS = 20
+
+
+def _mention_filename(token: str) -> str:
+    """Decode escaped braces in a document name shown inside a mention."""
+    return re.sub(r"\\([{}])", r"\1", token)
 
 
 def parse_tagged_segments(
@@ -42,22 +49,42 @@ def parse_tagged_segments(
 ) -> list[tuple[str, str]]:
     """Bind each explicit document mention to its adjacent question text."""
     matches = list(_MENTION.finditer(prompt))
+    if prompt.count("@{") != len(matches):
+        raise ValueError("A document mention is incomplete or malformed.")
     if not matches:
         return []
+    if len(matches) > MAX_TAGGED_SEGMENTS:
+        raise ValueError("Too many document mentions in one question.")
     allowed = set(available_files)
-    unknown = {match.group(1) for match in matches if match.group(1) not in allowed}
+    filenames = [_mention_filename(match.group(1)) for match in matches]
+    unknown = set(filenames) - allowed
     if unknown:
         raise ValueError("A mentioned document is not indexed in this session.")
-    prefix = prompt[: matches[0].start()].strip()
     full_question = _MENTION.sub(" ", prompt).strip()
     segments: list[tuple[str, str]] = []
+    leading = prompt[: matches[0].start()].strip()
     for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(prompt)
-        local = prompt[match.end() : end].strip()
-        question = " ".join(part for part in (prefix, local) if part).strip()
-        segments.append(
-            (match.group(1), question if len(question) >= 3 else full_question)
+        between = prompt[
+            match.end() : matches[index + 1].start()
+            if index + 1 < len(matches)
+            else len(prompt)
+        ]
+        boundaries = (
+            list(_CLAUSE_BREAK.finditer(between)) if index + 1 < len(matches) else []
         )
+        if boundaries:
+            boundary = boundaries[-1]
+            trailing = between[: boundary.start()]
+            next_leading = between[boundary.end() :]
+        else:
+            trailing, next_leading = between, ""
+        question = " ".join(
+            part for part in (leading, trailing.strip()) if part
+        ).strip()
+        segments.append(
+            (filenames[index], question if len(question) >= 3 else full_question)
+        )
+        leading = next_leading.strip()
     return segments
 
 
@@ -111,6 +138,18 @@ def include_tagged_anchors(
         if candidates:
             result.append(max(candidates, key=lambda node: node.score or 0))
     return result
+
+
+def has_tagged_evidence(
+    nodes: list[ExtractedNode], segments: list[tuple[str, str]], threshold: float
+) -> bool:
+    """Require a relevant chunk for every explicitly named document."""
+    supported_files = {
+        str(node.metadata.get("filename"))
+        for node in nodes
+        if node.score is not None and node.score >= threshold
+    }
+    return all(filename in supported_files for filename, _ in segments)
 
 
 def _clean_filename_stem(filename: str) -> str:

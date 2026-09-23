@@ -182,6 +182,10 @@ class HybridRAGStrategy(RAGStrategy):
             if top_k is not None
             else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
         )
+        if document_segments:
+            rerank_n = max(
+                rerank_n, len({filename for filename, _ in document_segments})
+            )
         retrieve_k = max(rerank_n * 2, self.default_retrieve_k)
 
         # 3. Broad Candidate Retrieval
