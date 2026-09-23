@@ -61,3 +61,9 @@ class AbstractDocumentRepository(ABC):
     @abstractmethod
     def delete_document(self, session_id: str, filename: str) -> None:
         """Deletes every chunk for one document in a session."""
+
+    @abstractmethod
+    def copy_document(
+        self, source_session_id: str, target_session_id: str, filename: str
+    ) -> int:
+        """Copy existing vectors in bounded pages; return the copied chunk count."""

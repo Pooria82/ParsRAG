@@ -1,6 +1,7 @@
 import hashlib
 import os
 import uuid
+from contextlib import suppress
 from typing import cast
 
 from llama_index.core import Settings
@@ -252,6 +253,67 @@ class QdrantRepository(AbstractDocumentRepository):
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to retrieve session files in Qdrant: {exc}"
+            ) from exc
+
+    def copy_document(
+        self, source_session_id: str, target_session_id: str, filename: str
+    ) -> int:
+        """Reuse stored vectors without reading the original file or embedding again."""
+        if source_session_id == target_session_id:
+            raise ValueError("Source and target sessions must differ.")
+        source_filter = qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key="session_id", match=qmodels.MatchValue(value=source_session_id)
+                ),
+                qmodels.FieldCondition(
+                    key="filename", match=qmodels.MatchValue(value=filename)
+                ),
+            ]
+        )
+        copied = 0
+        offset: int | str | uuid.UUID | None = None
+        try:
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=source_filter,
+                    limit=64,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=True,
+                )
+                if points:
+                    clones = []
+                    for point in points:
+                        vector = point.vector
+                        if vector is None:
+                            raise VectorDBConnectionError(
+                                "Source document has a point without a vector."
+                            )
+                        clones.append(
+                            qmodels.PointStruct(
+                                id=str(uuid.uuid4()),
+                                vector=cast(qmodels.VectorStruct, vector),
+                                payload={
+                                    **(point.payload or {}),
+                                    "session_id": target_session_id,
+                                },
+                            )
+                        )
+                    self.client.upsert(
+                        collection_name=self.collection_name, points=clones, wait=True
+                    )
+                    copied += len(clones)
+                if next_offset is None:
+                    break
+                offset = cast(int | str | uuid.UUID, next_offset)
+            return copied
+        except Exception as exc:
+            with suppress(VectorDBConnectionError):
+                self.delete_document(target_session_id, filename)
+            raise VectorDBConnectionError(
+                f"Failed to reuse document vectors: {exc}"
             ) from exc
 
     def delete_session(self, session_id: str) -> None:

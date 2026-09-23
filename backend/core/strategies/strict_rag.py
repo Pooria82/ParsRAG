@@ -6,13 +6,15 @@ from llama_index.core.prompts import PromptTemplate
 
 from backend.core.exceptions import VectorDBConnectionError
 from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.models.domain import QueryResponse
 from backend.core.query_progress import ProgressCallback
 from backend.core.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.base_strategy import RAGStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
+    include_tagged_anchors,
     resolve_target_files,
+    retrieve_document_nodes,
 )
 
 STRICT_RAG_PROMPT_TEMPLATE = """\
@@ -80,6 +82,7 @@ class StrictRAGStrategy(RAGStrategy):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the strict RAG pipeline.
 
@@ -90,6 +93,7 @@ class StrictRAGStrategy(RAGStrategy):
             top_k (int | None, optional): Optional override for retrieval depth.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
+            document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
             QueryResponse: The generated answer or a refusal if context is insufficient.
@@ -117,25 +121,16 @@ class StrictRAGStrategy(RAGStrategy):
         )
 
         # 2. Retrieve Nodes (Balanced Multi-File vs. Single-File Search)
-        nodes: list[ExtractedNode] = []
-        if len(available_files) > 1 and effective_filter is None:
-            # Multi-document balanced retrieval: fetch top chunks per document
-            k_per_file = max(3, fetch_k // len(available_files))
-            for fn in available_files:
-                file_nodes = self.repo.similarity_search(
-                    query,
-                    top_k=k_per_file,
-                    session_id=session_id,
-                    file_filter=[fn],
-                )
-                nodes.extend(file_nodes)
-        else:
-            nodes = self.repo.similarity_search(
-                query,
-                top_k=fetch_k,
-                session_id=session_id,
-                file_filter=effective_filter,
-            )
+        nodes = retrieve_document_nodes(
+            self.repo,
+            query,
+            available_files,
+            effective_filter,
+            session_id,
+            fetch_k,
+            3,
+            document_segments,
+        )
 
         # 3. Threshold Check
         if not nodes:
@@ -160,6 +155,10 @@ class StrictRAGStrategy(RAGStrategy):
         ]
         if not filtered_nodes:
             filtered_nodes = [nodes[0]]
+        if document_segments:
+            filtered_nodes = include_tagged_anchors(
+                nodes, filtered_nodes, document_segments, self.threshold
+            )
 
         # 5. Build Grouped Multi-Document Context
         context_str = format_multi_doc_context(filtered_nodes)

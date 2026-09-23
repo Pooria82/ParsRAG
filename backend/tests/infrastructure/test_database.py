@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qmodels
 
 from backend.core.exceptions import VectorDBConnectionError
 from backend.core.models.domain import ExtractedNode
@@ -187,3 +189,89 @@ def test_session_file_listing_scrolls_every_page(
     assert repo.get_session_files("session-123") == ["a.pdf", "b.pdf"]
     assert mock_client.scroll.call_count == 2
     assert mock_client.scroll.call_args_list[1].kwargs["offset"] == 42
+
+
+@patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
+@patch("backend.infrastructure.database.qdrant_repo.Settings")
+def test_document_copy_reuses_vectors_in_bounded_pages(
+    mock_settings: MagicMock, mock_qdrant_client_cls: MagicMock
+) -> None:
+    """A reused file retains evidence and vectors without re-embedding it."""
+    source_point = MagicMock(
+        id="source-id",
+        vector=[0.2, 0.8],
+        payload={
+            "session_id": "old",
+            "filename": "guide.pdf",
+            "text": "evidence",
+            "page": 3,
+        },
+    )
+    client = mock_qdrant_client_cls.return_value
+    client.scroll.side_effect = [([source_point], 77), ([], None)]
+    repo = QdrantRepository(collection_name="test", vector_size=2)
+
+    assert repo.copy_document("old", "new", "guide.pdf") == 1
+
+    copied = client.upsert.call_args.kwargs["points"][0]
+    assert copied.id != source_point.id
+    assert copied.vector == source_point.vector
+    assert copied.payload == {**source_point.payload, "session_id": "new"}
+    assert client.scroll.call_args_list[1].kwargs["offset"] == 77
+    assert client.upsert.call_args.kwargs["wait"] is True
+    mock_settings.embed_model.get_text_embedding_batch.assert_not_called()
+
+
+def test_document_copy_is_searchable_in_target_session() -> None:
+    """Exercise Qdrant's actual local engine, including payload and vector copies."""
+    client = QdrantClient(location=":memory:")
+    client.create_collection(
+        collection_name="reuse_test",
+        vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+    )
+    client.upsert(
+        collection_name="reuse_test",
+        points=[
+            qmodels.PointStruct(
+                id=1,
+                vector=[0.2, 0.8],
+                payload={
+                    "session_id": "source",
+                    "filename": "guide.pdf",
+                    "text": "evidence",
+                },
+            )
+        ],
+    )
+    repo = object.__new__(QdrantRepository)
+    repo.client = client
+    repo.collection_name = "reuse_test"
+
+    assert repo.copy_document("source", "target", "guide.pdf") == 1
+    assert repo.get_session_files("target") == ["guide.pdf"]
+    source, _ = client.scroll(
+        collection_name="reuse_test",
+        scroll_filter=qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key="session_id", match=qmodels.MatchValue(value="source")
+                )
+            ]
+        ),
+        with_vectors=True,
+    )
+    target, _ = client.scroll(
+        collection_name="reuse_test",
+        scroll_filter=qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key="session_id", match=qmodels.MatchValue(value="target")
+                )
+            ]
+        ),
+        with_vectors=True,
+    )
+    assert len(source) == len(target) == 1
+    assert target[0].id != source[0].id
+    assert target[0].vector == pytest.approx(source[0].vector)
+    assert target[0].payload == {**(source[0].payload or {}), "session_id": "target"}

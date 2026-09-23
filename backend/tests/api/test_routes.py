@@ -16,6 +16,55 @@ from backend.main import app
 client = TestClient(app, raise_server_exceptions=False)
 
 
+@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.routes.get_query_strategy")
+def test_query_routes_explicit_document_segments(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    mock_condenser_cls.return_value.condense.return_value = "comparison"
+    mock_get_strategy.return_value.execute.return_value = QueryResponse(answer="answer")
+    try:
+        response = client.post(
+            "/query",
+            json={
+                "prompt": "Compare @{a.pdf} costs and @{b.pdf} schedule",
+                "mode": "strict",
+                "session_id": "session-1",
+            },
+        )
+        assert response.status_code == 200
+        assert mock_get_strategy.return_value.execute.call_args.kwargs[
+            "document_segments"
+        ] == [
+            ("a.pdf", "Compare costs and"),
+            ("b.pdf", "Compare schedule"),
+        ]
+        rejected = client.post(
+            "/query",
+            json={
+                "prompt": "@{other.pdf} secret",
+                "mode": "strict",
+                "session_id": "session-1",
+            },
+        )
+        assert rejected.status_code == 400
+        excluded = client.post(
+            "/query",
+            json={
+                "prompt": "@{a.pdf} private section",
+                "mode": "strict",
+                "session_id": "session-1",
+                "file_filter": ["b.pdf"],
+            },
+        )
+        assert excluded.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
 @patch("backend.api.dependencies._shared_document_repository")
 def test_health_endpoints_separate_liveness_and_readiness(
     mock_repository: MagicMock,

@@ -278,3 +278,38 @@ def test_condenser_prompt_has_code_preservation_rule() -> None:
     assert (
         "Do not treat English code as a reason to translate" in CONDENSE_PROMPT_TEMPLATE
     )
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_tagged_questions_search_each_named_file(
+    mock_settings: MagicMock,
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="A", score=0.91, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="B", score=0.82, metadata={"filename": "b.pdf"})],
+    ]
+    mock_settings.llm.complete.return_value = "answer"
+
+    result = StrictRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        document_segments=[
+            ("a.pdf", "costs"),
+            ("b.pdf", "schedule"),
+        ],
+    )
+
+    assert [call.args[0] for call in repo.similarity_search.call_args_list] == [
+        "costs",
+        "schedule",
+    ]
+    assert [
+        call.kwargs["file_filter"] for call in repo.similarity_search.call_args_list
+    ] == [["a.pdf"], ["b.pdf"]]
+    assert {node.metadata["filename"] for node in result.source_nodes} == {
+        "a.pdf",
+        "b.pdf",
+    }

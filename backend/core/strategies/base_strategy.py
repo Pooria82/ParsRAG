@@ -18,6 +18,7 @@ class RAGStrategy(ABC):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the specific strategy pipeline.
 
@@ -28,6 +29,7 @@ class RAGStrategy(ABC):
             top_k (int | None, optional): Optional override for retrieval depth.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports coarse pipeline stages.
+            document_segments: Explicit file-scoped question segments.
 
         Returns:
             QueryResponse: The generated answer.

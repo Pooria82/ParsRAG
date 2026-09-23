@@ -1,6 +1,7 @@
 import os
 import re
 
+from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import ExtractedNode
 
 _BROAD_INDICATORS = (
@@ -33,6 +34,83 @@ _GENERIC_FILENAME_WORDS = {
     "report",
     "doc",
 }
+_MENTION = re.compile(r"@\{([^{}]{1,255})\}")
+
+
+def parse_tagged_segments(
+    prompt: str, available_files: list[str]
+) -> list[tuple[str, str]]:
+    """Bind each explicit document mention to its adjacent question text."""
+    matches = list(_MENTION.finditer(prompt))
+    if not matches:
+        return []
+    allowed = set(available_files)
+    unknown = {match.group(1) for match in matches if match.group(1) not in allowed}
+    if unknown:
+        raise ValueError("A mentioned document is not indexed in this session.")
+    prefix = prompt[: matches[0].start()].strip()
+    full_question = _MENTION.sub(" ", prompt).strip()
+    segments: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(prompt)
+        local = prompt[match.end() : end].strip()
+        question = " ".join(part for part in (prefix, local) if part).strip()
+        segments.append(
+            (match.group(1), question if len(question) >= 3 else full_question)
+        )
+    return segments
+
+
+def retrieve_document_nodes(
+    repo: AbstractDocumentRepository,
+    query: str,
+    available_files: list[str],
+    file_filter: list[str] | None,
+    session_id: str | None,
+    total_k: int,
+    minimum_per_file: int,
+    document_segments: list[tuple[str, str]] | None = None,
+) -> list[ExtractedNode]:
+    """Balance normal retrieval or bind explicit question parts to named files."""
+    if document_segments:
+        targets = document_segments
+    elif len(available_files) > 1 and file_filter is None:
+        targets = [(filename, query) for filename in available_files]
+    else:
+        return repo.similarity_search(
+            query, top_k=total_k, session_id=session_id, file_filter=file_filter
+        )
+    per_file = max(minimum_per_file, total_k // len(targets))
+    nodes: list[ExtractedNode] = []
+    for filename, question in targets:
+        nodes.extend(
+            repo.similarity_search(
+                question, top_k=per_file, session_id=session_id, file_filter=[filename]
+            )
+        )
+    return nodes
+
+
+def include_tagged_anchors(
+    nodes: list[ExtractedNode],
+    filtered: list[ExtractedNode],
+    segments: list[tuple[str, str]],
+    threshold: float,
+) -> list[ExtractedNode]:
+    """Retain one sufficiently relevant source from each explicitly named file."""
+    result = list(filtered)
+    for filename in dict.fromkeys(name for name, _ in segments):
+        if any(node.metadata.get("filename") == filename for node in result):
+            continue
+        candidates = [
+            node
+            for node in nodes
+            if node.metadata.get("filename") == filename
+            and (node.score or 0) >= threshold
+        ]
+        if candidates:
+            result.append(max(candidates, key=lambda node: node.score or 0))
+    return result
 
 
 def _clean_filename_stem(filename: str) -> str:
