@@ -3,7 +3,7 @@ services:
     image: parsrag-app:rocm
     build:
       args:
-        TORCH_INDEX_URL: https://download.pytorch.org/whl/rocm6.2
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/rocm6.2.4
     environment:
       EMBED_DEVICE: cuda
       EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-32}"

@@ -30,3 +30,9 @@ not use NLTK as a filesystem sandbox, and does not pass upload paths to those
 APIs. CI therefore suppresses only this advisory while retaining all other
 `pip-audit` findings as release blockers. The suppression must be removed when
 NLTK publishes a patched version or if ParsRAG starts using an affected API.
+
+The container scan blocks HIGH/CRITICAL findings with a published fix. Trivy
+uploads SARIF for visibility into findings without a published fix; these are
+not release blockers until an upgrade is possible. This includes the NLTK
+advisory above and unfixed Debian packages in the base image. Review the
+findings on every release and upgrade the base image when fixes are published.

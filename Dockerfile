@@ -10,7 +10,7 @@ COPY frontend/src ./src
 RUN npm run build
 
 FROM python:3.12-slim-bookworm AS python-dependencies
-ARG TORCH_VERSION=2.5.1
+ARG TORCH_VERSION=2.6.0
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -18,7 +18,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 RUN python -m venv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY requirements-runtime.txt requirements.lock /tmp/
-RUN pip install --upgrade pip \
+RUN pip install --upgrade 'pip>=26.1.2' 'setuptools>=78.1.1' \
     && pip install --index-url "${TORCH_INDEX_URL}" "torch==${TORCH_VERSION}" \
     && pip install -r /tmp/requirements-runtime.txt -c /tmp/requirements.lock
 
@@ -28,6 +28,9 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     HOME=/home/parsrag \
     HF_HOME=/home/parsrag/.cache/huggingface
+
+# The base image has a separate global pip; keep it patched as well as the venv.
+RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2'
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \

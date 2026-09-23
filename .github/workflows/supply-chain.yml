@@ -52,6 +52,13 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
+          exit-code: "0"
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: parsrag:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: "1"
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
