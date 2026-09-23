@@ -75,6 +75,16 @@ Strict mode refuses when retrieved evidence does not meet its configured
 threshold. This is an application safeguard, not a universal guarantee; verify
 important outputs against the displayed sources.
 
+In the composer, type `@` to choose a document already indexed in the current
+conversation. You can mention more than one file, for example:
+`@{budget.pdf} What is the cost? And @{timeline.docx} When is delivery?`
+Each clause is searched in its named file; strict mode declines a combined
+answer if either file lacks sufficient evidence. Type `/` at the beginning of
+a line to choose a summary, comparison, translation, outline, mode change,
+document action, or help action. The document panel can also copy an indexed
+file from an earlier local conversation without another upload. Keep the source
+conversation until the copy completes; afterwards, the two copies are independent.
+
 ## Supported inputs
 
 | Family | Extensions | Processing |
