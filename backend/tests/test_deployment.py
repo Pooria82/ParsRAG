@@ -110,6 +110,7 @@ def test_vite_development_proxy_covers_every_backend_route_family() -> None:
     """Local hot reload forwards every API route used by the workspace."""
     config = (ROOT / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
 
+    assert "const localApi = 'http://127.0.0.1:8000'" in config
     for route in (
         "/health",
         "/capabilities",
@@ -120,7 +121,7 @@ def test_vite_development_proxy_covers_every_backend_route_family() -> None:
         "/models",
         "/conversations",
     ):
-        assert f"'{route}': 'http://localhost:8000'" in config
+        assert f"'{route}': localApi" in config
     assert "codeSplitting" in config
     assert "maxSize: 250_000" in config
 
