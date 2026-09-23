@@ -56,6 +56,33 @@ test('first visit guide can be skipped and replayed from settings', async ({ pag
   await expect(tour).toBeVisible();
 });
 
+test('Persian first-run guide stays usable on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'fa', theme: 'light' }));
+    localStorage.removeItem('parsrag_tour_v1');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/*/files', route => route.fulfill({ json: [] }));
+  await page.goto('/');
+  const tour = page.getByRole('dialog', { name: 'راهنمای پارس‌رگ' });
+  await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(true);
+  for (let step = 0; step < 4; step += 1) {
+    await expect(tour).toBeVisible();
+    const bounds = await tour.locator('.tour-card').boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(667);
+    await tour.getByRole('button', { name: step === 3 ? 'شروع کنیم' : 'بعدی' }).click();
+  }
+  await expect(tour).toBeHidden();
+  await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(false);
+  await page.reload();
+  await expect(tour).toBeHidden();
+});
+
 test('reuses a previous document and offers document and command suggestions', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_tour_v1', 'done');
@@ -91,6 +118,47 @@ test('reuses a previous document and offers document and command suggestions', a
   await expect(composer).toHaveValue(/Summarize the selected documents/);
 });
 
+test('two document mentions survive submission with a scoped file filter', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_tour_v1', 'done');
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.setItem('parsrag_sessions_v1', JSON.stringify([{
+      id: 'current', title: 'New conversation', createdAt: 1, updatedAt: 1,
+      ragMode: 'strict', messages: [], draft: '', documents: [
+        { name: 'costs.pdf', status: 'indexed', enabled: true },
+        { name: 'schedule.pdf', status: 'indexed', enabled: true },
+      ],
+    }]));
+    localStorage.setItem('parsrag_active_session_id_v1', 'current');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/current/files', route => route.fulfill({ json: ['costs.pdf', 'schedule.pdf'] }));
+  await page.route('**/queries/*/progress', route => route.fulfill({ status: 404 }));
+  await page.route('**/conversations/title', route => route.fulfill({ json: { title: 'Cost and schedule' } }));
+  let submitted: { prompt: string; file_filter: string[] } | undefined;
+  await page.route('**/query', async route => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ json: { answer: 'The costs and schedule are documented.', source_nodes: [
+      { text: 'cost', score: 0.9, metadata: { filename: 'costs.pdf', page: 2 } },
+      { text: 'date', score: 0.9, metadata: { filename: 'schedule.pdf', page: 4 } },
+    ] } });
+  });
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Your message' });
+  await composer.fill('Compare @cost');
+  await composer.press('Enter');
+  await expect(composer).toHaveValue(/@\{costs\.pdf\}/);
+  await composer.pressSequentially(' costs and @sche');
+  await composer.press('Enter');
+  await expect(composer).toHaveValue(/@\{schedule\.pdf\}/);
+  await composer.pressSequentially(' schedule');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => submitted).toBeDefined();
+  expect(submitted!.prompt).toContain('@{costs.pdf}');
+  expect(submitted!.prompt).toContain('@{schedule.pdf}');
+  expect(submitted!.file_filter).toEqual(['costs.pdf', 'schedule.pdf']);
+});
+
 test('selected color palette survives a reload in light and dark mode', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_tour_v1', 'done');
@@ -110,4 +178,38 @@ test('selected color palette survives a reload in light and dark mode', async ({
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'ocean');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test('all workspace palettes keep readable body and primary-button contrast', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('parsrag_tour_v1', 'done'));
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/*/files', route => route.fulfill({ json: [] }));
+  await page.goto('/');
+  const contrast = await page.evaluate(() => {
+    const luminance = (raw: string) => {
+      const hex = raw.length === 4 ? '#' + [...raw.slice(1)].map(digit => digit + digit).join('') : raw;
+      const values = [1, 3, 5].map(offset => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255)
+        .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+    };
+    const ratio = (first: string, second: string) => {
+      const high = Math.max(luminance(first), luminance(second));
+      const low = Math.min(luminance(first), luminance(second));
+      return (high + 0.05) / (low + 0.05);
+    };
+    const output: Array<{ palette: string; theme: string; text: number; button: number }> = [];
+    for (const theme of ['light', 'dark']) for (const palette of ['evergreen', 'ocean', 'indigo', 'sienna']) {
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.palette = palette;
+      const style = getComputedStyle(document.documentElement);
+      const color = (name: string) => style.getPropertyValue(name).trim();
+      output.push({ palette, theme, text: ratio(color('--ink'), color('--surface')),
+        button: ratio(color('--on-accent'), color('--accent')) });
+    }
+    return output;
+  });
+  for (const sample of contrast) {
+    expect(sample.text, `${sample.theme}/${sample.palette} body text`).toBeGreaterThanOrEqual(4.5);
+    expect(sample.button, `${sample.theme}/${sample.palette} primary button`).toBeGreaterThanOrEqual(4.5);
+  }
 });

@@ -25,7 +25,8 @@ export function activeComposerTrigger(value: string, cursor: number): ComposerTr
 }
 
 export function insertDocumentMention(value: string, trigger: ComposerTrigger, filename: string): { text: string; cursor: number } {
-  const token = `@{${filename}}${/^\s/.test(value.slice(trigger.end)) ? '' : ' '}`;
+  const escaped = filename.replace(/[{}]/g, brace => `\\${brace}`);
+  const token = `@{${escaped}}${/^\s/.test(value.slice(trigger.end)) ? '' : ' '}`;
   const text = value.slice(0, trigger.start) + token + value.slice(trigger.end);
   return { text, cursor: trigger.start + token.length };
 }

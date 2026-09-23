@@ -19,6 +19,20 @@ export function WorkspaceTour({ open, language, onClose }: TourProps) {
   useEffect(() => { if (open) setIndex(0); }, [open]);
   useEffect(() => {
     if (!open) return;
+    const layer = cardRef.current?.parentElement;
+    const previousFocus = document.activeElement;
+    const siblings = [...(layer?.parentElement?.children ?? [])]
+      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== layer)
+      .map(element => ({ element, inert: element.inert }));
+    for (const { element } of siblings) element.inert = true;
+    return () => {
+      for (const { element, inert } of siblings) element.inert = inert;
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected && previousFocus !== document.body) previousFocus.focus();
+      else document.querySelector<HTMLElement>('[data-tour="brand"]')?.focus();
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
     const update = () => {
       const target = document.querySelector<HTMLElement>(STEPS[index].target);
       if (!target) { setHighlight(null); return; }
@@ -38,8 +52,12 @@ export function WorkspaceTour({ open, language, onClose }: TourProps) {
   const screenHeight = window.innerHeight;
   const cardWidth = Math.min(340, screenWidth - 32);
   const cardLeft = Math.max(16, Math.min((highlight?.left ?? 16), screenWidth - cardWidth - 16));
-  const cardTop = highlight ? (highlight.top + highlight.height + 186 < screenHeight
-    ? highlight.top + highlight.height + 16 : Math.max(16, highlight.top - 196)) : Math.max(16, (screenHeight - 190) / 2);
+  const cardHeight = Math.min(cardRef.current?.getBoundingClientRect().height ?? 220, screenHeight - 32);
+  const below = (highlight?.top ?? 0) + (highlight?.height ?? 0) + 16;
+  const preferredTop = highlight
+    ? below + cardHeight + 16 <= screenHeight ? below : highlight.top - cardHeight - 16
+    : (screenHeight - cardHeight) / 2;
+  const cardTop = Math.max(16, Math.min(preferredTop, screenHeight - cardHeight - 16));
   return <div className="tour-layer" role="dialog" aria-modal="true" aria-label={language === 'fa' ? 'راهنمای پارس‌رگ' : 'ParsRAG tour'}
     onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); onClose(); }
