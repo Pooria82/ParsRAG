@@ -41,7 +41,7 @@ jobs:
       - run: python -m mypy backend --strict
       - run: python -m pytest --cov=backend --cov-report=term-missing
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
