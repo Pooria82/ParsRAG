@@ -88,7 +88,7 @@ export class ParsRagApiClient {
     return response.json() as Promise<ModelConfiguration>;
   }
 
-  async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string }, signal?: AbortSignal): Promise<ModelConfiguration> {
+  async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string; disclosure_acknowledged?: boolean }, signal?: AbortSignal): Promise<ModelConfiguration> {
     const response = await fetch(this.url('/models/configuration'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
     if (!response.ok) throw new ApiError('request_failed', response.status);
     return response.json() as Promise<ModelConfiguration>;

@@ -19,7 +19,7 @@ from backend.core.models.domain import (
     ModelProvider,
     OllamaModel,
 )
-from backend.core.security import validate_model_api_url
+from backend.core.security import model_api_is_external, validate_model_api_url
 from backend.infrastructure.llm.config_store import (
     load_model_configuration,
     save_model_configuration,
@@ -29,6 +29,16 @@ load_dotenv()
 
 _configuration_lock = RLock()
 _api_key = os.getenv("MODEL_API_KEY") or os.getenv("OPENROUTER_API_KEY") or None
+
+
+def _environment_disclosure_acknowledged() -> bool:
+    """Read explicit operator consent for externally hosted model APIs."""
+    return os.getenv("MODEL_API_DISCLOSURE_ACKNOWLEDGED", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _bounded_environment_int(
@@ -69,12 +79,21 @@ def _environment_configuration() -> ModelConfigurationRequest:
         model_name=os.getenv("LLM_MODEL_NAME", "gemma3:12b"),
         base_url=base_url,
         api_key=_api_key,
+        disclosure_acknowledged=_environment_disclosure_acknowledged(),
     )
 
 
 _configuration = load_model_configuration() or _environment_configuration()
 if _configuration.provider is ModelProvider.API:
-    _configuration = _configuration.model_copy(update={"api_key": _api_key})
+    _configuration = _configuration.model_copy(
+        update={
+            "api_key": _api_key,
+            "disclosure_acknowledged": (
+                _configuration.disclosure_acknowledged
+                or _environment_disclosure_acknowledged()
+            ),
+        }
+    )
 
 
 def _is_local_ollama_url(value: str) -> bool:
@@ -108,6 +127,7 @@ def get_model_configuration() -> ModelConfigurationResponse:
             model_name=_configuration.model_name,
             base_url=_configuration.base_url,
             api_key_configured=bool(_api_key),
+            disclosure_acknowledged=_configuration.disclosure_acknowledged,
         )
 
 
@@ -158,6 +178,11 @@ def configure_model(
         raise ValueError("Ollama must use loopback or the configured internal host.")
     if configuration.provider is ModelProvider.API:
         base_url = validate_model_api_url(base_url)
+        if (
+            model_api_is_external(base_url)
+            and not configuration.disclosure_acknowledged
+        ):
+            raise ValueError("External model API disclosure must be acknowledged.")
         api_key = configuration.api_key or _api_key
         if verify:
             _verify_openai_compatible_connection(base_url, api_key)

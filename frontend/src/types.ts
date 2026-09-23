@@ -11,6 +11,7 @@ export interface ModelConfiguration {
   model_name: string;
   base_url: string;
   api_key_configured: boolean;
+  disclosure_acknowledged: boolean;
 }
 
 export interface OllamaModel { name: string; size?: number | null }

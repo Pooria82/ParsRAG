@@ -121,10 +121,14 @@ LLM_PROVIDER=api
 LLM_MODEL_NAME=your-model-id
 MODEL_API_BASE_URL=https://provider.example/v1
 MODEL_API_KEY=your-runtime-secret
+MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
 ```
 
 API خصوصی سازگار با OpenAI می‌تواند بدون کلید باشد. آدرس‌های عمومی باید HTTPS
 باشند، اما loopback و شبکه خصوصی می‌توانند از HTTP استفاده کنند.
+برای API خارجی، فقط پس از پذیرش ارسال پرسش‌ها و بخش‌های مرتبط اسناد، مقدار
+`MODEL_API_DISCLOSURE_ACKNOWLEDGED` را `1` بگذارید. در تنظیمات برنامه نیز همین
+تأیید هنگام انتخاب API ثبت می‌شود.
 
 ```powershell
 docker compose up -d --build

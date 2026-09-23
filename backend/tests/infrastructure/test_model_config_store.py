@@ -23,6 +23,7 @@ def test_model_configuration_persists_without_secret(
         model_name="corporate-model",
         base_url="https://models.example/v1",
         api_key="do-not-write-me",
+        disclosure_acknowledged=True,
     )
 
     try:
@@ -30,6 +31,7 @@ def test_model_configuration_persists_without_secret(
 
         payload = json.loads(path.read_text(encoding="utf-8"))
         assert "api_key" not in payload
+        assert payload["disclosure_acknowledged"] is True
         assert load_model_configuration() == configuration.model_copy(
             update={"api_key": None}
         )

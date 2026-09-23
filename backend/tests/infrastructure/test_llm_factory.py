@@ -107,6 +107,49 @@ def test_private_api_without_key_is_verified_through_models_endpoint(
 
 
 @patch("backend.infrastructure.llm.factory.httpx.get")
+def test_keyed_api_verification_uses_supplied_secret(mock_get: MagicMock) -> None:
+    """The verification request authenticates without persisting or returning its key."""
+    from backend.infrastructure.llm.factory import _verify_openai_compatible_connection
+
+    _verify_openai_compatible_connection("https://127.0.0.1/v1", "real-key")
+    mock_get.assert_called_once_with(
+        "https://127.0.0.1/v1/models",
+        headers={"Authorization": "Bearer real-key"},
+        timeout=8.0,
+        follow_redirects=False,
+    )
+
+
+@patch("backend.infrastructure.llm.factory.model_api_is_external", return_value=True)
+def test_external_api_requires_explicit_disclosure(_: MagicMock) -> None:
+    """An external endpoint cannot become active from unchecked settings."""
+    with pytest.raises(ValueError, match="disclosure"):
+        configure_model(
+            ModelConfigurationRequest(
+                provider=ModelProvider.API,
+                model_name="external-model",
+                base_url="https://127.0.0.1/v1",
+                api_key="secret-key",
+            ),
+            verify=False,
+            persist=False,
+        )
+
+
+def test_environment_disclosure_requires_explicit_operator_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Setting API provider alone is not external data-sharing consent."""
+    from backend.infrastructure.llm.factory import _environment_configuration
+
+    monkeypatch.setenv("LLM_PROVIDER", "api")
+    monkeypatch.setenv("MODEL_API_DISCLOSURE_ACKNOWLEDGED", "0")
+    assert not _environment_configuration().disclosure_acknowledged
+    monkeypatch.setenv("MODEL_API_DISCLOSURE_ACKNOWLEDGED", "1")
+    assert _environment_configuration().disclosure_acknowledged
+
+
+@patch("backend.infrastructure.llm.factory.httpx.get")
 def test_list_ollama_models_returns_installed_models(mock_get: MagicMock) -> None:
     mock_get.return_value.json.return_value = {
         "models": [{"name": "gemma3:12b", "size": 123}, {"name": "qwen3:14b"}]

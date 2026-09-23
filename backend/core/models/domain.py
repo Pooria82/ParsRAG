@@ -27,6 +27,7 @@ class ModelConfigurationRequest(BaseModel):
     model_name: str = Field(..., min_length=1, max_length=200)
     base_url: str = Field(..., min_length=1, max_length=500)
     api_key: str | None = Field(default=None, max_length=1000)
+    disclosure_acknowledged: bool = False
 
 
 class ModelConfigurationResponse(BaseModel):
@@ -36,6 +37,7 @@ class ModelConfigurationResponse(BaseModel):
     model_name: str
     base_url: str
     api_key_configured: bool
+    disclosure_acknowledged: bool = False
 
 
 class ConversationTitleRequest(BaseModel):

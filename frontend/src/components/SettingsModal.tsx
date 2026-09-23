@@ -46,6 +46,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
       if (config.provider === 'api') { setApiModelName(config.model_name); setApiModelUrl(config.base_url); }
       else { setOllamaModelName(config.model_name); setOllamaModelUrl(config.base_url); }
       setKeyConfigured(config.api_key_configured);
+      setApiDisclosureAccepted(config.disclosure_acknowledged);
       onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
         ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
         : { ollamaModelName: config.model_name, ollamaBaseUrl: config.base_url }) });
@@ -106,7 +107,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           event.preventDefault();
           if (provider === 'api' && !apiDisclosureAccepted) { setModelStatus('error'); setModelError(t.apiConsentRequired); return; }
           setModelStatus('loading'); setModelError(null);
-          void modelApi.configureModel({ provider, model_name: modelName.trim(), base_url: modelUrl.trim(), ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
+          void modelApi.configureModel({ provider, model_name: modelName.trim(), base_url: modelUrl.trim(), disclosure_acknowledged: provider === 'api' && apiDisclosureAccepted, ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
             setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved');
             onModelConfigured?.(config);
             onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'

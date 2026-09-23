@@ -123,10 +123,14 @@ LLM_PROVIDER=api
 LLM_MODEL_NAME=your-model-id
 MODEL_API_BASE_URL=https://provider.example/v1
 MODEL_API_KEY=your-runtime-secret
+MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
 ```
 
 Private OpenAI-compatible services can omit the key. Public endpoints require
 HTTPS; loopback and private-network endpoints may use HTTP.
+Set the disclosure flag to `1` only after accepting that an external API receives
+prompts and retrieved document excerpts. The Settings screen records the same
+acknowledgement when configuring an API interactively.
 
 ```powershell
 docker compose up -d --build
