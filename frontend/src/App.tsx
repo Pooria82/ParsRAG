@@ -8,6 +8,7 @@ import { Composer } from './components/Composer';
 import { SettingsModal } from './components/SettingsModal';
 import { Welcome } from './components/Welcome';
 import { BootSequence } from './components/BootSequence';
+import { WorkspaceTour } from './components/WorkspaceTour';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
@@ -33,6 +34,8 @@ export function App() {
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
   const [focusToken, setFocusToken] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideEligible] = useState(() => { try { return localStorage.getItem('parsrag_tour_v1') !== 'done'; } catch { return true; } });
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
   const progressRef = useRef<AbortController>();
   const uploadRef = useRef(false);
@@ -51,11 +54,18 @@ export function App() {
 
   useEffect(() => { setSidebarOpen(!isMobile); }, [isMobile]);
   useEffect(() => {
+    if (!guideEligible) return;
+    const timeout = window.setTimeout(() => setGuideOpen(true), 1200);
+    return () => window.clearTimeout(timeout);
+  }, [guideEligible]);
+  const closeGuide = () => { setGuideOpen(false); try { localStorage.setItem('parsrag_tour_v1', 'done'); } catch { /* The tour remains dismissible when storage is unavailable. */ } };
+  useEffect(() => {
     document.documentElement.dir = settings.language === 'fa' ? 'rtl' : 'ltr';
     document.documentElement.lang = settings.language;
     document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.dataset.palette = settings.palette;
     document.title = settings.language === 'fa' ? 'پارس‌رگ — از پرسش، به بینش' : 'ParsRAG — A clearer perspective';
-  }, [settings.language, settings.theme]);
+  }, [settings.language, settings.theme, settings.palette]);
 
   const checkHealth = useCallback(async () => {
     healthRef.current?.abort();
@@ -249,6 +259,23 @@ export function App() {
     } finally { uploadRef.current = false; setUploadingId(undefined); }
   };
 
+  const reuseDocument = async (sourceSessionId: string, name: string) => {
+    if (uploadRef.current || queryRef.current || active.documents.some(doc => doc.name === name)
+      || active.documents.length >= ingestionCapabilities.max_files_per_session) return;
+    const sessionId = active.id;
+    uploadRef.current = true; setUploadingId(sessionId); setUploadError(null);
+    updateSession(sessionId, session => ({ ...session, documents: [...session.documents,
+      { name, status: 'processing', enabled: true }], updatedAt: Date.now() }));
+    try {
+      await api.reuseDocument(sessionId, sourceSessionId, name, AbortSignal.timeout(60000));
+      updateSession(sessionId, session => ({ ...session, documents: session.documents.map(doc =>
+        doc.name === name ? { ...doc, status: 'indexed' } : doc) }));
+    } catch {
+      updateSession(sessionId, session => ({ ...session, documents: session.documents.filter(doc => doc.name !== name) }));
+      setUploadError({ sessionId, text: t.reuseDocumentFailed });
+    } finally { uploadRef.current = false; setUploadingId(undefined); }
+  };
+
   const deleteDocument = async (name: string) => {
     if (busy) return;
     try {
@@ -298,7 +325,10 @@ export function App() {
     onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
     isGenerating={generatingId === active.id} isBusy={busy} activeMode={active.ragMode}
     onChangeMode={ragMode => updateSession(active.id, s => ({ ...s, ragMode }))}
-    language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken} />;
+    language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken}
+    documentNames={active.documents.filter(doc => doc.status === 'indexed').map(doc => doc.name)}
+    onSelectMention={name => updateSession(active.id, session => ({ ...session, documents: session.documents.map(doc => doc.name === name ? { ...doc, enabled: true } : doc) }))}
+    onOpenGuide={() => setGuideOpen(true)} />;
 
   return <div className="app-shell">
     <BootSequence language={settings.language} />
@@ -342,6 +372,10 @@ export function App() {
     </main>
     <DocumentCenter isOpen={documentsOpen} onClose={() => setDocumentsOpen(false)} documents={active.documents}
       capabilities={ingestionCapabilities}
+      reusableDocuments={sessions.filter(session => session.id !== active.id).flatMap(session => session.documents
+        .filter(doc => doc.status === 'indexed' && !active.documents.some(current => current.name === doc.name))
+        .map(doc => ({ sourceSessionId: session.id, sourceTitle: session.title, name: doc.name })))}
+      onReuseDocument={(sourceSessionId, name) => void reuseDocument(sourceSessionId, name)}
       onUploadFiles={files => void upload(files)} language={settings.language} isUploading={busy} activeMode={active.ragMode}
       error={uploadError?.sessionId === active.id ? uploadError.text : null}
       onRemoveFailed={name => updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name || d.status !== 'error') }))}
@@ -350,6 +384,7 @@ export function App() {
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />
     <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
+      onStartGuide={() => setGuideOpen(true)}
       onModelConfigured={setModelRuntime}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);
@@ -357,6 +392,7 @@ export function App() {
         else updateSettings(updated);
       }} busy={busy}
       onClearAllData={clearAllData} />
+    <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} />
   </div>;
 }
 

@@ -12,9 +12,10 @@ interface SettingsModalProps {
   onClose: () => void; settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => Promise<void>; busy: boolean;
   onModelConfigured?: (configuration: ModelConfiguration) => void;
+  onStartGuide: () => void;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured, onStartGuide }: SettingsModalProps) {
   const t = translations[settings.language];
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -83,10 +84,19 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
             <span className="theme-choice-label">{theme === 'light' ? <Sun size={16} /> : <Moon size={16} />}{theme === 'light' ? t.themeLight : t.themeDark}{settings.theme === theme && <Check size={15} />}</span>
           </label>)}
         </div></fieldset>
+        <fieldset className="setting-field"><legend>{t.paletteLabel}</legend><div className="palette-choices">
+          {(['evergreen', 'ocean', 'indigo', 'sienna'] as const).map(palette => <label className={'palette-choice palette-' + palette} key={palette}>
+            <input type="radio" name="palette" checked={settings.palette === palette} onChange={() => onUpdateSettings({ palette })} />
+            <span className="palette-swatch" aria-hidden="true" /><span>{t.palettes[palette]}</span>{settings.palette === palette && <Check size={14} />}
+          </label>)}
+        </div></fieldset>
         <fieldset className="setting-field"><legend>{t.languageLabel}</legend><div className="segmented-control">
           <label><input type="radio" name="language" checked={settings.language === 'fa'} onChange={() => onUpdateSettings({ language: 'fa' })} /><span lang="fa">فارسی</span></label>
           <label><input type="radio" name="language" checked={settings.language === 'en'} onChange={() => onUpdateSettings({ language: 'en' })} /><span lang="en">English</span></label>
         </div></fieldset>
+        <div className="setting-field guide-setting"><span><strong>{t.guideReplay}</strong><small>{t.guideReplayHint}</small></span>
+          <button className="button secondary" onClick={() => { onClose(); onStartGuide(); }}><CircleHelp size={16} />{t.guideStart}</button>
+        </div>
       </>}
       {tab === 'rag' && <>
         <div className="setting-field"><label>{t.defaultModeLabel}</label>

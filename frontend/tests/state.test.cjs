@@ -11,6 +11,9 @@ test('recovers malformed storage and validates settings without external endpoin
   const settings = parseSettings(JSON.stringify({ language: 'xx', theme: 'neon', topK: 100, backendUrl: 'https://example.com' }));
   assert.equal(settings.language, 'fa');
   assert.equal(settings.theme, 'light');
+  assert.equal(settings.palette, 'evergreen');
+  assert.equal(parseSettings(JSON.stringify({ palette: 'ocean' })).palette, 'ocean');
+  assert.equal(parseSettings(JSON.stringify({ palette: 'unsafe' })).palette, 'evergreen');
   assert.equal(settings.topK, 50);
   assert.equal(settings.backendUrl, '');
   assert.equal(settings.apiModelName, 'google/gemma-4-26b-a4b-it');

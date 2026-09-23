@@ -106,7 +106,7 @@ test('stop control replaces submission during a pending answer', () => {
 
 test('document controls allow clearing the final source and deleting an indexed document', () => {
   const html = render(DocumentCenter, { isOpen: false, onClose: noop, documents: [{ name: 'a.pdf', status: 'indexed' }],
-    onUploadFiles: noop, onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'en', isUploading: false, activeMode: 'strict', error: null });
+    reusableDocuments: [], onReuseDocument: noop, onUploadFiles: noop, onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'en', isUploading: false, activeMode: 'strict', error: null });
   assert.match(html, /accept=".pdf,.docx,.pptx,.png/);
   assert.match(html, /10/);
   assert.match(html, /type="checkbox"/);
@@ -116,7 +116,7 @@ test('document controls allow clearing the final source and deleting an indexed 
 
 test('document processing shows transfer, extraction and ready stages', () => {
   const html = render(DocumentCenter, { isOpen: true, onClose: noop,
-    documents: [{ name: 'scan.pdf', status: 'processing', size: 1000 }], onUploadFiles: noop,
+    documents: [{ name: 'scan.pdf', status: 'processing', size: 1000 }], reusableDocuments: [], onReuseDocument: noop, onUploadFiles: noop,
     onRemoveFailed: noop, onToggleDocument: noop, onDeleteDocument: noop, language: 'fa',
     isUploading: true, activeMode: 'strict', error: null });
   assert.match(html, /انتقال فایل/);
@@ -129,7 +129,7 @@ test('settings render labeled native choices and modal semantics in both languag
     const html = render(SettingsModal, { onClose: noop, settings: { ...DEFAULT_SETTINGS, language }, onUpdateSettings: noop, onClearAllData: noop, busy: false });
     assert.match(html, /<dialog[^>]*aria-labelledby=/);
     assert.match(html, /role="tablist"/);
-    assert.equal((html.match(/type="radio"/g) || []).length, 4);
+    assert.equal((html.match(/type="radio"/g) || []).length, 8);
   }
 });
 

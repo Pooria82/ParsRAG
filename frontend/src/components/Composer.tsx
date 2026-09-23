@@ -3,12 +3,14 @@ import { ArrowUp, BookOpen, Check, ChevronDown, Layers2, MessageCircle, Papercli
 import type { RAGMode, Language } from '../types';
 import { translations } from '../i18n/translations';
 import { MODES } from '../core/state';
+import { activeComposerTrigger, applyComposerCommand, COMMANDS, insertDocumentMention } from '../core/composerActions';
 
 interface ComposerProps {
   value: string; onChange: (value: string) => void; onSendMessage: () => void;
   onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean;
   activeMode: RAGMode; onChangeMode: (mode: RAGMode) => void;
   language: Language; onOpenDocuments: () => void; documentCount: number; focusToken: number;
+  documentNames: string[]; onSelectMention: (name: string) => void; onOpenGuide: () => void;
 }
 
 const modeIcons = { hybrid: Layers2, strict: BookOpen, 'llm-only': MessageCircle };
@@ -17,10 +19,36 @@ export function Composer(props: ComposerProps) {
   const { value, onChange, isGenerating, activeMode, language } = props;
   const t = translations[language];
   const [modeOpen, setModeOpen] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const [menuIndex, setMenuIndex] = useState(0);
+  const [menuDismissed, setMenuDismissed] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const ModeIcon = modeIcons[activeMode];
+  const trigger = menuDismissed ? null : activeComposerTrigger(value, cursor);
+  const suggestions = trigger?.kind === 'document'
+    ? props.documentNames.filter(name => name.toLocaleLowerCase().includes(trigger.query.trim().toLocaleLowerCase())).slice(0, 8)
+    : trigger?.kind === 'command' ? COMMANDS.filter(command => command.id.startsWith(trigger.query.toLowerCase())).slice(0, 9) : [];
+
+  const chooseSuggestion = (index: number) => {
+    if (!trigger || index < 0 || index >= suggestions.length) return;
+    if (trigger.kind === 'document') {
+      const name = suggestions[index] as string;
+      const inserted = insertDocumentMention(value, trigger, name);
+      onChange(inserted.text); props.onSelectMention(name);
+      requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.setSelectionRange(inserted.cursor, inserted.cursor); });
+    } else {
+      const command = suggestions[index] as typeof COMMANDS[number];
+      const applied = applyComposerCommand(command.id, language, value, trigger);
+      onChange(applied.text);
+      if (applied.mode) props.onChangeMode(applied.mode);
+      if (applied.action === 'documents') props.onOpenDocuments();
+      if (applied.action === 'help') props.onOpenGuide();
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+    setMenuDismissed(true);
+  };
 
   useEffect(() => {
     if (!inputRef.current) return;
@@ -39,6 +67,13 @@ export function Composer(props: ComposerProps) {
   }, [modeOpen]);
   const send = () => { if (value.trim() && !props.isBusy) props.onSendMessage(); };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (trigger && suggestions.length && !event.nativeEvent.isComposing) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); setMenuIndex(current => (current + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length); return;
+      }
+      if (event.key === 'Enter') { event.preventDefault(); chooseSuggestion(menuIndex % suggestions.length); return; }
+      if (event.key === 'Escape') { event.preventDefault(); setMenuDismissed(true); return; }
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault(); send();
     }
@@ -54,11 +89,21 @@ export function Composer(props: ComposerProps) {
     } else if (event.key === 'Tab') setModeOpen(false);
   };
 
-  return <div className="composer-wrap">
+  return <div className="composer-wrap" data-tour="composer">
     <div className="composer">
-      <textarea id="message-input" ref={inputRef} value={value} onChange={e => onChange(e.target.value)}
+      <textarea id="message-input" ref={inputRef} value={value} onChange={e => { onChange(e.target.value); setCursor(e.target.selectionStart); setMenuIndex(0); setMenuDismissed(false); }}
+        onClick={e => setCursor(e.currentTarget.selectionStart)} onKeyUp={e => setCursor(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown} placeholder={t.composerPlaceholder} aria-label={t.messageLabel}
+        aria-controls={trigger && suggestions.length ? 'composer-suggestions' : undefined} aria-expanded={Boolean(trigger && suggestions.length)}
         rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={30000} />
+      {trigger && suggestions.length > 0 && <div className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
+        <p>{trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}</p>
+        {suggestions.map((option, index) => <button type="button" role="option" aria-selected={index === menuIndex} key={typeof option === 'string' ? option : option.id}
+          className={index === menuIndex ? 'is-active' : ''} onMouseDown={event => event.preventDefault()} onClick={() => chooseSuggestion(index)}>
+          {typeof option === 'string' ? <><Paperclip size={15} /><bdi>{option}</bdi></>
+            : <><span dir="ltr">{option.label}</span><small>{language === 'fa' ? option.fa : option.en}</small></>}
+        </button>)}
+      </div>}
       <div className="composer-toolbar">
         <div className="composer-tools">
           <button className="icon-button attach-button" onClick={props.onOpenDocuments} aria-label={t.attach} title={t.attach}><Paperclip size={20} />
@@ -66,7 +111,7 @@ export function Composer(props: ComposerProps) {
           </button>
           <span className="toolbar-divider" />
           <div className="mode-control">
-            <button ref={triggerRef} className="mode-trigger" aria-haspopup="menu" aria-expanded={modeOpen} aria-controls="answer-mode-menu"
+            <button ref={triggerRef} className="mode-trigger" data-tour="mode" aria-haspopup="menu" aria-expanded={modeOpen} aria-controls="answer-mode-menu"
               onClick={() => setModeOpen(!modeOpen)} title={t.modeLabel}>
               <ModeIcon size={16} /><span>{t.ragModes[activeMode].short}</span><ChevronDown size={14} className={modeOpen ? 'rotate' : ''} />
             </button>

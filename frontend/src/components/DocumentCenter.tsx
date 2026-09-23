@@ -11,9 +11,11 @@ interface DocumentCenterProps {
   onToggleDocument: (name: string) => void; onDeleteDocument: (name: string) => void; language: Language; isUploading: boolean;
   activeMode: RAGMode; error: string | null;
   capabilities?: IngestionCapabilities;
+  reusableDocuments: Array<{ sourceSessionId: string; sourceTitle: string; name: string }>;
+  onReuseDocument: (sourceSessionId: string, name: string) => void;
 }
 
-export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES }: DocumentCenterProps) {
+export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, reusableDocuments, onReuseDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES }: DocumentCenterProps) {
   const t = translations[language];
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -38,6 +40,16 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
         {!full && !isUploading && <span className="browse-link">{t.docBrowse}</span>}
         <small>{dropzoneDetails}</small>
       </button>
+      {reusableDocuments.length > 0 && !full && <section className="reusable-documents" aria-label={t.reuseDocumentsTitle}>
+        <div className="document-list-heading"><span>{t.reuseDocumentsTitle}</span><small>{t.reuseDocumentsHint}</small></div>
+        <div className="reusable-document-list">
+          {reusableDocuments.map(item => <div className="reusable-document" key={`${item.sourceSessionId}:${item.name}`}>
+            <FileText size={17} aria-hidden="true" />
+            <span><bdi title={item.name}>{item.name}</bdi><small>{item.sourceTitle}</small></span>
+            <button className="button secondary" disabled={isUploading} onClick={() => onReuseDocument(item.sourceSessionId, item.name)}>{t.reuseDocument}</button>
+          </div>)}
+        </div>
+      </section>}
       {error && <p className="inline-error" role="alert"><AlertCircle size={16} />{error}</p>}
       {documents.length > 0 && <>
         <div className="document-list-heading"><span>{t.documents}</span><span>{documents.length.toLocaleString(language)} / {limitLabel}</span></div>
