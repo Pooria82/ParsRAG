@@ -21,6 +21,7 @@ COPY requirements-runtime.txt requirements.lock /tmp/
 RUN pip install --upgrade 'pip>=26.1.2' 'setuptools>=78.1.1' \
     && pip install --index-url "${TORCH_INDEX_URL}" "torch==${TORCH_VERSION}" \
     && pip install -r /tmp/requirements-runtime.txt -c /tmp/requirements.lock
+RUN pip uninstall --yes pip
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 \
@@ -29,8 +30,9 @@ ENV PYTHONUNBUFFERED=1 \
     HOME=/home/parsrag \
     HF_HOME=/home/parsrag/.cache/huggingface
 
-# The base image has a separate global pip; keep it patched as well as the venv.
-RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade 'pip>=26.1.2'
+# pip is needed to build the image, but not to run the application. Remove the
+# base image's copy (and its vendored build-time packages) from the runtime.
+RUN /usr/local/bin/python -m pip uninstall --yes pip
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
