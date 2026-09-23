@@ -24,6 +24,17 @@ Ollama, a private OpenAI-compatible endpoint, or an external API when local
 hardware is unavailable. Every conversation has its own documents, retrieval
 scope, answer branches, sources, and deletion lifecycle.
 
+## Interface preview
+
+The conversation and source names below are synthetic examples captured from the
+running application. No private documents or API credentials appear in these images.
+
+<p align="center"><a href="docs/screenshots/home-en-light.png"><img src="docs/screenshots/home-en-light.png" width="900" alt="ParsRAG English welcome screen in light mode"></a></p>
+
+| Model connection | Grounded answer and sources | Dark workspace |
+| --- | --- | --- |
+| [![English model connection settings](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) | [![English sample answer with file and location citations](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
+
 ## Highlights
 
 - **Three explicit answer modes:** Strict document-only RAG, Hybrid RAG, and

@@ -24,6 +24,17 @@
 یا یک سرویس خارجی استفاده کرد. هر گفت‌وگو اسناد، محدوده جست‌وجو، شاخه‌های
 پاسخ، منابع و چرخه حذف مستقل خود را دارد.
 
+## نمای رابط کاربری
+
+گفت‌وگو و نام منابع در تصاویر زیر نمونهٔ ساختگی هستند. تصاویر از رابط برنامهٔ
+در حال اجرا گرفته شده‌اند و سند خصوصی یا کلید API در آن‌ها دیده نمی‌شود.
+
+<p align="center"><a href="docs/screenshots/home-fa-light.png"><img src="docs/screenshots/home-fa-light.png" width="900" alt="صفحه آغاز پارس‌رگ به زبان فارسی در حالت روشن"></a></p>
+
+| تنظیمات اتصال مدل | پاسخ مستند و منابع | فضای کار در حالت تاریک |
+| --- | --- | --- |
+| [![تنظیمات فارسی اتصال مدل](docs/screenshots/model-fa-light.png)](docs/screenshots/model-fa-light.png) | [![پاسخ نمونه فارسی با نام فایل و محل منبع](docs/screenshots/sources-fa-light.png)](docs/screenshots/sources-fa-light.png) | [![گفت‌وگوی فارسی در حالت تاریک](docs/screenshots/workspace-fa-dark.png)](docs/screenshots/workspace-fa-dark.png) |
+
 ## قابلیت‌های اصلی
 
 - **سه روش پاسخ‌دهی روشن:** فقط مبتنی بر سند، ترکیبی و فقط مبتنی بر دانش مدل.
