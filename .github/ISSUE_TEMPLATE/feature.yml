@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a focused product improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the workflow or limitation, without confidential data.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Data boundary
+      options:
+        - label: I described whether this changes local storage or model API data flow.
+          required: true

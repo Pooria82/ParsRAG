@@ -1,0 +1,70 @@
+name: Supply chain
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+
+  python-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install pip-audit
+      # NLTK is transitive through llama-index-core. ParsRAG does not call the
+      # model-path APIs affected by PYSEC-2026-3740; SECURITY.md records this
+      # narrow risk acceptance until upstream publishes a patched release.
+      - run: >-
+          python -m pip_audit --requirement requirements.lock
+          --ignore-vuln PYSEC-2026-3740
+
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build --tag parsrag:scan .
+      - uses: anchore/sbom-action@v0
+        with:
+          image: parsrag:scan
+          format: spdx-json
+          output-file: parsrag.spdx.json
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: parsrag:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: parsrag:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parsrag-sbom
+          path: parsrag.spdx.json

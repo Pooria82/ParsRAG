@@ -15,6 +15,8 @@ To maintain velocity while ensuring absolute stability for a production-grade sy
   - The CI/CD pipeline must pass 100%.
   - The PR must receive at least one code review approval.
   - Squash and Merge is mandated to keep the `main` history strictly linear and readable.
+- **Granular Committing Rule:** Work must *always* start on the `develop` branch (or a feature branch branching from it). A commit MUST be made immediately after completing each section, phase, or after making significant changes to a file or directory. Large monolithic commits are forbidden.
+- **Test-Driven Execution Rule:** After implementing any section or phase, you MUST write the related automated tests (e.g., unit tests). You must run the code (if possible) and execute the tests to guarantee correct functionality *before* making the granular commit.
 
 ## 2. Commit Message Convention
 We enforce **Conventional Commits** (`type(scope): message`) to allow for automated changelog generation and semantic version bumping.
@@ -61,10 +63,19 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# 6. Chainlit & UI
-.chainlit/
+# 6. Frontend build output
+node_modules/
+dist/
 
-# 7. OS & IDE
+# 7. Raw Data & Uploads
+data/
+uploads/
+documents/
+*.pdf
+*.txt
+*.docx
+
+# 8. OS & IDE
 .DS_Store
 .vscode/
 .idea/

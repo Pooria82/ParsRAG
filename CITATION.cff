@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use ParsRAG in research or a publication, cite this software."
+type: software
+title: "ParsRAG"
+abstract: "An offline-first Persian document conversation workspace with local and explicitly configured model runtimes."
+authors:
+  - family-names: "Madani"
+    given-names: "Pooria"
+repository-code: "https://github.com/Pooria82/ParsRAG"
+url: "https://github.com/Pooria82/ParsRAG"
+version: 0.1.0
+date-released: 2026-09-23

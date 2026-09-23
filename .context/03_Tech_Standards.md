@@ -28,7 +28,7 @@ Given the non-deterministic nature of LLMs, testing a RAG pipeline requires spec
 - **Framework:** `pytest` and `pytest-asyncio` for all asynchronous endpoints.
 - **Coverage Expectation:** Minimum **85% global test coverage**, with 100% coverage on core domain models, routers, and strategy classes.
 - **RAG/LLM Testing Approach:**
-  - **Unit Tests:** Mock the LLM and Qdrant responses using `unittest.mock`. Test the deterministic parts: routing logic, chunking algorithms, and prompt formatting.
+  - **Unit Tests:** Mock the LLM and Qdrant responses using `unittest.mock`. Test the deterministic parts: routing logic, chunking algorithms, and prompt formatting. Ensure assertions validate the strict Pydantic `QueryResponse` structures, not just raw strings.
   - **Integration Tests:** Use `Testcontainers` (or local docker-compose spin-ups) to test the actual FastAPI -> Qdrant connection without an LLM.
   - **LLM Evaluation:** For end-to-end RAG testing, use an evaluation framework like `Ragas` or `TruLens` in a separate staging CI pipeline to measure *Faithfulness* (no hallucination) and *Answer Relevance*.
 
@@ -43,18 +43,21 @@ ParsRAG/
 │   │   ├── dependencies.py    # FastAPI Depends() injections
 │   │   └── routes.py          # API route definitions
 │   ├── core/                  # Business Logic (Framework Agnostic)
+│   │   ├── interfaces/        # Abstract Base Classes (Strategy & Repository)
 │   │   ├── models/            # Pydantic V2 domain models
-│   │   └── strategies/        # RAG Query Strategies (Strict, Hybrid, LLM-Only)
+│   │   ├── strategies/        # RAG Query Strategies (Strict, Hybrid, LLM-Only)
+│   │   ├── condenser.py       # Conversational memory re-writer pipeline
+│   │   └── exceptions.py      # Centralized domain errors (ParsRAGError)
 │   ├── infrastructure/        # External I/O (LlamaIndex config, Qdrant, PyMuPDF)
 │   │   ├── database/          # Qdrant repository implementations
-│   │   ├── llm/               # Ollama factory and LlamaIndex prompt templates
+│   │   ├── llm/               # Ollama factory (Prompt templates are encapsulated in strategies)
 │   │   └── parsers/           # Document ingestion and PDF parsing
 │   ├── tests/                 # Backend pytest suite
 │   └── main.py                # FastAPI application entrypoint
-├── frontend/                  # Chainlit UI
-│   ├── app.py                 # Chainlit async event loop and UI layout
-│   ├── chainlit.md            # Chainlit welcome screen markdown
-│   └── public/                # Static assets (logos, custom CSS)
+├── frontend/                  # React 18, TypeScript, and Vite UI
+│   ├── src/                   # Components, state, API client, and styles
+│   ├── public/                # Local fonts and brand assets
+│   └── tests/                 # Deterministic frontend tests
 ├── docker-compose.yml         # Defines backend, frontend, qdrant, and ollama
 ├── pyproject.toml             # Poetry/Ruff/MyPy configurations
 └── README.md
@@ -67,3 +70,17 @@ Errors must never leak stack traces to the user and must not crash the applicati
 - **Logging:**
   - Use the built-in Python `logging` module configured with a JSON formatter for production (for easy ingestion into ELK/Datadog) and colored console output for development.
   - **Traceability:** Every API request must generate a unique `correlation_id` passed through the entire LlamaIndex pipeline and logged alongside every INFO/ERROR message.
+
+## 7. Security Practices
+Security must be implemented defensively at every system boundary.
+- **Input Validation:** All incoming API requests and uploaded files MUST be rigorously validated using Pydantic before processing.
+- **Path Traversal Prevention:** Uploaded filenames must be sanitized (`werkzeug.utils.secure_filename` or similar) to prevent path traversal attacks.
+- **Explicit Egress:** No telemetry is permitted. Model traffic may leave the workstation only when the user explicitly selects API mode and accepts the disclosure; parsing, embeddings, and vector storage remain local.
+- **Prompt Injection:** Employ defensive system prompts to mitigate user prompt injection attempting to leak organizational documents out of context.
+
+## 8. Database Optimization & Scalability
+While a traditional SQL ORM isn't applicable to a vector database, Qdrant relies on strict Pydantic schemas acting as our data modeling layer.
+- **Data Modeling (ORM-like validation):** Pydantic models define the schema for vector payloads. No unstructured dictionaries should be directly written to the database.
+- **Scalability & Indexing:** 
+  - Ensure Qdrant payload fields (e.g., `session_id`) are explicitly indexed (`create_payload_index`) to allow fast filtering.
+- **Optimization:** Use batched upserts instead of single-point inserts to maximize throughput during document ingestion. Maintain connection pooling via `qdrant-client` for high concurrency.

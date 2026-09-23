@@ -1,0 +1,25 @@
+services:
+  app:
+    image: parsrag-app:cuda
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124
+    environment:
+      EMBED_DEVICE: cuda
+      EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-32}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

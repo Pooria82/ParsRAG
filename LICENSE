@@ -1,0 +1,105 @@
+ParsRAG Source-Available License
+Version 1.0, 22 September 2026
+
+Copyright (c) 2026 Pooria Madani. All rights reserved.
+
+This license applies to the original ParsRAG source code, documentation,
+interface assets, and other original materials in this repository (the
+"Software"). Third-party components remain governed by their own licenses.
+
+1. Permitted use
+
+Subject to this license, the copyright holder grants you a limited,
+non-exclusive, non-transferable, non-sublicensable, revocable permission to:
+
+  a. download and make reasonable copies of an unmodified official release;
+  b. install and run that unmodified release for personal, academic, research,
+     educational, or internal organizational use; and
+  c. view and study the source code.
+
+Internal organizational use includes use by employees and contractors for the
+organization's own operations. It does not include providing the Software, or
+functionality substantially derived from it, to third parties as a hosted,
+managed, consulting, resale, or software-as-a-service offering.
+
+2. Contributions to the official project
+
+You may create a modification solely to prepare and submit a contribution to
+the official repository at https://github.com/Pooria82/ParsRAG. Until that
+change is accepted and released by the copyright holder, you may use the
+modified copy only for development and testing needed to prepare the
+contribution. You may not deploy, publish, distribute, or provide that modified
+copy to another person.
+
+Contributions are also subject to CONTRIBUTOR_LICENSE_AGREEMENT.md.
+
+3. Restrictions
+
+Except where the copyright holder gives prior written permission, you may not:
+
+  a. modify, adapt, translate, or create derivative works of the Software,
+     except as narrowly allowed by Section 2;
+  b. publish, distribute, mirror, sublicense, sell, rent, lease, transfer, or
+     otherwise make the Software or a derivative work available to others;
+  c. use the Software or a derivative work to provide a product or service to
+     third parties;
+  d. remove or alter copyright, attribution, license, authorship, provenance,
+     or trademark notices;
+  e. represent the Software or a derivative work as your own work;
+  f. rename, rebrand, or market the Software under another name;
+  g. use the ParsRAG name, logo, or visual identity except to identify an
+     unmodified official copy and link to the official repository; or
+  h. use the Software in violation of applicable law.
+
+Public GitHub functionality may allow users to view and fork this repository
+under GitHub's Terms of Service. Such a platform fork does not grant any rights
+beyond those stated in this license.
+
+4. Permission for other uses
+
+Commercial distribution, hosted services, private customizations, derivative
+products, redistribution, and other uses outside Section 1 require a separate
+written license from Pooria Madani. Permission requests must identify the
+requester, intended use, deployment scope, modifications, and distribution
+plan. Silence does not constitute permission.
+
+5. Ownership and attribution
+
+The Software is licensed, not sold. The copyright holder retains all title,
+copyright, trademark, and other intellectual-property rights in the Software.
+No implied rights are granted. Publications and academic work that use ParsRAG
+must cite the project using CITATION.cff and must not imply endorsement.
+
+6. Third-party materials
+
+This license does not replace or restrict the licenses of third-party packages,
+models, fonts, or other dependencies. You are responsible for complying with
+those terms. In particular, the bundled Vazirmatn font is licensed separately
+under the SIL Open Font License in frontend/public/fonts/OFL.md.
+
+7. Termination
+
+Your permission terminates automatically when you breach this license. Upon
+termination, you must stop using the Software and delete all copies under your
+control, except copies that applicable law requires you to retain. Sections 3,
+5, 7, 8, and 9 survive termination.
+
+8. Disclaimer of warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT. THE COPYRIGHT HOLDER DOES NOT WARRANT THAT
+THE SOFTWARE WILL BE ERROR-FREE, SECURE, OR SUITABLE FOR ANY PARTICULAR USE.
+
+9. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER WILL NOT BE LIABLE
+FOR ANY CLAIM, LOSS, OR OTHER LIABILITY ARISING FROM OR RELATED TO THE SOFTWARE
+OR ITS USE, WHETHER IN CONTRACT, TORT, OR OTHERWISE.
+
+10. Complete terms
+
+This document states the complete public license for the Software. A waiver or
+additional permission is effective only when made in writing by the copyright
+holder. If a provision is unenforceable, the remaining provisions continue in
+effect.

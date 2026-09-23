@@ -3,8 +3,8 @@
 ## 1. Definitive Technology Stack
 To achieve FAANG-level production readiness, the initially proposed stack has been critically evaluated and upgraded. Below are the finalized technology decisions and their justifications:
 
-- **Frontend UI: Chainlit** *(Upgraded from Streamlit)*
-  - *Justification:* Streamlit executes in a top-down script rerun loop, which is suboptimal for complex conversational state management. Chainlit is purpose-built for LLM chat applications. It supports native asynchronous event handling, real-time token streaming, and isolated user sessions out-of-the-box.
+- **Frontend UI: React 18, TypeScript, and Vite**
+  - *Justification:* A dedicated React workspace provides precise control over bilingual RTL/LTR behavior, local state, accessibility, document management, and the branded interaction design. FastAPI serves the production build from `frontend/dist`.
 - **Backend Framework: FastAPI** *(Retained)*
   - *Justification:* Asynchronous, high-performance web framework with native Pydantic validation and auto-generated OpenAPI docs. Ideal for serving LLMs and decoupling the backend from the UI.
 - **RAG Orchestration: LlamaIndex** *(Upgraded from LangChain)*
@@ -18,21 +18,21 @@ To achieve FAANG-level production readiness, the initially proposed stack has be
 - **Chunking Strategy:**
   - *Justification:* Using LlamaIndex's `SentenceSplitter` (formerly `RecursiveCharacterTextSplitter`) tuned specifically for Persian prose (target size: 500-1000 characters, overlap: 150 characters) to maintain semantic context boundaries.
 ## 2. High-Level System Architecture (Microservices)
-The system is entirely decoupled into microservices deployed via `Docker Compose`. This ensures independent scaling, clean boundaries, and isolated dependency management.
+The system keeps application and infrastructure boundaries explicit under Docker Compose. FastAPI serves the immutable React build, while Qdrant and Ollama remain replaceable infrastructure adapters.
 
 ### Containerization Strategy
-1. **`chainlit-ui` Container:** Serves the frontend application on port 8000.
-2. **`fastapi-backend` Container:** Hosts the core RAG logic, LlamaIndex orchestrator, and endpoints on port 8080.
-3. **`qdrant-db` Container:** Runs the official Rust-based Qdrant image.
-4. **`ollama-engine` Container:** Runs the local LLM (Qwen 2.5) with GPU-passthrough enabled for accelerated inference.
+1. **`app` Container:** A multi-stage image builds React with Vite, then serves the static workspace and typed API from FastAPI on port 8000.
+2. **`qdrant` Container:** Runs the official Qdrant image with a private persistent volume.
+3. **`ollama` Container:** Runs the local model service with a private persistent volume; an optional one-shot service pulls the configured model.
 
 ### Architecture Flow Diagram
 ```mermaid
 graph TD
-    Client((User)) -->|Uploads / Chats| UI[Chainlit UI Container]
+    Client((User)) -->|Port 8000| App[React UI + FastAPI application image]
     
     subgraph FastAPI Backend Container
         Router[API Router]
+        ExceptionHandler{Exception Handler}
         QueryPipeline[Query Orchestrator / Condenser]
         RAGRouter{Strategy: RAG Router}
         Reranker[FlashRank Node Post-Processor]
@@ -44,8 +44,9 @@ graph TD
         Ollama[Ollama Engine: Qwen 2.5]
     end
 
-    UI -->|REST / WebSockets| Router
-    Router --> QueryPipeline
+    App --> Router
+    Router --> ExceptionHandler
+    ExceptionHandler -->|Intercepts ParsRAGErrors| QueryPipeline
     QueryPipeline --> RAGRouter
     
     %% Strict & Hybrid
@@ -59,7 +60,7 @@ graph TD
     Generator -->|Streams Prompt| Ollama
     Ollama -->|Streams Tokens| Generator
     Generator -->|Returns Stream| Router
-    Router --> UI
+    Router --> App
 ```
 
 ## 3. Object-Oriented Design (OOP) & GoF Patterns
@@ -71,11 +72,11 @@ To ensure extreme maintainability and adherence to the Open-Closed Principle (OC
 
 ### 3.2. Repository Pattern (Database Decoupling)
 - **Problem:** Tying the application tightly to Qdrant makes it difficult to unit test or swap databases in the future.
-- **Solution:** Implement a `DocumentRepository` interface. The `QdrantRepository` implements this interface handling `save_nodes()`, `delete_session_nodes()`, and `similarity_search()`. The rest of the application only interacts with the interface.
+- **Solution:** Implement a `AbstractDocumentRepository` interface. The `QdrantRepository` implements this interface handling `save_nodes()`, `delete_session()`, and `similarity_search()`. The rest of the application only interacts with the interface.
 
-### 3.3. Factory Method Pattern
-- **Problem:** Constructing LlamaIndex components (VectorStoreIndex, Retrievers, LLMs) requires significant boilerplate and configuration injection.
-- **Solution:** Implement a `PipelineFactory` to abstract the instantiation of LlamaIndex objects, returning pre-configured query engines or retrievers based on the environment state.
+### 3.3. Singleton / Global Configuration Pattern
+- **Problem:** Constructing LlamaIndex components (VectorStoreIndex, Retrievers, LLMs) across different strategies requires significant boilerplate and configuration injection.
+- **Solution:** Utilize LlamaIndex's global `Settings` object (acting as a Singleton/Configuration registry) to inject the chosen LLM and embedding model uniformly at startup, avoiding the need for a complex custom Factory.
 
 ### 3.4. Dependency Injection (DI)
 - **Problem:** Hardcoding dependencies makes testing impossible.
@@ -84,6 +85,7 @@ To ensure extreme maintainability and adherence to the Open-Closed Principle (OC
 ## 4. Data Models (Domain Layer)
 All data crossing system boundaries is strictly validated using Pydantic V2 models.
 
+- **`ChatMessage`**: Represents a single conversation turn (role and content), acting as the backbone for conversational memory.
 - **`DocumentIngestionRequest`**: Contains `file_bytes`, `filename`, and `session_id` (optional).
 - **`QueryRequest`**: Contains `prompt` (str), `chat_history` (list of messages), and `mode` (enum: strict, hybrid, llm-only).
 - **`ExtractedNode`**: Represents a chunked piece of text. Contains `text`, `metadata` (page number, source file), and `relevance_score`.

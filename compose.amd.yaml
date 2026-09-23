@@ -1,0 +1,24 @@
+services:
+  app:
+    image: parsrag-app:rocm
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/rocm6.2.4
+    environment:
+      EMBED_DEVICE: cuda
+      EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-32}"
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+
+  ollama:
+    image: ollama/ollama:rocm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render

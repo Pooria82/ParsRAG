@@ -1,6 +1,7 @@
 # 1. Environment & Secrets
 .env
 .env.*
+!.env.example
 secrets.toml
 credentials.json
 
@@ -11,7 +12,7 @@ chroma_db/
 chroma_data/
 
 # 3. LLM Weights & HuggingFace Caches
-models/
+/models/
 .cache/
 huggingface/
 *.bin
@@ -32,15 +33,52 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
 .mypy_cache/
-
-# 6. Chainlit & UI
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+build/
+*.egg-info/
 .chainlit/
-.streamlit/secrets.toml
 
-# 7. OS & IDE
+# 6. OS & IDE
 .DS_Store
 .vscode/
 .idea/
+.agents/
 *.swp
+
+# 7. Private Data & Uploads
+data/
+uploads/
+documents/
+*.pdf
+*.txt
+!requirements-runtime.txt
+*.docx
+*.pptx
+
+# 8. Scratchpads & Generated Evaluation Files
+scratch/
+docs/evaluation/
+tmp/
+*.tmp
+*.log
+report.md
+testData/
+
+# 9. Node / Frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.db
+frontend/tests/.compiled/
+.playwright-cli/
+output/playwright/
+frontend/test-results/
+frontend/playwright-report/

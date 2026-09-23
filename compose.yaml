@@ -1,0 +1,146 @@
+name: parsrag
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parsrag-app:local
+    restart: unless-stopped
+    ports:
+      - "${PARSRAG_BIND_HOST:-127.0.0.1}:${PARSRAG_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      PARSRAG_MAX_REQUEST_BYTES: "${PARSRAG_MAX_REQUEST_BYTES:-534773760}"
+      PARSRAG_MAX_FILES_PER_SESSION: "${PARSRAG_MAX_FILES_PER_SESSION:-10}"
+      PARSRAG_MAX_FILE_BYTES: "${PARSRAG_MAX_FILE_BYTES:-104857600}"
+      PARSRAG_MAX_BATCH_BYTES: "${PARSRAG_MAX_BATCH_BYTES:-524288000}"
+      PARSRAG_INGEST_CONCURRENCY: "${PARSRAG_INGEST_CONCURRENCY:-1}"
+      PARSRAG_QUERY_CONCURRENCY: "${PARSRAG_QUERY_CONCURRENCY:-2}"
+      PARSRAG_ALLOWED_ORIGINS: "${PARSRAG_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      QDRANT_COLLECTION: "${QDRANT_COLLECTION:-}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
+      LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
+      OLLAMA_BASE_URL: "${OLLAMA_DOCKER_BASE_URL:-http://ollama:11434}"
+      OLLAMA_INTERNAL_HOST: ollama
+      MODEL_API_BASE_URL: "${MODEL_API_BASE_URL:-https://openrouter.ai/api/v1}"
+      MODEL_API_KEY: "${MODEL_API_KEY:-}"
+      MODEL_API_DISCLOSURE_ACKNOWLEDGED: "${MODEL_API_DISCLOSURE_ACKNOWLEDGED:-0}"
+      OPENROUTER_BASE_URL: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      PARSRAG_CONFIG_PATH: /var/lib/parsrag/model-configuration.json
+      EMBED_MODEL_NAME: "${EMBED_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      EMBED_DEVICE: "${EMBED_DEVICE:-auto}"
+      EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
+      EMBED_CACHE_DIR: /home/parsrag/.cache/huggingface
+      QDRANT_UPSERT_BATCH_SIZE: "${QDRANT_UPSERT_BATCH_SIZE:-64}"
+      OMP_NUM_THREADS: "${PARSRAG_CPU_THREADS:-4}"
+      MKL_NUM_THREADS: "${PARSRAG_CPU_THREADS:-4}"
+      HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"
+      OCR_ENABLED: "${OCR_ENABLED:-1}"
+      OCR_LANGUAGES: "${OCR_LANGUAGES:-fas+eng}"
+      OCR_DPI: "${OCR_DPI:-300}"
+      OCR_TIMEOUT_SECONDS: "${OCR_TIMEOUT_SECONDS:-45}"
+      OCR_MAX_PAGES: "${OCR_MAX_PAGES:-30}"
+      OCR_MAX_IMAGES: "${OCR_MAX_IMAGES:-30}"
+      OCR_MAX_IMAGE_PIXELS: "${OCR_MAX_IMAGE_PIXELS:-40000000}"
+      OCR_MIN_IMAGE_PIXELS: "${OCR_MIN_IMAGE_PIXELS:-10000}"
+      STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.80}"
+      RAG_TOP_K: "${RAG_TOP_K:-15}"
+      STRICT_RAG_TOP_K: "${STRICT_RAG_TOP_K:-15}"
+      HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
+      HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-15}"
+    volumes:
+      - model_cache:/home/parsrag/.cache
+      - app_config:/var/lib/parsrag
+    mem_limit: "${PARSRAG_APP_MEMORY_LIMIT:-6g}"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - parsrag_backend
+      - parsrag_egress
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    expose:
+      - "6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    mem_limit: "${QDRANT_MEMORY_LIMIT:-2g}"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -ec ': > /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - parsrag_backend
+
+  ollama:
+    image: "${OLLAMA_IMAGE:-ollama/ollama:0.34.1}"
+    profiles: ["local-model"]
+    restart: unless-stopped
+    expose:
+      - "11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-5m}"
+      OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-1}"
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-1}"
+      OLLAMA_FLASH_ATTENTION: "${OLLAMA_FLASH_ATTENTION:-1}"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-4096}"
+    volumes:
+      - ollama_models:/root/.ollama
+    mem_limit: "${OLLAMA_MEMORY_LIMIT:-12g}"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - parsrag_backend
+      - parsrag_egress
+
+  ollama-init:
+    image: "${OLLAMA_IMAGE:-ollama/ollama:0.34.1}"
+    profiles: ["local-model"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/ollama"]
+    command: ["pull", "${OLLAMA_MODEL:-gemma3:12b}"]
+    restart: "no"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - parsrag_backend
+
+volumes:
+  qdrant_data:
+  ollama_models:
+  model_cache:
+  app_config:
+
+networks:
+  parsrag_backend:
+    driver: bridge
+    internal: true
+  parsrag_egress:
+    driver: bridge
