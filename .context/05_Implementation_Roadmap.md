@@ -389,3 +389,17 @@ only when the user enables a remote API endpoint.
   refresh repository-discovery guidance against the public repository metadata.
 - [x] Test installability, offline shell loading, and API non-caching against
   both the production preview and the running Docker app.
+
+## Phase 13: Workspace Guidance and Interaction Polish
+
+- [x] Replace the PWA's opaque tile with a transparent, mask-safe version of
+  the welcome emblem and test alpha transparency in the install icon.
+- [x] Animate the document drawer in both interface directions, including its
+  exit path and backdrop, while respecting reduced-motion settings.
+- [x] Keep the active `@` or `/` suggestion visible during keyboard navigation
+  and give the suggestion list a clear, contained scrollbar.
+- [x] Add real keyboard shortcuts and operating-system-specific labels in
+  Settings; verify Control and Command behavior in browser tests.
+- [x] Expand the skippable and replayable tour to cover conversation history,
+  documents, composer, answer modes, response branches and sources, model
+  settings, privacy, local data controls, and installability.

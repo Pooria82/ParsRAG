@@ -87,6 +87,21 @@ document action, or help action. The document panel can also copy an indexed
 file from an earlier local conversation without another upload. Keep the source
 conversation until the copy completes; afterwards, the two copies are independent.
 
+The first-run tour now walks through conversation history, document upload and
+reuse, answer modes, prompt editing, sources, model settings, privacy, and data
+controls. Skip it or replay it from **Settings → Appearance → Workspace tour**.
+The same settings page lists shortcuts for the current operating system:
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| New conversation | `Ctrl+Shift+O` | `⌘⇧O` |
+| Search conversations | `Ctrl+Shift+K` | `⌘⇧K` |
+| Open documents | `Ctrl+Shift+D` | `⌘⇧D` |
+| Open settings | `Ctrl+,` | `⌘,` |
+| Focus the message box | `/` | `/` |
+| Show the tour | `Ctrl+Shift+H` | `⌘⇧H` |
+| Switch light/dark | `Ctrl+Shift+Y` | `⌘⇧Y` |
+
 ## Supported inputs
 
 | Family | Extensions | Processing |
