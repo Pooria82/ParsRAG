@@ -59,6 +59,8 @@ running application. No private documents or API credentials appear in these ima
   a skippable and replayable first-run tour, model settings,
   progressive answers, real processing stages, math rendering, prompt editing,
   retries, and conversation branches.
+- **Installable workspace:** a PWA manifest, project-owned icons, and an offline
+  interface shell; model requests and document data are never service-worker cached.
 
 Maintainers can use the [repository discovery settings](docs/repository-discovery.md)
 for the GitHub About panel after publishing changes.
@@ -349,6 +351,21 @@ families to `http://127.0.0.1:8000` when the frontend backend URL is blank. Set
 - After images and model weights are downloaded once, local Ollama operation can
   remain offline. API-provider mode naturally requires its endpoint.
 
+### Install as an app
+
+Open the built application at `http://127.0.0.1:8000/`. If your browser offers
+installation, use its Install option or **Settings → Appearance → Install app**.
+The installed window opens with the same local conversations and settings as
+that browser profile. The interface shell can reopen without network access;
+uploading, indexing, and answering still require the local backend and selected
+model endpoint. API responses, prompts, documents, and credentials are never
+saved by the service worker. When a new interface build is ready, the app offers
+an explicit reload and waits until any upload or answer is finished.
+
+For access from another machine, serve the app over HTTPS: service workers are
+restricted to secure contexts, with localhost as the development exception.
+The development server (`npm run dev`) deliberately does not register a worker.
+
 ## Quality gates
 
 ```powershell
@@ -361,6 +378,7 @@ Set-Location frontend
 npm test
 npm run build
 npm run test:e2e
+npm run test:pwa
 Set-Location ..
 
 docker compose config --quiet

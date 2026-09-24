@@ -376,3 +376,16 @@ only when the user enables a remote API endpoint.
 - [x] Refresh bilingual setup and discoverability documentation.
 - [ ] Confirm the new cross-platform CI jobs on the GitHub remote after the
   local commits are authorized for push.
+
+## Phase 12: Installable Local Workspace
+
+- [x] Add a stable web manifest, project-owned install icons, and standalone
+  presentation for the production workspace.
+- [x] Generate a versioned service worker from build assets and cache only the
+  public application shell; keep all API traffic on the network.
+- [x] Provide an install action where the browser supports it and an explicit
+  update action that waits for active work to finish.
+- [x] Document offline limits and HTTPS requirements in both READMEs, and
+  refresh repository-discovery guidance against the public repository metadata.
+- [x] Test installability, offline shell loading, and API non-caching against
+  both the production preview and the running Docker app.
