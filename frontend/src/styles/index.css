@@ -113,6 +113,7 @@ a{color:var(--accent);text-underline-offset:3px}
 .count-badge{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:5px;background:var(--selected);color:var(--accent);font-size:10px}
 .notice{margin:0 28px 12px;padding:10px 15px;display:flex;align-items:center;gap:10px;background:var(--accent-soft);border-radius:10px;font-size:12px;line-height:1.8}
 .notice span{flex:1}.notice .icon-button{height:26px;width:26px}
+.pwa-update .button{min-height:32px;padding:5px 11px;white-space:nowrap}
 
 /* Empty conversations place the input at the center of the invitation. */
 .welcome-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}

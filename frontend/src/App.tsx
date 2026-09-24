@@ -13,6 +13,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
+import { usePwa } from './hooks/usePwa';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
@@ -20,6 +21,7 @@ import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAP
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
+  const pwa = usePwa();
   const isMobile = useMediaQuery('(max-width: 760px)');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -65,6 +67,8 @@ export function App() {
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.dataset.palette = settings.palette;
     document.title = settings.language === 'fa' ? 'پارس‌رگ — از پرسش، به بینش' : 'ParsRAG — A clearer perspective';
+    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', themeColor);
   }, [settings.language, settings.theme, settings.palette]);
 
   const checkHealth = useCallback(async () => {
@@ -345,6 +349,7 @@ export function App() {
       <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
       {(notice || storageError) && <div className="notice" role="status"><AlertCircle size={17} /><span>{storageError ? t.storageFailed : notice}</span>{!storageError && <button className="icon-button" onClick={() => setNotice(null)} aria-label={t.dismiss}><X size={16} /></button>}</div>}
+      {pwa.updateReady && <div className="notice pwa-update" role="status"><span>{t.pwaUpdateReady}</span><button className="button secondary" disabled={busy} onClick={pwa.activateUpdate}>{t.pwaApplyUpdate}</button></div>}
       {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
         updateSession(active.id, s => ({ ...s, draft, ragMode: index === 2 ? 'llm-only' : 'hybrid' }));
         setFocusToken(value => value + 1);
@@ -385,6 +390,7 @@ export function App() {
       })} />
     <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
       onStartGuide={() => setGuideOpen(true)}
+      canInstall={pwa.canInstall} onInstall={() => void pwa.install()}
       onModelConfigured={setModelRuntime}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleHelp, Database, KeyRound, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
+import { Check, CircleHelp, Database, Download, KeyRound, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
@@ -13,9 +13,10 @@ interface SettingsModalProps {
   onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => Promise<void>; busy: boolean;
   onModelConfigured?: (configuration: ModelConfiguration) => void;
   onStartGuide: () => void;
+  canInstall?: boolean; onInstall?: () => void;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured, onStartGuide }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured, onStartGuide, canInstall, onInstall }: SettingsModalProps) {
   const t = translations[settings.language];
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -97,6 +98,9 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         <div className="setting-field guide-setting"><span><strong>{t.guideReplay}</strong><small>{t.guideReplayHint}</small></span>
           <button className="button secondary" onClick={() => { onClose(); onStartGuide(); }}><CircleHelp size={16} />{t.guideStart}</button>
         </div>
+        {canInstall && <div className="setting-field guide-setting"><span><strong>{t.pwaInstallTitle}</strong><small>{t.pwaInstallHint}</small></span>
+          <button className="button secondary" onClick={onInstall}><Download size={16} />{t.pwaInstall}</button>
+        </div>}
       </>}
       {tab === 'rag' && <>
         <div className="setting-field"><label>{t.defaultModeLabel}</label>
