@@ -1,20 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const externalBaseURL = process.env.PWA_TEST_BASE_URL;
+
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: 'pwa.spec.ts',
-  fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
+  testMatch: 'pwa.spec.ts',
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
-    trace: 'on-first-retry',
+    baseURL: externalBaseURL ?? 'http://127.0.0.1:4180',
     ...devices['Desktop Chrome'],
     ...(process.env.CI ? {} : { channel: 'chrome' }),
   },
-  webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173',
+  webServer: externalBaseURL ? undefined : {
+    command: 'npm run preview -- --host 127.0.0.1 --port 4180 --strictPort',
+    url: 'http://127.0.0.1:4180',
     reuseExistingServer: !process.env.CI,
   },
 });
