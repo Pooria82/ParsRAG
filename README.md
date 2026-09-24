@@ -42,10 +42,11 @@ running application. No private documents or API credentials appear in these ima
   model-only chat.
 - **Broad ingestion:** PDF, DOCX, PPTX, images, text, Markdown, JSON, CSV, HTML,
   XML, YAML, logs, configuration files, and common source-code formats.
-- **OCR where it matters:** scanned PDF pages, standalone images, and images
-  embedded in Word or PowerPoint files, with Persian and English Tesseract data.
-- **Traceable sources:** unique filenames plus page, slide, paragraph, or
-  section locations when the parser can determine them.
+- **OCR where it matters:** scanned and image-heavy PDF pages with sparse text
+  layers, standalone images, and images embedded in Word or PowerPoint files,
+  with Persian and English Tesseract data.
+- **Traceable sources:** unique filenames plus page ranges, slides, paragraphs,
+  or section locations when the parser can determine them.
 - **Local lifecycle:** Qdrant data is isolated by conversation; users can remove
   one document, deselect all documents, reuse an indexed document in another
   conversation without uploading it again, or delete an entire session.
@@ -76,6 +77,14 @@ for the GitHub About panel after publishing changes.
 Strict mode refuses when retrieved evidence does not meet its configured
 threshold. This is an application safeguard, not a universal guarantee; verify
 important outputs against the displayed sources.
+For newly indexed PDFs, a bounded excerpt joins each pair of consecutive pages,
+so a fact split by a page turn can be retrieved with a two-page citation.
+Borderline semantic matches are considered only when the retrieved text also
+contains the question's distinctive terms; unrelated material still fails closed.
+
+**After upgrading to 1.0.0:** existing indexed vectors do not change
+automatically. Remove and upload a PDF again to apply the new page-boundary
+indexing and OCR behavior. Reusing its old index does not rebuild it.
 
 In the composer, type `@` to choose a document already indexed in the current
 conversation. You can mention more than one file, for example:
@@ -106,7 +115,7 @@ The same settings page lists shortcuts for the current operating system:
 
 | Family | Extensions | Processing |
 | --- | --- | --- |
-| Documents | `.pdf`, `.docx`, `.pptx` | Native structured extraction; OCR for image-only PDF pages and embedded images |
+| Documents | `.pdf`, `.docx`, `.pptx` | Native structured extraction; OCR for scanned/sparse image PDF pages and embedded images |
 | Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tif`, `.tiff` | Validated and OCR-processed |
 | Text and data | `.txt`, `.md`, `.markdown`, `.json`, `.csv`, `.tsv`, `.log` | UTF-8 extraction; JSON is validated and normalized |
 | Markup/config | `.html`, `.htm`, `.xml`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg` | Visible text or UTF-8 extraction |
