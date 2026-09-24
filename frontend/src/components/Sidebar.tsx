@@ -50,13 +50,13 @@ export function Sidebar(props: SidebarProps) {
 
   const content = <>
     <button className="sidebar-brand" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChat}><BrandMark /><span><strong>{t.appName}</strong><small>{t.workspace}</small></span></button>
-    <button className="new-chat-button" onClick={() => { setSearch(''); onNewChat(); }} title={`${t.newChat} · ${newChatShortcut}`}>
+    <button className="new-chat-button" data-tour="new-chat" onClick={() => { setSearch(''); onNewChat(); }} title={`${t.newChat} · ${newChatShortcut}`}>
       <Plus size={19} /><span>{t.newChat}</span><span className="shortcut-symbol" aria-hidden="true">{newChatShortcut}</span>
     </button>
-    <label className="history-search"><Search size={16} aria-hidden="true" />
+    <label className="history-search" data-tour="history-search"><Search size={16} aria-hidden="true" />
       <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchChats} aria-label={t.searchChats} />
     </label>
-    <nav className="history-list" aria-label={t.conversations}>
+    <nav className="history-list" data-tour="history-list" aria-label={t.conversations}>
       {empty ? <div className="history-empty"><MessageSquare size={23} />
         <p>{search ? t.noChats : t.historyEmpty}</p>{!search && <span>{t.historyEmptyDesc}</span>}
       </div> : groups.map(group => group.items.length > 0 && <section className="history-group" key={group.label}>
@@ -77,15 +77,15 @@ export function Sidebar(props: SidebarProps) {
       </section>)}
     </nav>
     <div className="sidebar-bottom">
-      <div className="connection-status" data-status={props.connection}>
+      <div className="connection-status" data-tour="connection" data-status={props.connection}>
         <span className="status-dot" /><span><strong>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? t.backendOnline : t.backendOffline}</strong>
           {props.connection === 'online' && props.modelRuntime ? <small><bdi>{props.modelRuntime.provider === 'ollama' ? t.modelProviderOllama : t.modelProviderApi}</bdi><i aria-hidden="true">·</i><bdi dir="ltr">{props.modelRuntime.model_name}</bdi></small> : null}
         </span>
         {props.connection === 'offline' && <button onClick={props.onRetryConnection} title={t.retryConnection} aria-label={t.retryConnection}>↻</button>}
       </div>
       <div className="sidebar-footer">
-        <button className="settings-button" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>
-        <button className="icon-button theme-toggle" onClick={event => {
+        <button className="settings-button" data-tour="settings" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>
+        <button className="icon-button theme-toggle" data-tour="theme" onClick={event => {
           const bounds = event.currentTarget.getBoundingClientRect();
           props.onToggleTheme({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
         }} aria-label={theme === 'dark' ? t.themeLight : t.themeDark} title={theme === 'dark' ? t.themeLight : t.themeDark}>

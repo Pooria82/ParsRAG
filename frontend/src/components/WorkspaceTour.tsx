@@ -3,10 +3,23 @@ import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import type { Language } from '../types';
 
 const STEPS = [
-  { target: '[data-tour="brand"]', fa: ['گفت‌وگوی تازه', 'با انتخاب نام برنامه، هر زمان می‌توانید گفت‌وگوی تازه‌ای شروع کنید.'], en: ['A fresh conversation', 'Select the app name whenever you want a new conversation.'] },
-  { target: '[data-tour="documents"]', fa: ['اسناد گفت‌وگو', 'فایل‌ها را بارگذاری کنید یا سندی از گفت‌وگوهای قبلی بیاورید.'], en: ['Your documents', 'Upload files or bring in a document from an earlier conversation.'] },
-  { target: '[data-tour="composer"]', fa: ['پرسش شما', 'با @ سند خاصی را نام ببرید؛ با / دستورهای آماده را ببینید.'], en: ['Your question', 'Use @ to mention a document and / to explore quick commands.'] },
-  { target: '[data-tour="mode"]', fa: ['شیوهٔ پاسخ', 'بین پاسخ فقط بر اساس اسناد، حالت ترکیبی و گفت‌وگوی آزاد جابه‌جا شوید.'], en: ['Answer mode', 'Switch between documents only, hybrid answers, and open conversation.'] },
+  { target: '[data-tour="brand"]', fa: ['گفت‌وگوی تازه', 'با انتخاب نام پارس‌رگ، گفت‌وگوی تازه‌ای شروع کنید. هر گفت‌وگو، پرسش‌ها و اسناد خودش را دارد.'], en: ['A fresh conversation', 'Select the ParsRAG name to start again. Each conversation keeps its own questions and documents.'] },
+  { target: '[data-tour="new-chat"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['فضای گفت‌وگوها', 'از نوار کناری گفت‌وگوی تازه بسازید، گفت‌وگوهای قبلی را باز کنید یا نامشان را تغییر دهید و حذف کنید.'], en: ['Conversation space', 'Use the sidebar to start a conversation, revisit earlier ones, or rename and delete them.'] },
+  { target: '[data-tour="history-search"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['پیداکردن گفت‌وگو', 'در نوار کناری، عنوان و متن گفت‌وگوها را جست‌وجو کنید. میانبر جست‌وجو در تنظیمات نمایش داده می‌شود.'], en: ['Find a conversation', 'Search conversation titles and messages in the sidebar. Its keyboard shortcut is listed in Settings.'] },
+  { target: '[data-tour="documents"]', fa: ['اسناد این گفت‌وگو', 'اینجا فایل تازه بارگذاری کنید یا سند ایندکس‌شدهٔ گفت‌وگوی قبلی را بدون بارگذاری دوباره بیاورید.'], en: ['Conversation documents', 'Upload new files here or reuse an indexed document from an earlier conversation without uploading it again.'] },
+  { target: '[data-tour="attach"]', fa: ['مدیریت سندها', 'از گیره هم به اسناد برسید. پیشرفت بارگذاری و پردازش را ببینید؛ سندها را برای پاسخ انتخاب یا از انتخاب خارج کنید و در صورت نیاز حذفشان کنید.'], en: ['Manage documents', 'The paperclip opens documents too. Watch upload and processing progress, choose which files inform answers, and remove files when needed.'] },
+  { target: '[data-tour="composer"]', fa: ['پرسش دقیق‌تر', 'پرسش را اینجا بنویسید. با @ یک یا چند سند مشخص را نام ببرید و با / دستورهای آماده و حالت‌های پاسخ را پیدا کنید.'], en: ['Ask precisely', 'Write here. Use @ to mention one or more specific documents and / to discover quick commands and answer modes.'] },
+  { target: '[data-tour="mode"]', fa: ['سه شیوهٔ پاسخ', '«فقط اسناد» به شواهد محدود است؛ «ترکیبی» اسناد را با دانش مدل همراه می‌کند؛ «گفت‌وگوی آزاد» اسناد را جست‌وجو نمی‌کند.'], en: ['Three answer modes', 'Documents only stays grounded in sources; Hybrid combines sources and model knowledge; Free chat does not search documents.'] },
+  { target: '[data-tour="send"]', fa: ['ارسال و توقف', 'Enter پرسش را می‌فرستد و Shift+Enter خط تازه می‌سازد. هنگام تولید پاسخ، همین دکمه توقف را نشان می‌دهد.'], en: ['Send and stop', 'Enter sends your question; Shift+Enter adds a line. During generation, this button becomes Stop.'] },
+  { target: '[data-tour="starters"]', fallback: '[data-tour="composer"]', fa: ['شروع سریع', 'کارت‌های پیشنهادی در گفت‌وگوی خالی به شما کمک می‌کنند خلاصه‌سازی، مقایسه یا یک پرسش آزاد را شروع کنید.'], en: ['Quick starts', 'On an empty conversation, starter cards help you begin a summary, comparison, or open-ended question.'] },
+  { target: '[data-tour="prompt-actions"]', fallback: '[data-tour="composer"]', fa: ['ویرایش پرسش', 'پس از ارسال، می‌توانید پرسش خود را کپی یا ویرایش کنید. ویرایش، شاخهٔ تازه‌ای می‌سازد تا میان نسخه‌های پرسش و پاسخ جابه‌جا شوید.'], en: ['Edit your question', 'After sending, copy or edit your prompt. Editing creates a new branch so you can switch between prompt and answer versions.'] },
+  { target: '[data-tour="sources"]', fallback: '[data-tour="composer"]', fa: ['منابع پاسخ', 'در پاسخ‌های مبتنی بر سند، نام فایل‌های استفاده‌شده و جایگاه‌هایی مانند صفحه یا بند، در صورت تشخیص، کنار پاسخ دیده می‌شود.'], en: ['Answer sources', 'Document-grounded answers show source filenames and, when available, locations such as pages or paragraphs.'] },
+  { target: '[data-tour="response-actions"]', fallback: '[data-tour="composer"]', fa: ['کنترل پاسخ', 'پاسخ را کپی کنید یا دوباره تولیدش کنید. اگر چند نسخه وجود داشته باشد، با دکمه‌های کناری میان آن‌ها حرکت کنید.'], en: ['Control an answer', 'Copy or regenerate an answer. When several versions exist, use the adjacent controls to move between them.'] },
+  { target: '[data-tour="connection"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['وضعیت سرویس', 'پایین نوار کناری، آماده‌بودن سرویس و مدل فعال را ببینید. اگر سرویس در دسترس نبود، اتصال را دوباره بررسی کنید.'], en: ['Service status', 'The sidebar shows whether the service is ready and which model is active. Retry the connection if it is unavailable.'] },
+  { target: '[data-tour="theme"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['ظاهر دلخواه', 'حالت روشن و تیره را سریع عوض کنید. در تنظیمات، چهار رنگ هماهنگ و زبان فارسی یا انگلیسی نیز در دسترس است.'], en: ['Your preferred look', 'Switch light and dark quickly. Settings also offers four coordinated color palettes and Persian or English.'] },
+  { target: '[data-tour="settings"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['تنظیمات پاسخ و مدل', 'در تنظیمات، شیوهٔ پیش‌فرض و عمق جست‌وجو را تغییر دهید؛ مدل Ollama محلی یا API سازگار را با آدرس، نام مدل و در صورت نیاز کلید تنظیم کنید.'], en: ['Answers and model settings', 'Settings controls the default mode and retrieval depth, plus local Ollama or an OpenAI-compatible API with its URL, model name, and optional key.'] },
+  { target: '[data-tour="settings"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['حریم خصوصی و راهنما', 'تنظیمات مرز ارسال داده به API را روشن می‌کند، فهرست میانبرهای همین سیستم‌عامل را نشان می‌دهد و اجازه می‌دهد این راهنما را دوباره اجرا کنید.'], en: ['Privacy and help', 'Settings explains what an API receives, lists shortcuts for this operating system, and lets you replay this tour.'] },
+  { target: '[data-tour="settings"]', fallback: '[data-tour="sidebar-toggle"]', fa: ['داده‌های شما', 'در تنظیمات می‌توانید همهٔ داده‌های گفت‌وگو و اسناد را با تأیید پاک کنید. اگر مرورگر پشتیبانی کند، نصب برنامه نیز همان‌جا پیشنهاد می‌شود.'], en: ['Your data', 'Settings lets you delete all conversations and indexed documents with confirmation. If supported, you can also install the app there.'] },
 ] as const;
 
 interface TourProps { open: boolean; language: Language; onClose: () => void }
@@ -34,7 +47,13 @@ export function WorkspaceTour({ open, language, onClose }: TourProps) {
   useEffect(() => {
     if (!open) return;
     const update = () => {
-      const target = document.querySelector<HTMLElement>(STEPS[index].target);
+      const step = STEPS[index];
+      const visible = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)].find(element => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight
+          && bounds.right > 0 && bounds.left < innerWidth && !element.closest('[aria-hidden="true"]');
+      });
+      const target = visible(step.target) || ('fallback' in step ? visible(step.fallback) : undefined);
       if (!target) { setHighlight(null); return; }
       const bounds = target.getBoundingClientRect();
       setHighlight({ top: Math.max(8, bounds.top - 6), left: Math.max(8, bounds.left - 6),
@@ -78,6 +97,7 @@ export function WorkspaceTour({ open, language, onClose }: TourProps) {
     </> : <div className="tour-shade" style={{ inset: 0 }} />}
     <div ref={cardRef} className="tour-card" style={{ top: cardTop, left: cardLeft, width: cardWidth }} dir={language === 'fa' ? 'rtl' : 'ltr'}>
       <div className="tour-card-heading"><Sparkles size={18} /><span>{String(index + 1).padStart(2, '0')} / {String(STEPS.length).padStart(2, '0')}</span></div>
+      <div className="tour-progress" aria-hidden="true"><i style={{ width: `${((index + 1) / STEPS.length) * 100}%` }} /></div>
       <h2>{title}</h2><p>{description}</p>
       <div className="tour-actions">
         <button onClick={onClose}>{language === 'fa' ? 'رد کردن' : 'Skip'}</button>

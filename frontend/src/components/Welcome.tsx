@@ -16,7 +16,7 @@ export function Welcome({ language, composer, onSelectStarter }: { language: Lan
         <p className="welcome-description">{t.heroDescription}</p>
       </div>
       {composer}
-      <section className="starters" aria-label={t.starterLabel}>
+      <section className="starters" data-tour="starters" aria-label={t.starterLabel}>
         <p className="starters-label">{t.starterLabel}</p>
         <div className="starter-grid">
           {t.starterPrompts.map((starter, index) => {

@@ -118,7 +118,7 @@ export function Composer(props: ComposerProps) {
       </div>}
       <div className="composer-toolbar">
         <div className="composer-tools">
-          <button className="icon-button attach-button" onClick={props.onOpenDocuments} aria-label={t.attach} title={t.attach}><Paperclip size={20} />
+          <button className="icon-button attach-button" data-tour="attach" onClick={props.onOpenDocuments} aria-label={t.attach} title={t.attach}><Paperclip size={20} />
             {props.documentCount > 0 && <span className="attachment-dot" />}
           </button>
           <span className="toolbar-divider" />
@@ -142,8 +142,8 @@ export function Composer(props: ComposerProps) {
           </div>
         </div>
         <div className="composer-send"><span className="input-hint">{t.inputHint}</span>
-          {isGenerating ? <button className="send-button stop-button" onClick={props.onStopGenerating} aria-label={t.stop} title={t.stop}><Square size={16} fill="currentColor" /></button>
-            : <button className="send-button" disabled={!value.trim() || props.isBusy} onClick={send} aria-label={t.send} title={t.send}><ArrowUp size={20} /></button>}
+          {isGenerating ? <button className="send-button stop-button" data-tour="send" onClick={props.onStopGenerating} aria-label={t.stop} title={t.stop}><Square size={16} fill="currentColor" /></button>
+            : <button className="send-button" data-tour="send" disabled={!value.trim() || props.isBusy} onClick={send} aria-label={t.send} title={t.send}><ArrowUp size={20} /></button>}
         </div>
       </div>
     </div>

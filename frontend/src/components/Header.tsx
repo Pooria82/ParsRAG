@@ -11,7 +11,7 @@ export function Header({ title, language, isSidebarOpen, isEmpty, documentCount,
   const t = translations[language];
   return <header className="workspace-header">
     <div className="header-leading">
-      <button className="icon-button sidebar-toggle" onClick={onToggleSidebar} aria-label={t.sidebarToggle}
+      <button className="icon-button sidebar-toggle" data-tour="sidebar-toggle" onClick={onToggleSidebar} aria-label={t.sidebarToggle}
         aria-expanded={isSidebarOpen} aria-controls="conversation-sidebar">
         {isSidebarOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
       </button>

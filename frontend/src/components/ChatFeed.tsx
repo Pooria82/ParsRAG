@@ -58,7 +58,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                 <textarea autoFocus value={editing.value} onChange={event => setEditing({ id: message.id, value: event.target.value })} aria-label={t.editPrompt} />
                 <div><button type="button" onClick={() => setEditing(null)}><X size={14} />{t.cancel}</button><button className="save-prompt" disabled={!editing.value.trim() || editing.value.trim() === message.content || isBusy}><Check size={14} />{t.saveAndSubmit}</button></div>
               </form> : <div className="user-bubble" dir="auto">{message.content}</div>}
-              <div className="message-actions user-actions">
+              <div className="message-actions user-actions" data-tour="prompt-actions">
                 <button onClick={() => void copy(message)} title={t.copyPrompt}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copyPrompt}</button>
                 <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
               </div>
@@ -69,11 +69,11 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                   <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
                     externalImageLabel={t.externalImage} onComplete={onRevealComplete} />
                 </div>}
-              {Boolean(message.citations?.length) && <section className="citation-summary" aria-label={t.citationsTitle}>
+              {Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
                 <header><FileText size={15} /><span>{t.citationsTitle}</span></header>
                 <ul>{message.citations!.map(citation => <li key={citation.filename}><bdi>{citation.filename}</bdi>{citation.locations.length > 0 && <span className="source-locations">{citation.locations.map((location, locationIndex) => <span key={`${location.kind}-${location.start}-${location.end ?? ''}`}>{t.locationLabels[location.kind]} {location.start.toLocaleString(language)}{location.end && location.end !== location.start ? `–${location.end.toLocaleString(language)}` : ''}{locationIndex < citation.locations.length - 1 ? '، ' : ''}</span>)}</span>}</li>)}</ul>
               </section>}
-              <div className="message-actions">
+              <div className="message-actions" data-tour="response-actions">
                 {!message.error && <button onClick={() => void copy(message)} title={t.copy}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copy}</button>}
                 <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>
                 {message.variants && message.variants.length > 1 && <span className="variant-navigation" aria-label={t.responseVersions}>

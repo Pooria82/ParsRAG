@@ -146,7 +146,7 @@ test('first visit guide can be skipped and replayed from settings', async ({ pag
   await expect(tour).toBeVisible();
   await expect(tour.getByText('A fresh conversation')).toBeVisible();
   await tour.getByRole('button', { name: 'Next' }).click();
-  await expect(tour.getByText('Your documents')).toBeVisible();
+  await expect(tour.getByText('Conversation space')).toBeVisible();
   await tour.getByRole('button', { name: 'Skip' }).click();
   await expect(tour).toBeHidden();
   await page.getByRole('button', { name: 'Settings' }).click();
@@ -165,15 +165,16 @@ test('Persian first-run guide stays usable on a narrow screen', async ({ page })
   await page.goto('/');
   const tour = page.getByRole('dialog', { name: 'راهنمای پارس‌رگ' });
   await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(true);
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < 17; step += 1) {
     await expect(tour).toBeVisible();
+    await expect(tour.locator('.tour-highlight')).toHaveCount(1);
     const bounds = await tour.locator('.tour-card').boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.y).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(667);
-    await tour.getByRole('button', { name: step === 3 ? 'شروع کنیم' : 'بعدی' }).click();
+    await tour.getByRole('button', { name: step === 16 ? 'شروع کنیم' : 'بعدی' }).click();
   }
   await expect(tour).toBeHidden();
   await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(false);

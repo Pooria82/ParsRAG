@@ -342,6 +342,8 @@ html[dir="rtl"] .documents-dialog{--drawer-offset:-105%}
 .tour-highlight{position:fixed;border:2px solid var(--accent);border-radius:13px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 20%,transparent),0 10px 35px #0005;pointer-events:auto;transition:top 320ms var(--ease-out),left 320ms var(--ease-out),width 320ms var(--ease-out),height 320ms var(--ease-out)}
 .tour-card{position:fixed;z-index:1;pointer-events:auto;max-height:calc(100dvh - 32px);overflow:auto;padding:20px;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:17px;box-shadow:var(--shadow-popover);animation:rise 220ms var(--ease-out)}
 .tour-card-heading{display:flex;align-items:center;justify-content:space-between;color:var(--accent);font-size:11px;margin-bottom:12px}
+.tour-progress{height:3px;margin:-3px 0 15px;border-radius:3px;background:var(--surface-soft);overflow:hidden}
+.tour-progress i{display:block;height:100%;border-radius:3px;background:var(--accent);transition:width 280ms var(--ease-out)}
 .tour-card h2{font-size:17px;line-height:1.6;font-weight:650}.tour-card p{font-size:12px;line-height:1.9;color:var(--secondary);margin-top:5px}
 .tour-actions{display:flex;align-items:center;gap:9px;margin-top:17px}.tour-actions>span{flex:1}.tour-actions>button:not(.button){font-size:11px;color:var(--secondary);padding:7px;border-radius:7px;display:flex;align-items:center;gap:5px}.tour-actions>button:not(.button):hover{background:var(--surface-soft)}
 .tour-next{min-height:34px;font-size:11px}
