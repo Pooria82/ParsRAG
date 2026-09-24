@@ -54,6 +54,34 @@ test('document drawer animates both opening and closing without losing modal foc
   await expect(drawer).not.toBeVisible();
 });
 
+test('keyboard navigation keeps the active slash command visible in its scroll panel', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Your message' });
+  await composer.fill('/');
+  const list = page.getByRole('listbox', { name: 'Quick commands' });
+  await expect(list).toBeVisible();
+  await composer.press('ArrowUp');
+  await expect.poll(() => list.evaluate(element => {
+    const selected = element.querySelector('[aria-selected="true"]');
+    if (!selected) return false;
+    const viewport = element.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    return element.scrollTop > 0 && item.top >= viewport.top && item.bottom <= viewport.bottom;
+  })).toBe(true);
+  await composer.press('ArrowDown');
+  await expect(list.locator('[aria-selected="true"]')).toHaveAttribute('id', 'composer-option-0');
+  await expect.poll(() => list.evaluate(element => {
+    const viewport = element.getBoundingClientRect();
+    const item = element.querySelector('[aria-selected="true"]')!.getBoundingClientRect();
+    return item.top >= viewport.top && item.bottom <= viewport.bottom;
+  })).toBe(true);
+});
+
 test('first visit guide can be skipped and replayed from settings', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));

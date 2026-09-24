@@ -23,6 +23,7 @@ export function Composer(props: ComposerProps) {
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const ModeIcon = modeIcons[activeMode];
@@ -56,6 +57,15 @@ export function Composer(props: ComposerProps) {
     inputRef.current.style.height = Math.min(Math.max(inputRef.current.scrollHeight, 58), 180) + 'px';
   }, [value]);
   useEffect(() => { if (props.focusToken) inputRef.current?.focus(); }, [props.focusToken]);
+  useEffect(() => {
+    const list = suggestionsRef.current;
+    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !selected) return;
+    const listBounds = list.getBoundingClientRect();
+    const optionBounds = selected.getBoundingClientRect();
+    if (optionBounds.top < listBounds.top + 6) list.scrollTop += optionBounds.top - listBounds.top - 6;
+    else if (optionBounds.bottom > listBounds.bottom - 6) list.scrollTop += optionBounds.bottom - listBounds.bottom + 6;
+  }, [menuIndex, trigger?.kind, trigger?.query, suggestions.length]);
   useEffect(() => {
     if (!modeOpen) return;
     menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
@@ -95,10 +105,12 @@ export function Composer(props: ComposerProps) {
         onClick={e => setCursor(e.currentTarget.selectionStart)} onKeyUp={e => setCursor(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown} placeholder={t.composerPlaceholder} aria-label={t.messageLabel}
         aria-controls={trigger && suggestions.length ? 'composer-suggestions' : undefined} aria-expanded={Boolean(trigger && suggestions.length)}
+        aria-activedescendant={trigger && suggestions.length ? `composer-option-${menuIndex % suggestions.length}` : undefined}
+        aria-autocomplete="list"
         rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={30000} />
-      {trigger && suggestions.length > 0 && <div className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
+      {trigger && suggestions.length > 0 && <div ref={suggestionsRef} className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
         <p>{trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}</p>
-        {suggestions.map((option, index) => <button type="button" role="option" aria-selected={index === menuIndex} key={typeof option === 'string' ? option : option.id}
+        {suggestions.map((option, index) => <button type="button" role="option" id={`composer-option-${index}`} aria-selected={index === menuIndex} key={typeof option === 'string' ? option : option.id}
           className={index === menuIndex ? 'is-active' : ''} onMouseDown={event => event.preventDefault()} onClick={() => chooseSuggestion(index)}>
           {typeof option === 'string' ? <><Paperclip size={15} /><bdi>{option}</bdi></>
             : <><span dir="ltr">{option.label}</span><small>{language === 'fa' ? option.fa : option.en}</small></>}

@@ -145,7 +145,10 @@ a{color:var(--accent);text-underline-offset:3px}
 .composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
 .composer textarea{display:block;width:100%;border:0;resize:none;outline:none;background:none;min-height:58px;max-height:180px;font-size:14px;padding:3px 5px 8px;line-height:1.9;scrollbar-width:thin}
 .composer textarea:focus-visible{outline:none}
-.composer-suggestions{position:absolute;inset-inline:0;bottom:calc(100% + 8px);z-index:18;max-height:300px;overflow-y:auto;padding:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-popover);animation:rise 180ms var(--ease-out)}
+.composer-suggestions{position:absolute;inset-inline:0;bottom:calc(100% + 8px);z-index:18;max-height:min(310px,calc(100dvh - 160px));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--accent) var(--surface-soft);padding:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-popover);animation:rise 180ms var(--ease-out)}
+.composer-suggestions::-webkit-scrollbar{width:8px}
+.composer-suggestions::-webkit-scrollbar-track{background:var(--surface-soft);border-radius:8px}
+.composer-suggestions::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent) 50%,var(--line-strong));border:2px solid var(--surface-soft);border-radius:8px}
 .composer-suggestions>p{padding:7px 10px;color:var(--muted);font-size:11px}
 .composer-suggestions>button{width:100%;display:flex;align-items:center;gap:10px;min-height:39px;padding:8px 10px;border-radius:8px;text-align:start;font-size:12px}
 .composer-suggestions>button:hover,.composer-suggestions>button.is-active{background:var(--accent-soft);color:var(--accent)}
