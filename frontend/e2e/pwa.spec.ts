@@ -13,6 +13,18 @@ test('production workspace installs an offline shell without caching API data', 
   const manifest = await manifestResponse.json();
   expect(manifest).toMatchObject({ id: '/', start_url: '/', scope: '/', display: 'standalone' });
   for (const icon of manifest.icons) expect((await request.get(icon.src)).ok()).toBe(true);
+  const transparentCorners = await page.evaluate(async () => {
+    const response = await fetch('/brand/icon-512.png');
+    const bitmap = await createImageBitmap(await response.blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    return [context.getImageData(0, 0, 1, 1).data[3],
+      context.getImageData(bitmap.width - 1, 0, 1, 1).data[3]];
+  });
+  expect(transparentCorners).toEqual([0, 0]);
 
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
