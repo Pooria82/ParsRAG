@@ -36,6 +36,24 @@ test('opens the workspace and model settings against local API fixtures', async 
   await expect(page.getByRole('button', { name: 'Verify connection and apply' })).toBeVisible();
 });
 
+test('document drawer animates both opening and closing without losing modal focus', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'fa', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'اسناد' }).first().click();
+  const drawer = page.locator('dialog.documents-dialog');
+  await expect(drawer).toBeVisible();
+  await expect.poll(() => drawer.evaluate(element => getComputedStyle(element).getPropertyValue('--drawer-offset').trim())).toBe('-105%');
+  await expect.poll(() => drawer.evaluate(element => getComputedStyle(element).animationName)).toBe('documents-enter');
+  await drawer.getByRole('button', { name: 'بستن' }).click();
+  await expect(drawer).toHaveAttribute('data-closing', 'true');
+  await expect.poll(() => drawer.evaluate(element => getComputedStyle(element).animationName)).toBe('documents-exit');
+  await expect(drawer).not.toBeVisible();
+});
+
 test('first visit guide can be skipped and replayed from settings', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
@@ -107,6 +125,7 @@ test('reuses a previous document and offers document and command suggestions', a
   await docs.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(docs.getByRole('checkbox', { name: /guide.pdf/ })).toBeVisible();
   await docs.getByRole('button', { name: 'Close' }).click();
+  await expect(docs).toBeHidden();
   const composer = page.getByRole('textbox', { name: 'Your message' });
   await composer.fill('@gui');
   await expect(page.getByRole('listbox', { name: 'Mention a document' })).toBeVisible();

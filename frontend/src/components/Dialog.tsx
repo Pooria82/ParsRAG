@@ -14,24 +14,30 @@ interface DialogProps {
 /** Native modal semantics keep keyboard focus and background interaction scoped. */
 export function Dialog({ open, onClose, title, closeLabel, subtitle, className = '', children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeTimer = useRef<number>();
   const [closing, setClosing] = useState(false);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
-    if (open && !dialog?.open) {
+    if (!dialog) return;
+    if (open) {
+      window.clearTimeout(closeTimer.current);
       setClosing(false);
-      dialog?.showModal();
+      if (!dialog.open) dialog.showModal();
+      return;
     }
-    if (!open && dialog?.open) {
+    if (dialog.open) {
       setClosing(true);
-      const timeout = window.setTimeout(() => {
+      closeTimer.current = window.setTimeout(() => {
         dialog.close();
         setClosing(false);
-      }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 150);
-      return () => window.clearTimeout(timeout);
+      }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : className.includes('documents-dialog') ? 340 : 180);
     }
-    return () => { if (dialog?.open) dialog.close(); };
-  }, [open]);
+  }, [open, className]);
+  useEffect(() => () => {
+    window.clearTimeout(closeTimer.current);
+    if (ref.current?.open) ref.current.close();
+  }, []);
 
   return <dialog ref={ref} className={`dialog ${className}`} data-closing={closing || undefined} aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose(); }}

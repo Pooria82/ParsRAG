@@ -90,14 +90,10 @@
 .theme-choice.is-selected .theme-preview b:nth-child(2) { animation-delay: 70ms; }
 @keyframes preview-write { from { transform: scaleX(.55); opacity: .45; } to { transform: scaleX(1); opacity: 1; } }
 
-.dialog[data-closing='true'] { animation: dialog-exit 150ms ease-in both !important; }
-.dialog[data-closing='true']::backdrop { animation: backdrop-exit 150ms ease-in both; }
-.documents-dialog[open]:not([data-closing='true']) { animation: drawer-enter 260ms var(--ease-out); }
-[dir='rtl'] .documents-dialog[open]:not([data-closing='true']) { animation-name: drawer-enter-rtl; }
+.dialog[data-closing='true']:not(.documents-dialog) { animation: dialog-exit 180ms ease-in both; }
+.dialog[data-closing='true']:not(.documents-dialog)::backdrop { animation: backdrop-exit 180ms ease-in both; }
 @keyframes dialog-exit { to { opacity: 0; transform: translateY(5px) scale(.985); } }
 @keyframes backdrop-exit { to { opacity: 0; } }
-@keyframes drawer-enter { from { transform: translateX(28px); opacity: .65; } }
-@keyframes drawer-enter-rtl { from { transform: translateX(-28px); opacity: .65; } }
 
 .send-button, .new-chat-button, .button, .starter-card, .settings-button, .documents-button { transition-duration: 260ms; transition-timing-function: var(--ease-out); }
 .send-button:active:not(:disabled), .button:active:not(:disabled), .icon-button:active:not(:disabled) { transform: scale(.94); }

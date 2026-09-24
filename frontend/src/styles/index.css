@@ -253,6 +253,16 @@ details[open]>summary>svg:last-child{transform:rotate(180deg)}
 
 /* Documents are secondary to the conversation. */
 .documents-dialog{height:100dvh;max-height:100dvh;width:396px;max-width:100vw;inset:0;inset-inline-start:auto;margin:0;border-radius:0;border:0;border-inline-start:1px solid var(--line)}
+.documents-dialog{--drawer-offset:105%}
+html[dir="rtl"] .documents-dialog{--drawer-offset:-105%}
+.documents-dialog[open]:not([data-closing]){animation:documents-enter 340ms cubic-bezier(.2,.75,.25,1) both}
+.documents-dialog[data-closing]{animation:documents-exit 340ms cubic-bezier(.65,0,.8,.3) both}
+.documents-dialog[open]:not([data-closing])::backdrop{animation:documents-backdrop-in 340ms ease both}
+.documents-dialog[data-closing]::backdrop{animation:documents-backdrop-out 340ms ease both}
+@keyframes documents-enter{from{transform:translateX(var(--drawer-offset));opacity:.7}to{transform:translateX(0);opacity:1}}
+@keyframes documents-exit{from{transform:translateX(0);opacity:1}to{transform:translateX(var(--drawer-offset));opacity:.7}}
+@keyframes documents-backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes documents-backdrop-out{from{opacity:1}to{opacity:0}}
 .documents-dialog .dialog-surface{min-height:100%}
 .documents-dialog .dialog-header{border-bottom:1px solid var(--line);padding-top:29px;padding-bottom:23px}
 .documents-body{flex:1;padding:24px}
