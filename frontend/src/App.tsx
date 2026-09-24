@@ -8,7 +8,7 @@ import { Composer } from './components/Composer';
 import { SettingsModal } from './components/SettingsModal';
 import { Welcome } from './components/Welcome';
 import { BootSequence } from './components/BootSequence';
-import { WorkspaceTour } from './components/WorkspaceTour';
+import { WorkspaceTour, type TourStage } from './components/WorkspaceTour';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useThemeTransition } from './hooks/useThemeTransition';
 import { useLanguageTransition } from './hooks/useLanguageTransition';
@@ -39,6 +39,7 @@ export function App() {
   const [focusToken, setFocusToken] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [tourStage, setTourStage] = useState<TourStage>({});
   const [guideEligible] = useState(() => { try { return localStorage.getItem('parsrag_tour_v1') !== 'done'; } catch { return true; } });
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
   const progressRef = useRef<AbortController>();
@@ -62,7 +63,12 @@ export function App() {
     const timeout = window.setTimeout(() => setGuideOpen(true), 1200);
     return () => window.clearTimeout(timeout);
   }, [guideEligible]);
-  const closeGuide = () => { setGuideOpen(false); try { localStorage.setItem('parsrag_tour_v1', 'done'); } catch { /* The tour remains dismissible when storage is unavailable. */ } };
+  const closeGuide = () => { setGuideOpen(false); setDocumentsOpen(false); setSettingsOpen(false); setTourStage({}); try { localStorage.setItem('parsrag_tour_v1', 'done'); } catch { /* The tour remains dismissible when storage is unavailable. */ } };
+  const changeTourStage = useCallback((stage: TourStage) => {
+    setTourStage(stage);
+    setDocumentsOpen(stage.surface === 'documents');
+    setSettingsOpen(stage.surface === 'settings');
+  }, []);
   useEffect(() => {
     document.documentElement.dir = settings.language === 'fa' ? 'rtl' : 'ltr';
     document.documentElement.lang = settings.language;
@@ -348,7 +354,7 @@ export function App() {
     language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken}
     documentNames={active.documents.filter(doc => doc.status === 'indexed').map(doc => doc.name)}
     onSelectMention={name => updateSession(active.id, session => ({ ...session, documents: session.documents.map(doc => doc.name === name ? { ...doc, enabled: true } : doc) }))}
-    onOpenGuide={() => setGuideOpen(true)} />;
+    onOpenGuide={() => setGuideOpen(true)} guidedMenu={guideOpen ? tourStage.menu : null} />;
 
   return <div className="app-shell">
     <BootSequence language={settings.language} />
@@ -392,7 +398,7 @@ export function App() {
         </div>
       </>}
     </main>
-    <DocumentCenter isOpen={documentsOpen} onClose={() => setDocumentsOpen(false)} documents={active.documents}
+    <DocumentCenter isOpen={documentsOpen} guided={guideOpen} onClose={() => setDocumentsOpen(false)} documents={active.documents}
       capabilities={ingestionCapabilities}
       reusableDocuments={sessions.filter(session => session.id !== active.id).flatMap(session => session.documents
         .filter(doc => doc.status === 'indexed' && !active.documents.some(current => current.name === doc.name))
@@ -405,7 +411,7 @@ export function App() {
       onToggleDocument={name => updateSession(active.id, s => {
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />
-    <SettingsModal open={settingsOpen} settings={settings} onClose={() => setSettingsOpen(false)}
+    <SettingsModal open={settingsOpen} guided={guideOpen} guidedTab={guideOpen ? tourStage.settingsTab : undefined} guidedProvider={guideOpen ? tourStage.provider : undefined} settings={settings} onClose={() => setSettingsOpen(false)}
       onStartGuide={() => setGuideOpen(true)}
       canInstall={pwa.canInstall} onInstall={() => void pwa.install()}
       onModelConfigured={setModelRuntime}
@@ -415,7 +421,7 @@ export function App() {
         else updateSettings(updated);
       }} busy={busy}
       onClearAllData={clearAllData} />
-    <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} />
+    <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} onStageChange={changeTourStage} activeStage={tourStage} />
   </div>;
 }
 

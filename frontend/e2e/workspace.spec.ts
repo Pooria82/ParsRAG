@@ -154,6 +154,71 @@ test('first visit guide can be skipped and replayed from settings', async ({ pag
   await expect(tour).toBeVisible();
 });
 
+test('tour opens real document, composer, and settings controls without changing saved settings', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light', palette: 'evergreen' }));
+    localStorage.removeItem('parsrag_tour_v1');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/*/files', route => route.fulfill({ json: [] }));
+  await page.route('**/models/configuration', route => route.fulfill({ json: {
+    provider: 'ollama', model_name: 'qwen2.5:7b', base_url: 'http://ollama:11434',
+    api_key_configured: false, disclosure_acknowledged: false,
+  } }));
+  await page.goto('/');
+  const tour = page.getByRole('dialog', { name: 'ParsRAG tour' });
+  const advanceTo = async (title: string) => {
+    for (let attempt = 0; attempt < 34; attempt += 1) {
+      if (await tour.getByRole('heading', { name: title }).isVisible()) return;
+      await tour.getByRole('button', { name: 'Next' }).click();
+    }
+    throw new Error(`Tour step not found: ${title}`);
+  };
+  const expectHighlightOn = async (selector: string) => {
+    await expect.poll(async () => {
+      const target = await page.locator(selector).first().boundingBox();
+      const highlight = await tour.locator('.tour-highlight').boundingBox();
+      return Boolean(target && highlight && Math.abs(highlight.x - target.x) < 10 && Math.abs(highlight.y - target.y) < 10);
+    }).toBe(true);
+  };
+  await advanceTo('Upload a document');
+  await expect(page.locator('.documents-dialog')).toBeVisible();
+  await expect(page.locator('[data-tour="document-upload"]')).toBeVisible();
+  await expectHighlightOn('[data-tour="document-upload"]');
+  await advanceTo('Reuse a document');
+  await expect(page.locator('[data-tour="document-reuse"]')).toBeVisible();
+  await advanceTo('Select or remove documents');
+  await expect(page.locator('[data-tour="document-selection"]')).toBeVisible();
+  await advanceTo('Mention a document with @');
+  await expect(page.locator('.documents-dialog')).toBeHidden();
+  await expect(page.locator('[data-tour="mention-menu"]')).toBeVisible();
+  await expectHighlightOn('[data-tour="mention-menu"]');
+  await advanceTo('Quick commands with /');
+  await expect(page.locator('[data-tour="command-menu"]')).toBeVisible();
+  await expectHighlightOn('[data-tour="command-menu"]');
+  await advanceTo('Three answer modes');
+  await expect(page.locator('[data-tour="mode-menu"] [role="menuitemradio"]')).toHaveCount(3);
+  await expectHighlightOn('[data-tour="mode-menu"]');
+  await advanceTo('Install the app (PWA)');
+  await expect(page.locator('.settings-dialog')).toBeVisible();
+  await expect(page.locator('[data-tour="settings-pwa"]')).toBeVisible();
+  await expectHighlightOn('[data-tour="settings-pwa"]');
+  await advanceTo('Default answer mode');
+  await expect(page.locator('#tab-rag')).toHaveAttribute('aria-selected', 'true');
+  await advanceTo('Model provider');
+  await expect(page.locator('input[name="provider"]:checked')).toHaveCount(1);
+  await expect(page.locator('input[name="provider"]:checked').locator('..')).toContainText('Ollama');
+  await advanceTo('API key');
+  await expect(page.locator('input[name="provider"]:checked').locator('..')).toContainText('API');
+  await expect(page.locator('[data-tour="settings-api-key"]')).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.locator('.settings-dialog')).toBeHidden();
+  await expect(page.locator('[data-tour="mention-menu"]')).toHaveCount(0);
+  await expect(page.locator('[data-tour="command-menu"]')).toHaveCount(0);
+  await expect(page.locator('[data-tour="mode-menu"]')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('parsrag_settings_v1') || '{}').palette)).toBe('evergreen');
+});
+
 test('Persian first-run guide stays usable on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await page.addInitScript(() => {
@@ -165,7 +230,8 @@ test('Persian first-run guide stays usable on a narrow screen', async ({ page })
   await page.goto('/');
   const tour = page.getByRole('dialog', { name: 'راهنمای پارس‌رگ' });
   await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(true);
-  for (let step = 0; step < 17; step += 1) {
+  const total = Number((await tour.locator('.tour-card-heading span').innerText()).split('/')[1].trim());
+  for (let step = 0; step < total; step += 1) {
     await expect(tour).toBeVisible();
     await expect(tour.locator('.tour-highlight')).toHaveCount(1);
     const bounds = await tour.locator('.tour-card').boundingBox();
@@ -174,7 +240,7 @@ test('Persian first-run guide stays usable on a narrow screen', async ({ page })
     expect(bounds!.y).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(667);
-    await tour.getByRole('button', { name: step === 16 ? 'شروع کنیم' : 'بعدی' }).click();
+    await tour.getByRole('button', { name: step === total - 1 ? 'شروع کنیم' : 'بعدی' }).click();
   }
   await expect(tour).toBeHidden();
   await expect.poll(() => page.locator('main').evaluate(element => element.inert)).toBe(false);
@@ -204,9 +270,9 @@ test('tour highlights prompt controls, citations, and answer actions when a conv
   const tour = page.getByRole('dialog', { name: 'ParsRAG tour' });
   await expect(tour).toBeVisible();
   for (const [index, selector, title] of [
-    [9, '[data-tour="prompt-actions"]', 'Edit your question'],
-    [10, '[data-tour="sources"]', 'Answer sources'],
-    [11, '[data-tour="response-actions"]', 'Control an answer'],
+    [13, '[data-tour="prompt-actions"]', 'Edit your question'],
+    [14, '[data-tour="sources"]', 'Answer sources'],
+    [15, '[data-tour="response-actions"]', 'Control an answer'],
   ] as const) {
     while (Number((await tour.locator('.tour-card-heading span').innerText()).split('/')[0].trim()) <= index) {
       await tour.getByRole('button', { name: 'Next' }).click();

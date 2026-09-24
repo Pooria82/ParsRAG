@@ -345,6 +345,7 @@ html[dir="rtl"] .documents-dialog{--drawer-offset:-105%}
 .tour-progress{height:3px;margin:-3px 0 15px;border-radius:3px;background:var(--surface-soft);overflow:hidden}
 .tour-progress i{display:block;height:100%;border-radius:3px;background:var(--accent);transition:width 280ms var(--ease-out)}
 .tour-card h2{font-size:17px;line-height:1.6;font-weight:650}.tour-card p{font-size:12px;line-height:1.9;color:var(--secondary);margin-top:5px}
+.tour-empty-hint{margin:8px 12px;padding:10px 12px;border:1px dashed var(--line-strong);border-radius:9px;color:var(--secondary);font-size:11px;line-height:1.8}
 .tour-actions{display:flex;align-items:center;gap:9px;margin-top:17px}.tour-actions>span{flex:1}.tour-actions>button:not(.button){font-size:11px;color:var(--secondary);padding:7px;border-radius:7px;display:flex;align-items:center;gap:5px}.tour-actions>button:not(.button):hover{background:var(--surface-soft)}
 .tour-next{min-height:34px;font-size:11px}
 .segmented-control{display:flex;padding:4px;background:var(--surface-soft);border:1px solid var(--line);border-radius:10px;max-width:300px}

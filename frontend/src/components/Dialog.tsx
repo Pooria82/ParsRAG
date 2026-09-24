@@ -8,11 +8,12 @@ interface DialogProps {
   closeLabel: string;
   subtitle?: string;
   className?: string;
+  guided?: boolean;
   children: ReactNode;
 }
 
 /** Native modal semantics keep keyboard focus and background interaction scoped. */
-export function Dialog({ open, onClose, title, closeLabel, subtitle, className = '', children }: DialogProps) {
+export function Dialog({ open, onClose, title, closeLabel, subtitle, className = '', guided = false, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeTimer = useRef<number>();
   const [closing, setClosing] = useState(false);
@@ -23,17 +24,22 @@ export function Dialog({ open, onClose, title, closeLabel, subtitle, className =
     if (open) {
       window.clearTimeout(closeTimer.current);
       setClosing(false);
-      if (!dialog.open) dialog.showModal();
+      if (dialog.open && dialog.matches(':modal') === guided) dialog.close();
+      if (!dialog.open) {
+        if (guided) dialog.show();
+        else dialog.showModal();
+      }
       return;
     }
     if (dialog.open) {
+      if (guided) { dialog.close(); setClosing(false); return; }
       setClosing(true);
       closeTimer.current = window.setTimeout(() => {
         dialog.close();
         setClosing(false);
       }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : className.includes('documents-dialog') ? 340 : 180);
     }
-  }, [open, className]);
+  }, [open, className, guided]);
   useEffect(() => () => {
     window.clearTimeout(closeTimer.current);
     if (ref.current?.open) ref.current.close();

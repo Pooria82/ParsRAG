@@ -11,6 +11,7 @@ interface ComposerProps {
   activeMode: RAGMode; onChangeMode: (mode: RAGMode) => void;
   language: Language; onOpenDocuments: () => void; documentCount: number; focusToken: number;
   documentNames: string[]; onSelectMention: (name: string) => void; onOpenGuide: () => void;
+  guidedMenu?: 'mode' | 'document' | 'command' | null;
 }
 
 const modeIcons = { hybrid: Layers2, strict: BookOpen, 'llm-only': MessageCircle };
@@ -27,7 +28,10 @@ export function Composer(props: ComposerProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const ModeIcon = modeIcons[activeMode];
-  const trigger = menuDismissed ? null : activeComposerTrigger(value, cursor);
+  const trigger = props.guidedMenu === 'document' || props.guidedMenu === 'command'
+    ? { kind: props.guidedMenu, query: '', start: 0, end: 0 }
+    : menuDismissed ? null : activeComposerTrigger(value, cursor);
+  const showModeMenu = modeOpen || props.guidedMenu === 'mode';
   const suggestions = trigger?.kind === 'document'
     ? props.documentNames.filter(name => name.toLocaleLowerCase().includes(trigger.query.trim().toLocaleLowerCase())).slice(0, 8)
     : trigger?.kind === 'command' ? COMMANDS.filter(command => command.id.startsWith(trigger.query.toLowerCase())).slice(0, 9) : [];
@@ -57,6 +61,7 @@ export function Composer(props: ComposerProps) {
     inputRef.current.style.height = Math.min(Math.max(inputRef.current.scrollHeight, 58), 180) + 'px';
   }, [value]);
   useEffect(() => { if (props.focusToken) inputRef.current?.focus(); }, [props.focusToken]);
+  useEffect(() => { if (props.guidedMenu) setModeOpen(false); }, [props.guidedMenu]);
   useEffect(() => {
     const list = suggestionsRef.current;
     const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -104,12 +109,13 @@ export function Composer(props: ComposerProps) {
       <textarea id="message-input" ref={inputRef} value={value} onChange={e => { onChange(e.target.value); setCursor(e.target.selectionStart); setMenuIndex(0); setMenuDismissed(false); }}
         onClick={e => setCursor(e.currentTarget.selectionStart)} onKeyUp={e => setCursor(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown} placeholder={t.composerPlaceholder} aria-label={t.messageLabel}
-        aria-controls={trigger && suggestions.length ? 'composer-suggestions' : undefined} aria-expanded={Boolean(trigger && suggestions.length)}
+        aria-controls={trigger && (suggestions.length || props.guidedMenu === 'document') ? 'composer-suggestions' : undefined} aria-expanded={Boolean(trigger && (suggestions.length || props.guidedMenu === 'document'))}
         aria-activedescendant={trigger && suggestions.length ? `composer-option-${menuIndex % suggestions.length}` : undefined}
         aria-autocomplete="list"
         rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={30000} />
-      {trigger && suggestions.length > 0 && <div ref={suggestionsRef} className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
+      {trigger && (suggestions.length > 0 || props.guidedMenu === 'document') && <div ref={suggestionsRef} data-tour={trigger.kind === 'document' ? 'mention-menu' : 'command-menu'} className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
         <p>{trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}</p>
+        {suggestions.length === 0 && <p className="tour-empty-hint">{language === 'fa' ? 'پس از بارگذاری سند، نام فایل‌ها اینجا پیشنهاد می‌شود.' : 'After uploading documents, their filenames are suggested here.'}</p>}
         {suggestions.map((option, index) => <button type="button" role="option" id={`composer-option-${index}`} aria-selected={index === menuIndex} key={typeof option === 'string' ? option : option.id}
           className={index === menuIndex ? 'is-active' : ''} onMouseDown={event => event.preventDefault()} onClick={() => chooseSuggestion(index)}>
           {typeof option === 'string' ? <><Paperclip size={15} /><bdi>{option}</bdi></>
@@ -123,11 +129,11 @@ export function Composer(props: ComposerProps) {
           </button>
           <span className="toolbar-divider" />
           <div className="mode-control">
-            <button ref={triggerRef} className="mode-trigger" data-tour="mode" aria-haspopup="menu" aria-expanded={modeOpen} aria-controls="answer-mode-menu"
+            <button ref={triggerRef} className="mode-trigger" data-tour="mode" aria-haspopup="menu" aria-expanded={showModeMenu} aria-controls="answer-mode-menu"
               onClick={() => setModeOpen(!modeOpen)} title={t.modeLabel}>
-              <ModeIcon size={16} /><span>{t.ragModes[activeMode].short}</span><ChevronDown size={14} className={modeOpen ? 'rotate' : ''} />
+              <ModeIcon size={16} /><span>{t.ragModes[activeMode].short}</span><ChevronDown size={14} className={showModeMenu ? 'rotate' : ''} />
             </button>
-            {modeOpen && <div ref={menuRef} id="answer-mode-menu" className="mode-menu" role="menu" aria-label={t.modeLabel} onKeyDown={menuKeyboard}>
+            {showModeMenu && <div ref={menuRef} data-tour="mode-menu" id="answer-mode-menu" className="mode-menu" role="menu" aria-label={t.modeLabel} onKeyDown={menuKeyboard}>
               <p className="menu-caption">{t.modeLabel}</p>
               {MODES.map(mode => {
                 const Icon = modeIcons[mode];

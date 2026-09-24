@@ -7,6 +7,7 @@ import { Dialog } from './Dialog';
 
 interface DocumentCenterProps {
   isOpen: boolean; onClose: () => void; documents: SessionDocument[];
+  guided?: boolean;
   onUploadFiles: (files: File[]) => void; onRemoveFailed: (name: string) => void;
   onToggleDocument: (name: string) => void; onDeleteDocument: (name: string) => void; language: Language; isUploading: boolean;
   activeMode: RAGMode; error: string | null;
@@ -15,7 +16,7 @@ interface DocumentCenterProps {
   onReuseDocument: (sourceSessionId: string, name: string) => void;
 }
 
-export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, reusableDocuments, onReuseDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES }: DocumentCenterProps) {
+export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, reusableDocuments, onReuseDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES, guided = false }: DocumentCenterProps) {
   const t = translations[language];
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -25,12 +26,12 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
   const limitLabel = capabilities.max_files_per_session.toLocaleString(language);
   const limitReached = t.docLimitReached.replace('{count}', limitLabel);
   const dropzoneDetails = t.docDropzoneSub.replace('{size}', sizeLabel).replace('{count}', limitLabel);
-  return <Dialog open={isOpen} onClose={onClose} title={t.docCenterTitle} subtitle={t.docCenterDesc} closeLabel={t.close} className="documents-dialog">
+  return <Dialog open={isOpen} guided={guided} onClose={onClose} title={t.docCenterTitle} subtitle={t.docCenterDesc} closeLabel={t.close} className="documents-dialog">
     <div className="documents-body">
       <input type="file" ref={fileInput} className="visually-hidden" tabIndex={-1} accept={capabilities.supported_extensions.join(',')} multiple aria-label={t.attach}
         onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) onUploadFiles(files); event.target.value = ''; }} />
       {!documents.length && <div className="document-empty"><span className="document-empty-art"><FileText size={34} /><span><Plus size={15} /></span></span><h3>{t.docEmptyTitle}</h3><p>{t.docEmptyDesc}</p></div>}
-      <button className={'dropzone ' + (dragging ? 'is-dragging' : '')} disabled={full || isUploading}
+      <button data-tour="document-upload" className={'dropzone ' + (dragging ? 'is-dragging' : '')} disabled={full || isUploading}
         onClick={() => fileInput.current?.click()}
         onDragOver={event => { event.preventDefault(); if (!full && !isUploading) setDragging(true); }}
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
@@ -40,8 +41,9 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
         {!full && !isUploading && <span className="browse-link">{t.docBrowse}</span>}
         <small>{dropzoneDetails}</small>
       </button>
-      {reusableDocuments.length > 0 && !full && <section className="reusable-documents" aria-label={t.reuseDocumentsTitle}>
+      {(reusableDocuments.length > 0 || guided) && !full && <section className="reusable-documents" data-tour="document-reuse" aria-label={t.reuseDocumentsTitle}>
         <div className="document-list-heading"><span>{t.reuseDocumentsTitle}</span><small>{t.reuseDocumentsHint}</small></div>
+        {reusableDocuments.length === 0 && <p className="tour-empty-hint">{language === 'fa' ? 'پس از نمایه‌سازی اولین سند، می‌توانید آن را در گفت‌وگوهای دیگر از اینجا انتخاب کنید.' : 'After indexing a document, you can select it here in another conversation.'}</p>}
         <div className="reusable-document-list">
           {reusableDocuments.map(item => <div className="reusable-document" key={`${item.sourceSessionId}:${item.name}`}>
             <FileText size={17} aria-hidden="true" />
@@ -51,7 +53,7 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
         </div>
       </section>}
       {error && <p className="inline-error" role="alert"><AlertCircle size={16} />{error}</p>}
-      {documents.length > 0 && <>
+      {documents.length > 0 && <div data-tour="document-selection">
         <div className="document-list-heading"><span>{t.documents}</span><span>{documents.length.toLocaleString(language)} / {limitLabel}</span></div>
         <div className="document-list">
           {documents.map(doc => <div className={'document-row status-' + doc.status} key={doc.name}>
@@ -71,7 +73,8 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
           </div>)}
         </div>
         <p className="document-selection-hint">{t.docSelectionHint}</p>
-      </>}
+      </div>}
+      {guided && documents.length === 0 && <p className="tour-empty-hint" data-tour="document-selection">{language === 'fa' ? 'سندهای بارگذاری‌شده اینجا ظاهر می‌شوند؛ می‌توانید انتخابشان را تغییر دهید یا حذفشان کنید.' : 'Uploaded documents appear here; you can change their selection or delete them.'}</p>}
       {activeMode === 'llm-only' && <p className="info-note"><FolderOpen size={17} />{t.freeModeDocs}</p>}
     </div>
     <footer className="documents-footer"><LockKeyhole size={15} /><span>{t.docScope}</span></footer>
