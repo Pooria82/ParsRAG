@@ -98,10 +98,12 @@ export function WorkspaceTour({ open, language, onClose, onStageChange, activeSt
       setHighlight(current => current && Object.keys(next).every(key => current[key as keyof Highlight] === next[key as keyof Highlight]) ? current : next);
     };
     const frame = requestAnimationFrame(update);
-    const timer = window.setTimeout(update, 220);
+    // The document drawer animates for 340 ms; follow its target until it settles.
+    const tracker = window.setInterval(update, 50);
+    const timer = window.setTimeout(() => window.clearInterval(tracker), 750);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
-    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer); window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer); window.clearInterval(tracker); window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
   }, [index, open, activeStage]);
   useEffect(() => { if (open) cardRef.current?.querySelector<HTMLButtonElement>('.tour-next')?.focus(); }, [open, index]);
   if (!open) return null;

@@ -377,7 +377,7 @@ test('selected color palette survives a reload in light and dark mode', async ({
   const settings = page.getByRole('dialog', { name: /Settings/ });
   await settings.getByRole('radio', { name: 'Ocean blue' }).check();
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'ocean');
-  await settings.getByRole('radio', { name: /Dark/ }).check();
+  await settings.locator('.theme-choice.preview-dark').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'ocean');
