@@ -68,7 +68,7 @@ a{color:var(--accent);text-underline-offset:3px}
 .sidebar-brand>span{display:block}.sidebar-brand small{font-size:11px;color:var(--muted);display:block;font-weight:400}
 .new-chat-button{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:10px 14px;color:var(--accent);background:var(--selected);border:1px solid transparent;border-radius:10px;font-weight:550;font-size:13px;text-align:start}
 .new-chat-button:hover{border-color:var(--line-strong);background:var(--surface-hover)}
-.shortcut-symbol{margin-inline-start:auto;color:var(--muted);font-family:'Segoe UI',sans-serif;font-size:15px}
+.shortcut-symbol{margin-inline-start:auto;color:var(--muted);font-family:'Segoe UI',sans-serif;font-size:10px;white-space:nowrap}
 .history-search{margin:14px 0 15px;display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid transparent;border-radius:9px;color:var(--muted)}
 .history-search:focus-within{border-color:var(--line-strong);background:var(--canvas)}
 .history-search input{width:100%;font-size:12px;border:0;outline:0;background:none;height:24px}
@@ -332,6 +332,11 @@ html[dir="rtl"] .documents-dialog{--drawer-offset:-105%}
 .palette-choice>svg{position:absolute;top:6px;inset-inline-end:6px;color:var(--accent)}
 .guide-setting{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:14px;border:1px solid var(--line);border-radius:11px;background:var(--surface-soft)}
 .guide-setting>span{display:grid;gap:3px}.guide-setting strong{font-size:12px;font-weight:600}.guide-setting small{color:var(--muted);font-size:10px}
+.shortcut-guide{margin-top:18px;padding:17px;border:1px solid var(--line);border-radius:11px;background:var(--surface-soft)}
+.shortcut-guide h3{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.shortcut-guide h3 svg{color:var(--accent)}.shortcut-guide>p{margin:6px 0 14px;color:var(--muted);font-size:11px;line-height:1.8}
+.shortcut-guide dl{display:grid;gap:7px}.shortcut-guide dl>div{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
+.shortcut-guide dt{color:var(--secondary)}.shortcut-guide dd{margin:0}.shortcut-guide kbd{display:inline-block;min-width:22px;padding:4px 7px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--ink);font:500 11px/1.4 'Segoe UI',sans-serif;white-space:nowrap;box-shadow:0 1px 0 var(--line-strong)}
 .tour-layer{position:fixed;inset:0;z-index:300;pointer-events:none}
 .tour-shade{position:fixed;background:#071410ad;pointer-events:auto}
 .tour-highlight{position:fixed;border:2px solid var(--accent);border-radius:13px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 20%,transparent),0 10px 35px #0005;pointer-events:auto;transition:top 320ms var(--ease-out),left 320ms var(--ease-out),width 320ms var(--ease-out),height 320ms var(--ease-out)}

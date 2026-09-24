@@ -82,6 +82,58 @@ test('keyboard navigation keeps the active slash command visible in its scroll p
   })).toBe(true);
 });
 
+test('Windows and Linux shortcuts work and the settings guide reflects Control keys', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  await expect(page.getByRole('textbox', { name: 'Your message' })).toBeVisible();
+  await page.keyboard.press('Control+Shift+k');
+  await expect(page.getByRole('textbox', { name: 'Search conversations' })).toBeFocused();
+  await page.getByRole('button', { name: 'Toggle conversations' }).click();
+  await page.keyboard.press('/');
+  const composer = page.getByRole('textbox', { name: 'Your message' });
+  await expect(composer).toBeFocused();
+  await composer.fill('A draft to keep in the previous conversation');
+  await page.keyboard.press('Control+Shift+o');
+  await expect(composer).toHaveValue('');
+  await page.keyboard.press('Control+Shift+d');
+  const documents = page.getByRole('dialog', { name: /Conversation documents/ });
+  await expect(documents).toBeVisible();
+  await documents.getByRole('button', { name: 'Close' }).click();
+  await expect(documents).toBeHidden();
+  await page.keyboard.press('Control+,');
+  const settings = page.getByRole('dialog', { name: /Settings/ });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('region', { name: 'Keyboard shortcuts' }).getByText('Ctrl+Shift+O')).toBeVisible();
+  await settings.getByRole('button', { name: 'Close' }).click();
+  await expect(settings).toBeHidden();
+  await page.keyboard.press('Control+Shift+y');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.keyboard.press('Control+Shift+h');
+  await expect(page.getByRole('dialog', { name: 'ParsRAG tour' })).toBeVisible();
+});
+
+test('macOS shortcuts use Command and do not respond to Control', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  const search = page.getByRole('textbox', { name: 'Search conversations' });
+  await page.keyboard.press('Control+Shift+k');
+  await expect(search).not.toBeFocused();
+  await page.keyboard.press('Meta+Shift+k');
+  await expect(search).toBeFocused();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('region', { name: 'Keyboard shortcuts' }).getByText('⌘⇧O')).toBeVisible();
+});
+
 test('first visit guide can be skipped and replayed from settings', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));

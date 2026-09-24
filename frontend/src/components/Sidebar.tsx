@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
 import type { Language, ModelConfiguration, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { Dialog } from './Dialog';
+import { isApplePlatform, shortcutLabel } from '../core/shortcuts';
 
 interface SidebarProps {
   sessions: Session[]; activeSessionId: string; generatingSessionId?: string;
@@ -14,16 +15,24 @@ interface SidebarProps {
   connection: 'checking' | 'preparing' | 'online' | 'offline'; onRetryConnection: () => void;
   modelRuntime?: ModelConfiguration;
   uploadingSessionId?: string;
+  searchFocusToken?: number;
 }
 
 export function Sidebar(props: SidebarProps) {
   const { sessions, activeSessionId, onSelectSession, onNewChat, language, theme, isOpen, isMobile } = props;
   const t = translations[language];
+  const newChatShortcut = shortcutLabel('newChat', isApplePlatform(navigator.platform || navigator.userAgent));
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState<{ session: Session; action: 'rename' | 'delete' } | null>(null);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!props.searchFocusToken) return;
+    const frame = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [props.searchFocusToken]);
   const groups = useMemo(() => {
     const midnight = new Date().setHours(0, 0, 0, 0);
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(0, 0, 0, 0);
@@ -41,11 +50,11 @@ export function Sidebar(props: SidebarProps) {
 
   const content = <>
     <button className="sidebar-brand" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChat}><BrandMark /><span><strong>{t.appName}</strong><small>{t.workspace}</small></span></button>
-    <button className="new-chat-button" onClick={() => { setSearch(''); onNewChat(); }} title={t.newChatShortcut}>
-      <Plus size={19} /><span>{t.newChat}</span><span className="shortcut-symbol" aria-hidden="true">⌘</span>
+    <button className="new-chat-button" onClick={() => { setSearch(''); onNewChat(); }} title={`${t.newChat} · ${newChatShortcut}`}>
+      <Plus size={19} /><span>{t.newChat}</span><span className="shortcut-symbol" aria-hidden="true">{newChatShortcut}</span>
     </button>
     <label className="history-search"><Search size={16} aria-hidden="true" />
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchChats} aria-label={t.searchChats} />
+      <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchChats} aria-label={t.searchChats} />
     </label>
     <nav className="history-list" aria-label={t.conversations}>
       {empty ? <div className="history-empty"><MessageSquare size={23} />

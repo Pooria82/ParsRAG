@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleHelp, Database, Download, KeyRound, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
+import { Check, CircleHelp, Database, Download, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
 import { ChoiceMenu } from './ui/ChoiceMenu';
 import { ParsRagApiClient } from '../services/api';
+import { isApplePlatform, SHORTCUTS, shortcutLabel } from '../core/shortcuts';
 
 interface SettingsModalProps {
   open?: boolean;
@@ -18,6 +19,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured, onStartGuide, canInstall, onInstall }: SettingsModalProps) {
   const t = translations[settings.language];
+  const applePlatform = isApplePlatform(navigator.platform || navigator.userAgent);
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearStatus, setClearStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -98,6 +100,10 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         <div className="setting-field guide-setting"><span><strong>{t.guideReplay}</strong><small>{t.guideReplayHint}</small></span>
           <button className="button secondary" onClick={() => { onClose(); onStartGuide(); }}><CircleHelp size={16} />{t.guideStart}</button>
         </div>
+        <section className="shortcut-guide" aria-label={t.shortcutTitle}>
+          <h3><Keyboard size={17} />{t.shortcutTitle}</h3><p>{t.shortcutHint}</p>
+          <dl>{SHORTCUTS.map(shortcut => <div key={shortcut.action}><dt>{t.shortcutActions[shortcut.action]}</dt><dd><kbd dir="ltr">{shortcutLabel(shortcut.action, applePlatform)}</kbd></dd></div>)}</dl>
+        </section>
         {canInstall && <div className="setting-field guide-setting"><span><strong>{t.pwaInstallTitle}</strong><small>{t.pwaInstallHint}</small></span>
           <button className="button secondary" onClick={onInstall}><Download size={16} />{t.pwaInstall}</button>
         </div>}

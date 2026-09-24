@@ -18,6 +18,7 @@ import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -36,6 +37,7 @@ export function App() {
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
   const [focusToken, setFocusToken] = useState(0);
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideEligible] = useState(() => { try { return localStorage.getItem('parsrag_tour_v1') !== 'done'; } catch { return true; } });
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
@@ -125,16 +127,6 @@ export function App() {
     if (isMobile) setSidebarOpen(false);
     setFocusToken(value => value + 1);
   }, [settings.language, settings.defaultMode, isMobile]);
-
-  useEffect(() => {
-    const shortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'o' && !document.querySelector('dialog[open]')) {
-        event.preventDefault(); newChat();
-      }
-    };
-    window.addEventListener('keydown', shortcut);
-    return () => window.removeEventListener('keydown', shortcut);
-  }, [newChat]);
 
   const stop = () => {
     const current = queryRef.current;
@@ -324,6 +316,30 @@ export function App() {
   const updateSettings = useCallback((updated: Partial<AppSettings>) => setSettings(current => ({ ...current, ...updated })), []);
   const transitionTheme = useThemeTransition(theme => updateSettings({ theme }));
   const transitionLanguage = useLanguageTransition(language => updateSettings({ language }));
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (guideOpen || document.querySelector('dialog[open]')) return;
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      const editable = Boolean(element?.isContentEditable || element?.closest('input,textarea,select,[contenteditable="true"]'));
+      const action = resolveShortcut(event, isApplePlatform(navigator.platform || navigator.userAgent), editable);
+      if (!action) return;
+      event.preventDefault();
+      switch (action) {
+        case 'newChat': newChat(); break;
+        case 'searchChats':
+          setSidebarOpen(true);
+          setSearchFocusToken(value => value + 1);
+          break;
+        case 'documents': setDocumentsOpen(true); break;
+        case 'settings': setSettingsOpen(true); break;
+        case 'composer': setFocusToken(value => value + 1); break;
+        case 'guide': setGuideOpen(true); break;
+        case 'theme': transitionTheme(settings.theme === 'dark' ? 'light' : 'dark'); break;
+      }
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, [guideOpen, newChat, settings.theme, transitionTheme]);
   const selectedDocuments = active.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
   const composer = <Composer key={active.id} value={active.draft ?? ''} onChange={draft => updateSession(active.id, s => ({ ...s, draft }))}
     onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
@@ -338,6 +354,7 @@ export function App() {
     <BootSequence language={settings.language} />
     <a href="#message-input" className="skip-link">{t.messageLabel}</a>
     <Sidebar sessions={sessions} activeSessionId={active.id} generatingSessionId={generatingId}
+      searchFocusToken={searchFocusToken}
       onSelectSession={id => { setActiveId(id); setNotice(null); setDocumentsOpen(false); if (isMobile) setSidebarOpen(false); }}
       onNewChat={newChat} onDeleteSession={deleteSession}
       onRenameSession={(id, title) => updateSession(id, s => ({ ...s, title, updatedAt: Date.now() }))}
