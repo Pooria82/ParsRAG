@@ -182,6 +182,44 @@ test('Persian first-run guide stays usable on a narrow screen', async ({ page })
   await expect(tour).toBeHidden();
 });
 
+test('tour highlights prompt controls, citations, and answer actions when a conversation exists', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.removeItem('parsrag_tour_v1');
+    localStorage.setItem('parsrag_sessions_v1', JSON.stringify([{
+      id: 'guided', title: 'Research', createdAt: 1, updatedAt: 1, ragMode: 'strict', draft: '',
+      documents: [{ name: 'guide.pdf', status: 'indexed' }],
+      messages: [
+        { id: 'user-1', role: 'user', content: 'What does the guide say?', timestamp: 1 },
+        { id: 'answer-1', role: 'assistant', content: 'It describes the workflow.', timestamp: 2,
+          citations: [{ filename: 'guide.pdf', locations: [{ kind: 'page', start: 2 }] }] },
+      ],
+    }]));
+    localStorage.setItem('parsrag_active_session_id_v1', 'guided');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/guided/files', route => route.fulfill({ json: ['guide.pdf'] }));
+  await page.goto('/');
+  const tour = page.getByRole('dialog', { name: 'ParsRAG tour' });
+  await expect(tour).toBeVisible();
+  for (const [index, selector, title] of [
+    [9, '[data-tour="prompt-actions"]', 'Edit your question'],
+    [10, '[data-tour="sources"]', 'Answer sources'],
+    [11, '[data-tour="response-actions"]', 'Control an answer'],
+  ] as const) {
+    while (Number((await tour.locator('.tour-card-heading span').innerText()).split('/')[0].trim()) <= index) {
+      await tour.getByRole('button', { name: 'Next' }).click();
+    }
+    await expect(tour.getByRole('heading', { name: title })).toBeVisible();
+    await expect.poll(async () => {
+      const target = await page.locator(selector).first().boundingBox();
+      const highlight = await tour.locator('.tour-highlight').boundingBox();
+      return Boolean(target && highlight && Math.abs(highlight.x - target.x) < 10 && Math.abs(highlight.y - target.y) < 10);
+    }).toBe(true);
+  }
+});
+
 test('reuses a previous document and offers document and command suggestions', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('parsrag_tour_v1', 'done');
