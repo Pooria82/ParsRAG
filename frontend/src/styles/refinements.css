@@ -63,6 +63,8 @@
   z-index: 25;
   inset: calc(100% + 7px) 0 auto;
   padding: 6px;
+  max-height: min(280px, calc(100dvh - 100px));
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);

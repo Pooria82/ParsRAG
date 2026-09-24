@@ -384,6 +384,52 @@ test('selected color palette survives a reload in light and dark mode', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('workspace, document, and settings scroll areas stay usable in both themes', async ({ page }) => {
+  await page.setViewportSize({ width: 920, height: 600 });
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_tour_v1', 'done');
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    const sessions = Array.from({ length: 24 }, (_, index) => ({
+      id: `scroll-${index}`, title: `Conversation ${index}`, createdAt: index + 1,
+      updatedAt: index + 1, ragMode: 'strict', draft: '',
+      documents: index === 23 ? Array.from({ length: 8 }, (_, file) => ({ name: `document-${file}.pdf`, status: 'indexed' })) : [],
+      messages: index === 23 ? Array.from({ length: 20 }, (_, message) => ({
+        id: `message-${message}`, role: message % 2 ? 'assistant' : 'user',
+        content: `Long response ${message}: ${'document evidence '.repeat(18)}`, timestamp: message + 1,
+      })) : [{ id: `history-${index}`, role: 'user', content: `Question ${index}`, timestamp: index + 1 }],
+    }));
+    localStorage.setItem('parsrag_sessions_v1', JSON.stringify(sessions));
+    localStorage.setItem('parsrag_active_session_id_v1', 'scroll-23');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/scroll-23/files', route => route.fulfill({ json: Array.from({ length: 8 }, (_, index) => `document-${index}.pdf`) }));
+  await page.goto('/');
+  const checkScroll = async (selector: string) => {
+    const scroll = page.locator(selector).first();
+    await expect(scroll).toBeVisible();
+    const state = await scroll.evaluate(element => {
+      element.scrollTop = element.scrollHeight;
+      return { max: element.scrollHeight - element.clientHeight, position: element.scrollTop,
+        color: getComputedStyle(element).scrollbarColor };
+    });
+    expect(state.max).toBeGreaterThan(0);
+    expect(state.position).toBeGreaterThan(0);
+    expect(state.color).not.toBe('auto');
+  };
+  await checkScroll('.history-list');
+  await checkScroll('.chat-feed');
+  await page.getByRole('button', { name: 'Documents' }).first().click();
+  await checkScroll('.documents-dialog');
+  await page.locator('.documents-dialog .dialog-header button').click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: /Model/ }).click();
+  await checkScroll('.settings-dialog');
+  await page.locator('.settings-dialog .dialog-header button').click();
+  await page.getByRole('button', { name: /dark/i }).first().click();
+  await checkScroll('.history-list');
+  await checkScroll('.chat-feed');
+});
+
 test('all workspace palettes keep readable body and primary-button contrast', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('parsrag_tour_v1', 'done'));
   await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
