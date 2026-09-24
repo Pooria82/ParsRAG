@@ -35,7 +35,7 @@ _GENERIC_FILENAME_WORDS = {
     "doc",
 }
 _MENTION = re.compile(r"@\{((?:\\[{}]|[^{}]){1,510})\}")
-_CLAUSE_BREAK = re.compile(r"\s+(?:و|and)\s+|[؟?!؛;.\n]+\s*", re.IGNORECASE)
+_CLAUSE_BREAK = re.compile(r"\s(?:و|and)\s|[؟?!؛;.\n]", re.IGNORECASE)
 MAX_TAGGED_SEGMENTS = 20
 
 
