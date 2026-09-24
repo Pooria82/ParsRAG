@@ -186,6 +186,10 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
 def _location_tag(node: ExtractedNode) -> str:
     """Formats reliable parser metadata for model-visible inline citations."""
     metadata = node.metadata
+    page = metadata.get("page")
+    page_end = metadata.get("page_end")
+    if isinstance(page, int) and isinstance(page_end, int) and page_end > page:
+        return f", pages: {page}-{page_end}"
     for key, label in (
         ("page", "page"),
         ("slide", "slide"),

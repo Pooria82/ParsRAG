@@ -68,6 +68,44 @@ def test_strict_rag_above_threshold(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_rag_accepts_borderline_cross_page_text_evidence(
+    mock_settings: MagicMock,
+) -> None:
+    """A low vector score alone must not reject an exact cross-page fact."""
+    repo = MagicMock()
+    repo.similarity_search.return_value = [
+        ExtractedNode(
+            text="[page 3] The invoice total is\n[page 4] 425 euros due today.",
+            score=0.67,
+            metadata={"filename": "invoice.pdf", "page": 3, "page_end": 4},
+        )
+    ]
+    mock_settings.llm.complete.return_value = "The invoice total is 425 euros."
+
+    result = StrictRAGStrategy(repo).execute("What is the invoice total in euros?", [])
+
+    assert result.answer == "The invoice total is 425 euros."
+    assert result.source_nodes[0].metadata["page_end"] == 4
+    assert "pages: 3-4" in mock_settings.llm.complete.call_args.args[0]
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_rag_rejects_borderline_unrelated_ocr_noise(
+    mock_settings: MagicMock,
+) -> None:
+    """The lexical fallback must not turn unrelated OCR text into evidence."""
+    repo = MagicMock()
+    repo.similarity_search.return_value = [
+        ExtractedNode(text="Expense account 425 euros.", score=0.67)
+    ]
+
+    result = StrictRAGStrategy(repo).execute("What is the invoice total?", [])
+
+    assert "I do not know" in result.answer
+    mock_settings.llm.complete.assert_not_called()
+
+
 @patch("backend.core.strategies.llm_only.Settings")
 def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()

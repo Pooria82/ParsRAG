@@ -128,6 +128,41 @@ def test_ingest_success() -> None:
     app.dependency_overrides.clear()
 
 
+def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
+    """Cross-page OCR facts enter the same session without a separate upload."""
+    from backend.infrastructure.parsers.document_parser import ParsedSection
+
+    repo = MagicMock()
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    with (
+        patch("backend.api.routes._validate_file"),
+        patch("backend.api.routes.parse_document_sections") as parse,
+        patch("backend.api.routes.chunk_text") as chunk,
+    ):
+        parse.return_value = [
+            ParsedSection("The invoice total is", {"page": 3}),
+            ParsedSection("425 euros due today", {"page": 4}),
+        ]
+        chunk.side_effect = [
+            [ExtractedNode(text="The invoice total is", metadata={"page": 3})],
+            [ExtractedNode(text="425 euros due today", metadata={"page": 4})],
+        ]
+
+        response = client.post(
+            "/ingest",
+            files={"file": ("invoice.pdf", b"fake pdf bytes", "application/pdf")},
+            data={"session_id": "cross-page"},
+        )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert "3 chunks" in response.json()["message"]
+    bridge = repo.save_nodes.call_args_list[1].args[0][-1]
+    assert bridge.metadata["page"] == 3
+    assert bridge.metadata["page_end"] == 4
+    assert "invoice total is\n[page 4] 425 euros" in bridge.text
+
+
 def test_concurrent_uploads_recheck_session_duplicates() -> None:
     """A second upload must observe the first commit before entering ingestion."""
     from backend.api import routes

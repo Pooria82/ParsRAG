@@ -148,6 +148,16 @@ test('rejects invalid answers and deduplicates compact source locations', () => 
   });
 });
 
+test('cross-page evidence is shown as one traceable page range', () => {
+  const response = parseAnswer({ answer: '425 euros', source_nodes: [{
+    text: '[page 3] total is [page 4] 425 euros',
+    metadata: { filename: 'invoice.pdf', page: 3, page_end: 4 },
+  }] });
+  assert.deepEqual(response.citations, [{
+    filename: 'invoice.pdf', locations: [{ kind: 'page', start: 3, end: 4 }],
+  }]);
+});
+
 test('synchronizes real server documents, preserving choices and partial-upload outcomes', () => {
   const docs = [{ name: 'gone.pdf', status: 'indexed' }, { name: 'retry.pdf', status: 'error' }, { name: 'keep.pdf', status: 'indexed', enabled: false }];
   const merged = mergeRemoteDocuments(docs, ['keep.pdf', 'new.pdf', 'new.pdf']);

@@ -216,7 +216,7 @@ export function parseAnswer(value: unknown): { answer: string; citations: Citati
       const location = { kind, start, ...(typeof end === 'number' && Number.isFinite(end) ? { end } : {}) };
       if (!citation.locations.some(item => item.kind === kind && item.start === start && item.end === location.end)) citation.locations.push(location);
     };
-    add('page', metadata.page); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
+    add('page', metadata.page, metadata.page_end); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
     sources.set(filename, citation);
   }
   return { answer: value.answer, citations: [...sources.values()] };

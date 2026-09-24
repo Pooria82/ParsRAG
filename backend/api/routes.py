@@ -49,8 +49,11 @@ from backend.infrastructure.llm.factory import (
     get_model_configuration,
     list_ollama_models,
 )
-from backend.infrastructure.parsers.chunker import chunk_text
-from backend.infrastructure.parsers.document_parser import parse_document_sections
+from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
+from backend.infrastructure.parsers.document_parser import (
+    ParsedSection,
+    parse_document_sections,
+)
 
 router = APIRouter()
 logger = logging.getLogger("parsrag.operations")
@@ -343,13 +346,28 @@ def _ingest_documents(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+        previous_section: ParsedSection | None = None
         for section in sections:
             nodes = chunk_text(
                 section.text,
                 metadata={"filename": upload_item.filename, **section.metadata},
             )
+            if previous_section is not None:
+                previous_page = previous_section.metadata.get("page")
+                current_page = section.metadata.get("page")
+                if isinstance(previous_page, int) and isinstance(current_page, int):
+                    bridge = bridge_adjacent_pages(
+                        previous_section.text,
+                        section.text,
+                        filename=upload_item.filename,
+                        previous_page=previous_page,
+                        current_page=current_page,
+                    )
+                    if bridge is not None:
+                        nodes.append(bridge)
             repo.save_nodes(nodes, session_id=session_id)
             total_chunks += len(nodes)
+            previous_section = section
         ingested_names.append(upload_item.filename)
 
     if len(ingested_names) == 1:

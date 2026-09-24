@@ -1,4 +1,7 @@
 import os
+import re
+import unicodedata
+from math import ceil
 
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
@@ -6,7 +9,7 @@ from llama_index.core.prompts import PromptTemplate
 
 from backend.core.exceptions import VectorDBConnectionError
 from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import QueryResponse
+from backend.core.models.domain import ExtractedNode, QueryResponse
 from backend.core.query_progress import ProgressCallback
 from backend.core.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.base_strategy import RAGStrategy
@@ -43,6 +46,8 @@ CONTENT & CODE VERIFICATION RULES:
 
 DOCUMENT SYNTHESIS RULES:
 - If asked to summarize, compare, or draw conclusions across documents, synthesize the facts comprehensively and state the overarching conclusion clearly.
+- A page-boundary excerpt joins the end of one page to the start of the next. Read both labeled portions together, and cite the supplied page range when both support the answer.
+- OCR text may contain recognition errors. Do not invent a missing word, number, or relationship to repair it.
 - If asked about a specific document, focus your answer on that document while citing the document name where relevant.
 - When a source label includes a page, slide, paragraph, or section, append that exact source label at the end of the relevant answer paragraph. Never invent a location.
 
@@ -51,6 +56,70 @@ Context:
 
 Query: {query}
 Answer:"""
+
+_WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
+_QUERY_STOPWORDS = {
+    "and",
+    "are",
+    "based",
+    "does",
+    "from",
+    "how",
+    "the",
+    "this",
+    "what",
+    "when",
+    "where",
+    "which",
+    "with",
+    "چه",
+    "چگونه",
+    "چیست",
+    "است",
+    "این",
+    "آن",
+    "برای",
+    "درباره",
+    "براساس",
+    "اسناد",
+    "سند",
+    "صفحه",
+    "های",
+    "در",
+    "از",
+    "به",
+    "را",
+    "که",
+    "آیا",
+    "کن",
+    "بگو",
+    "کرده",
+    "شده",
+}
+
+
+def _evidence_terms(value: str) -> set[str]:
+    """Extract distinctive multilingual words for a conservative text check."""
+    normalized = unicodedata.normalize("NFKC", value.lower())
+    normalized = normalized.replace("ي", "ی").replace("ك", "ک").replace("\u200c", "")
+    return set(_WORD.findall(normalized)) - _QUERY_STOPWORDS
+
+
+def _has_lexical_evidence(
+    query: str, nodes: list[ExtractedNode], threshold: float
+) -> bool:
+    """Allow borderline vectors only when their text supports most query terms."""
+    terms = _evidence_terms(query)
+    if len(terms) < 2:
+        return False
+    minimum_score = max(0.55, threshold - 0.20)
+    candidates = [
+        node for node in nodes if node.score is not None and node.score >= minimum_score
+    ][:5]
+    if not candidates:
+        return False
+    evidence = _evidence_terms(" ".join(node.text for node in candidates))
+    return len(terms & evidence) >= max(2, ceil(len(terms) * 0.6))
 
 
 class StrictRAGStrategy(RAGStrategy):
@@ -143,7 +212,9 @@ class StrictRAGStrategy(RAGStrategy):
         highest_score = max(
             [n.score for n in nodes if n.score is not None], default=0.0
         )
-        if highest_score < self.threshold:
+        if highest_score < self.threshold and not _has_lexical_evidence(
+            query, nodes, self.threshold
+        ):
             return QueryResponse(
                 answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
                 source_nodes=[],

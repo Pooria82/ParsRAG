@@ -8,7 +8,7 @@ from math import ceil, isfinite
 from typing import Protocol
 
 import fitz  # type: ignore  # PyMuPDF has no complete type information.
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 class PixmapLike(Protocol):
@@ -172,7 +172,20 @@ def extract_image_text(image_bytes: bytes, settings: OCRSettings | None = None) 
                 raise OCRError("The image exceeds the configured OCR pixel limit.")
             if pixels < active.min_image_pixels:
                 return ""
-            normalized = source.convert("RGB")
+            oriented = ImageOps.exif_transpose(source)
+            if oriented.mode in {"RGBA", "LA"} or "transparency" in oriented.info:
+                rgba = oriented.convert("RGBA")
+                background = Image.new("RGBA", rgba.size, "white")
+                background.alpha_composite(rgba)
+                normalized = background.convert("L")
+            else:
+                normalized = oriented.convert("L")
+            normalized = ImageOps.autocontrast(normalized, cutoff=1)
+            if normalized.width < 1200 and pixels * 4 <= active.max_image_pixels:
+                normalized = normalized.resize(
+                    (normalized.width * 2, normalized.height * 2),
+                    Image.Resampling.LANCZOS,
+                )
             output = BytesIO()
             normalized.save(output, format="PNG", optimize=True)
     except (UnidentifiedImageError, OSError) as exc:

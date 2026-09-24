@@ -2,7 +2,7 @@ import io
 import json
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, Protocol
 
 import fitz  # type: ignore  # PyMuPDF
 from docx import Document
@@ -20,6 +20,7 @@ from backend.infrastructure.parsers.ocr import (
     OCRImageLimitError,
     OCRPageLimitError,
     OCRSettings,
+    RasterizablePage,
     extract_image_text,
     extract_page_text,
 )
@@ -38,6 +39,16 @@ class ParsedSection:
 
     text: str
     metadata: dict[str, int]
+
+
+class _PDFPage(RasterizablePage, Protocol):
+    """Parser-visible PDF page methods used to decide whether OCR is needed."""
+
+    def get_text(self, option: str) -> str:
+        """Extract the searchable text layer."""
+
+    def get_images(self, *, full: bool) -> list[object]:
+        """List raster images embedded on the page."""
 
 
 class _VisibleTextExtractor(HTMLParser):
@@ -345,8 +356,44 @@ def _format_pptx_table(table: Any) -> str:
     return _format_table_grid(grid_rows)
 
 
+def _needs_pdf_ocr(page: _PDFPage, text: str, settings: OCRSettings) -> bool:
+    """Detect scanned pages and image pages with only a short text layer."""
+    if not text:
+        return True
+    if not settings.enabled or sum(char.isalnum() for char in text) >= 40:
+        return False
+    images = page.get_images(full=True)
+    return isinstance(images, list) and bool(images)
+
+
+def _pdf_page_text(
+    page: _PDFPage, text: str, settings: OCRSettings, scanned_pages: int
+) -> tuple[str, int]:
+    """OCR one suspect page while retaining usable native text on OCR failure."""
+    if not _needs_pdf_ocr(page, text, settings):
+        return text, scanned_pages
+    scanned_pages += 1
+    if not settings.enabled:
+        return "", scanned_pages
+    if scanned_pages > settings.max_pages:
+        if text:
+            return text, scanned_pages
+        raise OCRPageLimitError(
+            f"Scanned PDFs are limited to {settings.max_pages} OCR pages."
+        )
+    try:
+        recognized = extract_page_text(page, settings)
+    except OCRError as exc:
+        if text:
+            return text, scanned_pages
+        raise ValueError(f"Scanned PDFs could not be processed: {exc}") from exc
+    if recognized and text and text not in recognized:
+        return f"{text}\n\n{recognized}", scanned_pages
+    return recognized or text, scanned_pages
+
+
 def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
-    """Extracts ordered PDF pages, using OCR only for scanned pages."""
+    """Extract ordered PDF pages and OCR image pages with sparse text layers."""
     try:
         document = fitz.open(stream=file_bytes, filetype="pdf")
     except Exception as exc:
@@ -358,20 +405,7 @@ def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
     try:
         for page_number, page in enumerate(document, start=1):
             text = page.get_text("text").strip()
-            if not text:
-                scanned_pages += 1
-                if not settings.enabled:
-                    continue
-                if scanned_pages > settings.max_pages:
-                    raise OCRPageLimitError(
-                        f"Scanned PDFs are limited to {settings.max_pages} OCR pages."
-                    )
-                try:
-                    text = extract_page_text(page, settings)
-                except OCRError as exc:
-                    raise ValueError(
-                        f"Scanned PDFs could not be processed: {exc}"
-                    ) from exc
+            text, scanned_pages = _pdf_page_text(page, text, settings, scanned_pages)
             if text:
                 sections.append(
                     ParsedSection(text=text, metadata={"page": page_number})
