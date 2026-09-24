@@ -5,13 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#faf9f6" />
     <meta name="description" content="پارس‌رگ؛ فضایی برای گفت‌وگو با اسناد و پیدا کردن پاسخ‌های روشن‌تر." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>پارس‌رگ — از پرسش، به بینش</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preload" href="/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <script>
       try {
         const value = JSON.parse(localStorage.getItem('parsrag_settings_v1') || '{}');
         if (value.theme === 'dark' || value.theme === 'light') document.documentElement.dataset.theme = value.theme;
+        if (['evergreen', 'ocean', 'indigo', 'sienna'].includes(value.palette)) document.documentElement.dataset.palette = value.palette;
         if (value.language === 'en') { document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; }
       } catch { /* Preferences are validated again by the application. */ }
     </script>

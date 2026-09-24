@@ -7,7 +7,7 @@ export const STORAGE = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  language: 'fa', theme: 'light', defaultMode: 'hybrid', strictThreshold: 0.8,
+  language: 'fa', theme: 'light', palette: 'evergreen', defaultMode: 'hybrid', strictThreshold: 0.8,
   dynamicDepth: true, topK: 15, selectedModel: 'gemma3:12b',
   apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:12b',
   apiBaseUrl: 'https://openrouter.ai/api/v1', ollamaBaseUrl: 'http://localhost:11434', backendUrl: '',
@@ -56,6 +56,8 @@ export function parseSettings(raw: string | null, origin?: string): AppSettings 
       ...DEFAULT_SETTINGS,
       language: value.language === 'en' ? 'en' : 'fa',
       theme: value.theme === 'dark' ? 'dark' : 'light',
+      palette: ['evergreen', 'ocean', 'indigo', 'sienna'].includes(String(value.palette))
+        ? value.palette as AppSettings['palette'] : 'evergreen',
       defaultMode: isMode(value.defaultMode) ? value.defaultMode : 'hybrid',
       dynamicDepth: typeof value.dynamicDepth === 'boolean' ? value.dynamicDepth : true,
       topK: typeof value.topK === 'number' && Number.isInteger(value.topK)
@@ -214,7 +216,7 @@ export function parseAnswer(value: unknown): { answer: string; citations: Citati
       const location = { kind, start, ...(typeof end === 'number' && Number.isFinite(end) ? { end } : {}) };
       if (!citation.locations.some(item => item.kind === kind && item.start === start && item.end === location.end)) citation.locations.push(location);
     };
-    add('page', metadata.page); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
+    add('page', metadata.page, metadata.page_end); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
     sources.set(filename, citation);
   }
   return { answer: value.answer, citations: [...sources.values()] };

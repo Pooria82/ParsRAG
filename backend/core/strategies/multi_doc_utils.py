@@ -1,6 +1,7 @@
 import os
 import re
 
+from backend.core.interfaces.repository import AbstractDocumentRepository
 from backend.core.models.domain import ExtractedNode
 
 _BROAD_INDICATORS = (
@@ -33,6 +34,122 @@ _GENERIC_FILENAME_WORDS = {
     "report",
     "doc",
 }
+_MENTION = re.compile(r"@\{((?:\\[{}]|[^{}]){1,510})\}")
+_CLAUSE_BREAK = re.compile(r"\s(?:و|and)\s|[؟?!؛;.\n]", re.IGNORECASE)
+MAX_TAGGED_SEGMENTS = 20
+
+
+def _mention_filename(token: str) -> str:
+    """Decode escaped braces in a document name shown inside a mention."""
+    return re.sub(r"\\([{}])", r"\1", token)
+
+
+def parse_tagged_segments(
+    prompt: str, available_files: list[str]
+) -> list[tuple[str, str]]:
+    """Bind each explicit document mention to its adjacent question text."""
+    matches = list(_MENTION.finditer(prompt))
+    if prompt.count("@{") != len(matches):
+        raise ValueError("A document mention is incomplete or malformed.")
+    if not matches:
+        return []
+    if len(matches) > MAX_TAGGED_SEGMENTS:
+        raise ValueError("Too many document mentions in one question.")
+    allowed = set(available_files)
+    filenames = [_mention_filename(match.group(1)) for match in matches]
+    unknown = set(filenames) - allowed
+    if unknown:
+        raise ValueError("A mentioned document is not indexed in this session.")
+    full_question = _MENTION.sub(" ", prompt).strip()
+    segments: list[tuple[str, str]] = []
+    leading = prompt[: matches[0].start()].strip()
+    for index, match in enumerate(matches):
+        between = prompt[
+            match.end() : matches[index + 1].start()
+            if index + 1 < len(matches)
+            else len(prompt)
+        ]
+        boundaries = (
+            list(_CLAUSE_BREAK.finditer(between)) if index + 1 < len(matches) else []
+        )
+        if boundaries:
+            boundary = boundaries[-1]
+            trailing = between[: boundary.start()]
+            next_leading = between[boundary.end() :]
+        else:
+            trailing, next_leading = between, ""
+        question = " ".join(
+            part for part in (leading, trailing.strip()) if part
+        ).strip()
+        segments.append(
+            (filenames[index], question if len(question) >= 3 else full_question)
+        )
+        leading = next_leading.strip()
+    return segments
+
+
+def retrieve_document_nodes(
+    repo: AbstractDocumentRepository,
+    query: str,
+    available_files: list[str],
+    file_filter: list[str] | None,
+    session_id: str | None,
+    total_k: int,
+    minimum_per_file: int,
+    document_segments: list[tuple[str, str]] | None = None,
+) -> list[ExtractedNode]:
+    """Balance normal retrieval or bind explicit question parts to named files."""
+    if document_segments:
+        targets = document_segments
+    elif len(available_files) > 1 and file_filter is None:
+        targets = [(filename, query) for filename in available_files]
+    else:
+        return repo.similarity_search(
+            query, top_k=total_k, session_id=session_id, file_filter=file_filter
+        )
+    per_file = max(minimum_per_file, total_k // len(targets))
+    nodes: list[ExtractedNode] = []
+    for filename, question in targets:
+        nodes.extend(
+            repo.similarity_search(
+                question, top_k=per_file, session_id=session_id, file_filter=[filename]
+            )
+        )
+    return nodes
+
+
+def include_tagged_anchors(
+    nodes: list[ExtractedNode],
+    filtered: list[ExtractedNode],
+    segments: list[tuple[str, str]],
+    threshold: float,
+) -> list[ExtractedNode]:
+    """Retain one sufficiently relevant source from each explicitly named file."""
+    result = list(filtered)
+    for filename in dict.fromkeys(name for name, _ in segments):
+        if any(node.metadata.get("filename") == filename for node in result):
+            continue
+        candidates = [
+            node
+            for node in nodes
+            if node.metadata.get("filename") == filename
+            and (node.score or 0) >= threshold
+        ]
+        if candidates:
+            result.append(max(candidates, key=lambda node: node.score or 0))
+    return result
+
+
+def has_tagged_evidence(
+    nodes: list[ExtractedNode], segments: list[tuple[str, str]], threshold: float
+) -> bool:
+    """Require a relevant chunk for every explicitly named document."""
+    supported_files = {
+        str(node.metadata.get("filename"))
+        for node in nodes
+        if node.score is not None and node.score >= threshold
+    }
+    return all(filename in supported_files for filename, _ in segments)
 
 
 def _clean_filename_stem(filename: str) -> str:
@@ -69,6 +186,10 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
 def _location_tag(node: ExtractedNode) -> str:
     """Formats reliable parser metadata for model-visible inline citations."""
     metadata = node.metadata
+    page = metadata.get("page")
+    page_end = metadata.get("page_end")
+    if isinstance(page, int) and isinstance(page_end, int) and page_end > page:
+        return f", pages: {page}-{page_end}"
     for key, label in (
         ("page", "page"),
         ("slide", "slide"),

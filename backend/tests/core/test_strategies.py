@@ -68,6 +68,44 @@ def test_strict_rag_above_threshold(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_rag_accepts_borderline_cross_page_text_evidence(
+    mock_settings: MagicMock,
+) -> None:
+    """A low vector score alone must not reject an exact cross-page fact."""
+    repo = MagicMock()
+    repo.similarity_search.return_value = [
+        ExtractedNode(
+            text="[page 3] The invoice total is\n[page 4] 425 euros due today.",
+            score=0.67,
+            metadata={"filename": "invoice.pdf", "page": 3, "page_end": 4},
+        )
+    ]
+    mock_settings.llm.complete.return_value = "The invoice total is 425 euros."
+
+    result = StrictRAGStrategy(repo).execute("What is the invoice total in euros?", [])
+
+    assert result.answer == "The invoice total is 425 euros."
+    assert result.source_nodes[0].metadata["page_end"] == 4
+    assert "pages: 3-4" in mock_settings.llm.complete.call_args.args[0]
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_rag_rejects_borderline_unrelated_ocr_noise(
+    mock_settings: MagicMock,
+) -> None:
+    """The lexical fallback must not turn unrelated OCR text into evidence."""
+    repo = MagicMock()
+    repo.similarity_search.return_value = [
+        ExtractedNode(text="Expense account 425 euros.", score=0.67)
+    ]
+
+    result = StrictRAGStrategy(repo).execute("What is the invoice total?", [])
+
+    assert "I do not know" in result.answer
+    mock_settings.llm.complete.assert_not_called()
+
+
 @patch("backend.core.strategies.llm_only.Settings")
 def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()
@@ -278,3 +316,94 @@ def test_condenser_prompt_has_code_preservation_rule() -> None:
     assert (
         "Do not treat English code as a reason to translate" in CONDENSE_PROMPT_TEMPLATE
     )
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_tagged_questions_search_each_named_file(
+    mock_settings: MagicMock,
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="A", score=0.91, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="B", score=0.82, metadata={"filename": "b.pdf"})],
+    ]
+    mock_settings.llm.complete.return_value = "answer"
+
+    result = StrictRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        document_segments=[
+            ("a.pdf", "costs"),
+            ("b.pdf", "schedule"),
+        ],
+    )
+
+    assert [call.args[0] for call in repo.similarity_search.call_args_list] == [
+        "costs",
+        "schedule",
+    ]
+    assert [
+        call.kwargs["file_filter"] for call in repo.similarity_search.call_args_list
+    ] == [["a.pdf"], ["b.pdf"]]
+    assert {node.metadata["filename"] for node in result.source_nodes} == {
+        "a.pdf",
+        "b.pdf",
+    }
+
+
+@patch("backend.core.strategies.strict_rag.Settings")
+def test_strict_tagged_question_refuses_when_one_named_file_lacks_evidence(
+    mock_settings: MagicMock,
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="A", score=0.93, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="B", score=0.46, metadata={"filename": "b.pdf"})],
+    ]
+
+    result = StrictRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        document_segments=[("a.pdf", "costs"), ("b.pdf", "schedule")],
+    )
+
+    assert result.source_nodes == []
+    assert "Insufficient evidence" in result.answer
+    mock_settings.llm.complete.assert_not_called()
+
+
+@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
+@patch("backend.core.strategies.hybrid_rag.Settings")
+def test_hybrid_tagged_question_keeps_each_named_file_when_top_k_is_one(
+    mock_settings: MagicMock, mock_rerank_cls: MagicMock
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    repo.similarity_search.side_effect = [
+        [ExtractedNode(text="costs", score=0.91, metadata={"filename": "a.pdf"})],
+        [ExtractedNode(text="dates", score=0.86, metadata={"filename": "b.pdf"})],
+    ]
+    mock_rerank_cls.return_value.postprocess_nodes.return_value = []
+    mock_settings.llm.complete.return_value = "answer"
+
+    result = HybridRAGStrategy(repo).execute(
+        "compare",
+        [],
+        session_id="s",
+        top_k=1,
+        document_segments=[("a.pdf", "costs"), ("b.pdf", "dates")],
+    )
+
+    assert {node.metadata["filename"] for node in result.source_nodes} == {
+        "a.pdf",
+        "b.pdf",
+    }
+    assert [call.args[0] for call in repo.similarity_search.call_args_list] == [
+        "costs",
+        "dates",
+    ]
+    assert mock_rerank_cls.call_args_list[-1].kwargs["top_n"] == 2

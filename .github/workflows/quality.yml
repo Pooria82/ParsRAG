@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -25,11 +29,15 @@ jobs:
       - run: python -m pytest --cov=backend --cov-report=term-missing --cov-report=xml
       - uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage
+          name: backend-coverage-${{ matrix.os }}
           path: coverage.xml
 
   frontend:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: frontend
@@ -44,8 +52,12 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - if: matrix.os == 'ubuntu-latest'
+        run: npx playwright install --with-deps chromium
+      - if: matrix.os == 'ubuntu-latest'
+        run: npm run test:e2e
+      - if: matrix.os == 'ubuntu-latest'
+        run: npm run test:pwa
 
   packaging:
     runs-on: ubuntu-latest

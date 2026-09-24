@@ -1,19 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const localApi = 'http://127.0.0.1:8000';
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
     proxy: {
-      '/health': 'http://localhost:8000',
-      '/capabilities': 'http://localhost:8000',
-      '/ingest': 'http://localhost:8000',
-      '/query': 'http://localhost:8000',
-      '/queries': 'http://localhost:8000',
-      '/sessions': 'http://localhost:8000',
-      '/models': 'http://localhost:8000',
-      '/conversations': 'http://localhost:8000',
+      '/health': localApi,
+      '/capabilities': localApi,
+      '/ingest': localApi,
+      '/query': localApi,
+      '/queries': localApi,
+      '/sessions': localApi,
+      '/models': localApi,
+      '/conversations': localApi,
     },
   },
   build: {

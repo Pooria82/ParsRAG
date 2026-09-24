@@ -18,11 +18,23 @@
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
 </p>
 
-ParsRAG is a bilingual, offline-first workspace for document Q&A. Parsing,
+ParsRAG is a bilingual, offline-first retrieval-augmented generation (RAG)
+workspace for Persian and English document Q&A. Parsing,
 OCR, embeddings, and vector search run on the host. Generation can use local
 Ollama, a private OpenAI-compatible endpoint, or an external API when local
 hardware is unavailable. Every conversation has its own documents, retrieval
 scope, answer branches, sources, and deletion lifecycle.
+
+## Interface preview
+
+The conversation and source names below are synthetic examples captured from the
+running application. No private documents or API credentials appear in these images.
+
+<p align="center"><a href="docs/screenshots/home-en-light.png"><img src="docs/screenshots/home-en-light.png" width="900" alt="ParsRAG English welcome screen in light mode"></a></p>
+
+| Model connection | Grounded answer and sources | Dark workspace |
+| --- | --- | --- |
+| [![English model connection settings](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) | [![English sample answer with file and location citations](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
 
 ## Highlights
 
@@ -30,19 +42,29 @@ scope, answer branches, sources, and deletion lifecycle.
   model-only chat.
 - **Broad ingestion:** PDF, DOCX, PPTX, images, text, Markdown, JSON, CSV, HTML,
   XML, YAML, logs, configuration files, and common source-code formats.
-- **OCR where it matters:** scanned PDF pages, standalone images, and images
-  embedded in Word or PowerPoint files, with Persian and English Tesseract data.
-- **Traceable sources:** unique filenames plus page, slide, paragraph, or
-  section locations when the parser can determine them.
+- **OCR where it matters:** scanned and image-heavy PDF pages with sparse text
+  layers, standalone images, and images embedded in Word or PowerPoint files,
+  with Persian and English Tesseract data.
+- **Traceable sources:** unique filenames plus page ranges, slides, paragraphs,
+  or section locations when the parser can determine them.
 - **Local lifecycle:** Qdrant data is isolated by conversation; users can remove
-  one document, deselect all documents, or delete an entire session.
+  one document, deselect all documents, reuse an indexed document in another
+  conversation without uploading it again, or delete an entire session.
+- **Precise prompts:** mention one or several uploaded files with `@` to bind
+  parts of a question to those sources; use `/` for quick prompt and mode actions.
 - **Adaptive compute:** CPU is the portable default; optional Compose overlays
   accelerate both embeddings and Ollama on NVIDIA or supported AMD hosts.
 - **Resource controls:** bounded uploads, OCR dimensions, parser archives,
   concurrency, embedding batches, Qdrant upserts, and container memory.
-- **Polished bilingual UI:** RTL/LTR content direction, model settings,
+- **Polished bilingual UI:** RTL/LTR content direction, four color palettes,
+  a skippable and replayable first-run tour, model settings,
   progressive answers, real processing stages, math rendering, prompt editing,
   retries, and conversation branches.
+- **Installable workspace:** a PWA manifest, project-owned icons, and an offline
+  interface shell; model requests and document data are never service-worker cached.
+
+Maintainers can use the [repository discovery settings](docs/repository-discovery.md)
+for the GitHub About panel after publishing changes.
 
 ## Answer modes
 
@@ -55,12 +77,45 @@ scope, answer branches, sources, and deletion lifecycle.
 Strict mode refuses when retrieved evidence does not meet its configured
 threshold. This is an application safeguard, not a universal guarantee; verify
 important outputs against the displayed sources.
+For newly indexed PDFs, a bounded excerpt joins each pair of consecutive pages,
+so a fact split by a page turn can be retrieved with a two-page citation.
+Borderline semantic matches are considered only when the retrieved text also
+contains the question's distinctive terms; unrelated material still fails closed.
+
+**After upgrading to 1.0.0:** existing indexed vectors do not change
+automatically. Remove and upload a PDF again to apply the new page-boundary
+indexing and OCR behavior. Reusing its old index does not rebuild it.
+
+In the composer, type `@` to choose a document already indexed in the current
+conversation. You can mention more than one file, for example:
+`@{budget.pdf} What is the cost? And @{timeline.docx} When is delivery?`
+Each clause is searched in its named file; strict mode declines a combined
+answer if either file lacks sufficient evidence. Type `/` at the beginning of
+a line to choose a summary, comparison, translation, outline, mode change,
+document action, or help action. The document panel can also copy an indexed
+file from an earlier local conversation without another upload. Keep the source
+conversation until the copy completes; afterwards, the two copies are independent.
+
+The first-run tour now walks through conversation history, document upload and
+reuse, answer modes, prompt editing, sources, model settings, privacy, and data
+controls. Skip it or replay it from **Settings → Appearance → Workspace tour**.
+The same settings page lists shortcuts for the current operating system:
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| New conversation | `Ctrl+Shift+O` | `⌘⇧O` |
+| Search conversations | `Ctrl+Shift+K` | `⌘⇧K` |
+| Open documents | `Ctrl+Shift+D` | `⌘⇧D` |
+| Open settings | `Ctrl+,` | `⌘,` |
+| Focus the message box | `/` | `/` |
+| Show the tour | `Ctrl+Shift+H` | `⌘⇧H` |
+| Switch light/dark | `Ctrl+Shift+Y` | `⌘⇧Y` |
 
 ## Supported inputs
 
 | Family | Extensions | Processing |
 | --- | --- | --- |
-| Documents | `.pdf`, `.docx`, `.pptx` | Native structured extraction; OCR for image-only PDF pages and embedded images |
+| Documents | `.pdf`, `.docx`, `.pptx` | Native structured extraction; OCR for scanned/sparse image PDF pages and embedded images |
 | Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tif`, `.tiff` | Validated and OCR-processed |
 | Text and data | `.txt`, `.md`, `.markdown`, `.json`, `.csv`, `.tsv`, `.log` | UTF-8 extraction; JSON is validated and normalized |
 | Markup/config | `.html`, `.htm`, `.xml`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg` | Visible text or UTF-8 extraction |
@@ -257,6 +312,22 @@ load its weights.
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
 
+## Windows, macOS, and Linux
+
+The CPU Docker Compose configuration is the portable baseline on all three
+systems. Start with `docker compose up -d --build`; add
+`--profile local-model` for the containerized Ollama service. On macOS, use
+the CPU container profile or run Ollama natively and configure its reachable
+endpoint in the app. Docker Desktop does not expose a Mac GPU to the Linux
+Ollama container, so the NVIDIA/AMD GPU overlays are for supported Windows
+and Linux hosts only. A private or external OpenAI-compatible API also works
+on machines without a local model. See the [Docker GPU guidance](https://docs.docker.com/guides/rag-ollama/).
+
+CI runs backend and frontend checks on Windows, macOS, and Linux; the Docker
+image and browser flow are checked on Linux. A local Windows run and CI provide
+different evidence: verify the first install on your own target machine,
+especially OCR language packs and GPU access.
+
 ## Native development
 
 Requirements: Python 3.12, Node.js 22, Qdrant, and either Ollama or an
@@ -275,8 +346,20 @@ Set-Location ..
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
+On macOS or Linux, replace the Python commands with:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-runtime.txt -c requirements.lock
+.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Install and build the frontend with `cd frontend && npm ci && npm run build`
+on either platform. Start Qdrant separately and point the application at your
+Ollama or compatible API endpoint before testing `/health/ready`.
+
 For hot reload, run `npm run dev` inside `frontend`. Vite proxies all API route
-families to `http://localhost:8000` when the frontend backend URL is blank. Set
+families to `http://127.0.0.1:8000` when the frontend backend URL is blank. Set
 `ENVIRONMENT=development` only in a local development `.env` when needed.
 
 ## Health, persistence, and offline use
@@ -292,6 +375,21 @@ families to `http://localhost:8000` when the frontend backend URL is blank. Set
 - After images and model weights are downloaded once, local Ollama operation can
   remain offline. API-provider mode naturally requires its endpoint.
 
+### Install as an app
+
+Open the built application at `http://127.0.0.1:8000/`. If your browser offers
+installation, use its Install option or **Settings → Appearance → Install app**.
+The installed window opens with the same local conversations and settings as
+that browser profile. The interface shell can reopen without network access;
+uploading, indexing, and answering still require the local backend and selected
+model endpoint. API responses, prompts, documents, and credentials are never
+saved by the service worker. When a new interface build is ready, the app offers
+an explicit reload and waits until any upload or answer is finished.
+
+For access from another machine, serve the app over HTTPS: service workers are
+restricted to secure contexts, with localhost as the development exception.
+The development server (`npm run dev`) deliberately does not register a worker.
+
 ## Quality gates
 
 ```powershell
@@ -304,6 +402,7 @@ Set-Location frontend
 npm test
 npm run build
 npm run test:e2e
+npm run test:pwa
 Set-Location ..
 
 docker compose config --quiet

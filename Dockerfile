@@ -7,6 +7,8 @@ RUN npm ci
 COPY frontend/index.html frontend/tsconfig.json frontend/vite.config.ts ./
 COPY frontend/public ./public
 COPY frontend/src ./src
+COPY frontend/pwa ./pwa
+COPY frontend/scripts/build-service-worker.mjs ./scripts/build-service-worker.mjs
 RUN npm run build
 
 FROM python:3.12-slim-bookworm AS python-dependencies

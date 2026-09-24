@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "پارس‌رگ | ParsRAG",
+  "short_name": "ParsRAG",
+  "description": "فضای شخصی گفت‌وگو با اسناد فارسی و انگلیسی",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F7FAF8",
+  "theme_color": "#146A57",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -5,6 +5,32 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-24
+
+### Added
+
+- Installable PWA with an offline interface shell and a transparent project mark.
+- Document mentions, reusable indexed files, quick commands, platform-aware
+  shortcuts, personalized color palettes, and a guided tour that opens and
+  explains the controls in place.
+- Searchable page-boundary excerpts for newly indexed PDFs, with page-range
+  citations when an answer spans adjacent pages.
+
+### Improved
+
+- Strict document answers can use borderline vector matches only when the
+  retrieved text also supports the question's distinctive terms; unrelated
+  evidence continues to be refused.
+- OCR also checks image-heavy PDF pages with short text layers and normalizes
+  standalone/embedded images before recognition, within the configured limits.
+- Scrollbars across the workspace, panels, menus, and long-form content now
+  share the active color theme and remain usable in light and dark modes.
+
+### Upgrade note
+
+- Remove and upload previously indexed PDFs again to gain page-boundary chunks
+  and improved OCR text. Existing vectors are retained until users replace them.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added
@@ -44,5 +70,6 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.1.0

@@ -362,3 +362,44 @@ only when the user enables a remote API endpoint.
 - [x] Confirm no secrets or private test documents exist in the tracked tree or Git history before creating the public remote.
 - [x] Verify 10-file session limits, 100 MiB file limits, broad text/image parsing, embedded Office OCR, bounded vector upserts, and runtime capability discovery.
 - [x] Validate base, NVIDIA, low-VRAM NVIDIA, and AMD Compose configurations; verify the CUDA app detects the RTX 3060 and `qwen2.5:7b` returns `GPU_OK` at 100% GPU with the 6 GB low-VRAM overlay.
+
+## Phase 11: Workspace Productivity and Portable Release Checks
+
+- [x] Add explicit per-document `@` mentions with same-session validation and
+  per-segment retrieval. Prevent mentions from bypassing an active file filter.
+- [x] Reuse indexed files across local conversations by copying bounded Qdrant
+  vector pages, avoiding another upload, OCR pass, and embedding run.
+- [x] Add discoverable `/` prompt and mode actions, a first-run tour with skip
+  and replay, and four persistent light/dark-compatible color palettes.
+- [x] Fix the development proxy's IPv4/IPv6 ambiguity and add Windows, macOS,
+  and Linux test jobs for backend and frontend checks.
+- [x] Refresh bilingual setup and discoverability documentation.
+- [ ] Confirm the new cross-platform CI jobs on the GitHub remote after the
+  local commits are authorized for push.
+
+## Phase 12: Installable Local Workspace
+
+- [x] Add a stable web manifest, project-owned install icons, and standalone
+  presentation for the production workspace.
+- [x] Generate a versioned service worker from build assets and cache only the
+  public application shell; keep all API traffic on the network.
+- [x] Provide an install action where the browser supports it and an explicit
+  update action that waits for active work to finish.
+- [x] Document offline limits and HTTPS requirements in both READMEs, and
+  refresh repository-discovery guidance against the public repository metadata.
+- [x] Test installability, offline shell loading, and API non-caching against
+  both the production preview and the running Docker app.
+
+## Phase 13: Workspace Guidance and Interaction Polish
+
+- [x] Replace the PWA's opaque tile with a transparent, mask-safe version of
+  the welcome emblem and test alpha transparency in the install icon.
+- [x] Animate the document drawer in both interface directions, including its
+  exit path and backdrop, while respecting reduced-motion settings.
+- [x] Keep the active `@` or `/` suggestion visible during keyboard navigation
+  and give the suggestion list a clear, contained scrollbar.
+- [x] Add real keyboard shortcuts and operating-system-specific labels in
+  Settings; verify Control and Command behavior in browser tests.
+- [x] Expand the skippable and replayable tour to cover conversation history,
+  documents, composer, answer modes, response branches and sources, model
+  settings, privacy, local data controls, and installability.

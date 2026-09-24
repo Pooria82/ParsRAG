@@ -15,6 +15,7 @@ from backend.core.strategies.base_strategy import RAGStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     resolve_target_files,
+    retrieve_document_nodes,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = """\
@@ -89,9 +90,10 @@ def _merge_evidence(
     reranked_nodes: list[ExtractedNode],
     *,
     limit: int,
+    min_anchors: int = 3,
 ) -> list[ExtractedNode]:
     """Protect multilingual dense hits while retaining cross-encoder ordering."""
-    anchors = _select_dense_anchors(dense_nodes, limit=min(3, limit))
+    anchors = _select_dense_anchors(dense_nodes, limit=min(min_anchors, limit))
     merged: list[ExtractedNode] = []
     seen: set[tuple[str, str, object]] = set()
     for node in [*anchors, *reranked_nodes]:
@@ -143,6 +145,7 @@ class HybridRAGStrategy(RAGStrategy):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the hybrid RAG pipeline.
 
@@ -153,6 +156,7 @@ class HybridRAGStrategy(RAGStrategy):
             top_k (int | None, optional): Optional override for number of reranked chunks.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
+            document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
             QueryResponse: The generated answer and source citations.
@@ -178,28 +182,23 @@ class HybridRAGStrategy(RAGStrategy):
             if top_k is not None
             else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
         )
+        if document_segments:
+            rerank_n = max(
+                rerank_n, len({filename for filename, _ in document_segments})
+            )
         retrieve_k = max(rerank_n * 2, self.default_retrieve_k)
 
         # 3. Broad Candidate Retrieval
-        extracted_nodes: list[ExtractedNode] = []
-        if len(available_files) > 1 and effective_filter is None:
-            # Multi-document balanced candidate retrieval
-            k_per_file = max(5, retrieve_k // len(available_files))
-            for fn in available_files:
-                file_nodes = self.repo.similarity_search(
-                    query,
-                    top_k=k_per_file,
-                    session_id=session_id,
-                    file_filter=[fn],
-                )
-                extracted_nodes.extend(file_nodes)
-        else:
-            extracted_nodes = self.repo.similarity_search(
-                query,
-                top_k=retrieve_k,
-                session_id=session_id,
-                file_filter=effective_filter,
-            )
+        extracted_nodes = retrieve_document_nodes(
+            self.repo,
+            query,
+            available_files,
+            effective_filter,
+            session_id,
+            retrieve_k,
+            5,
+            document_segments,
+        )
 
         if not extracted_nodes:
             return QueryResponse(
@@ -241,6 +240,9 @@ class HybridRAGStrategy(RAGStrategy):
             extracted_nodes,
             reranked_source_nodes,
             limit=rerank_n,
+            min_anchors=max(3, len({filename for filename, _ in document_segments}))
+            if document_segments
+            else 3,
         )
 
         context_str = format_multi_doc_context(final_source_nodes)

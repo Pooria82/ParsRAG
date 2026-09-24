@@ -3,8 +3,10 @@ import logging
 import os
 import re
 import zipfile
+from contextlib import ExitStack
 from pathlib import PurePath
 from threading import Lock
+from typing import TypedDict
 from uuid import UUID
 
 import httpx
@@ -25,12 +27,15 @@ from backend.core.models.domain import (
     ModelConfigurationRequest,
     ModelConfigurationResponse,
     OllamaModel,
+    QueryMode,
     QueryRequest,
     QueryResponse,
+    ReuseDocumentRequest,
 )
 from backend.core.query_progress import get_query_stage, set_query_stage
 from backend.core.runtime import runtime_state
 from backend.core.security import current_correlation_id
+from backend.core.strategies.multi_doc_utils import parse_tagged_segments
 from backend.core.upload_policy import (
     IMAGE_EXTENSIONS,
     OFFICE_EXTENSIONS,
@@ -44,8 +49,11 @@ from backend.infrastructure.llm.factory import (
     get_model_configuration,
     list_ollama_models,
 )
-from backend.infrastructure.parsers.chunker import chunk_text
-from backend.infrastructure.parsers.document_parser import parse_document_sections
+from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
+from backend.infrastructure.parsers.document_parser import (
+    ParsedSection,
+    parse_document_sections,
+)
 
 router = APIRouter()
 logger = logging.getLogger("parsrag.operations")
@@ -60,6 +68,12 @@ _ingest_limiter = WorkLimiter(
 )
 _query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
 _session_ingest_locks = tuple(Lock() for _ in range(64))
+
+
+class ExecuteOptions(TypedDict, total=False):
+    """Optional retrieval arguments for a document-scoped query."""
+
+    document_segments: list[tuple[str, str]]
 
 
 def _session_ingest_lock(session_id: str) -> Lock:
@@ -332,13 +346,28 @@ def _ingest_documents(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+        previous_section: ParsedSection | None = None
         for section in sections:
             nodes = chunk_text(
                 section.text,
                 metadata={"filename": upload_item.filename, **section.metadata},
             )
+            if previous_section is not None:
+                previous_page = previous_section.metadata.get("page")
+                current_page = section.metadata.get("page")
+                if isinstance(previous_page, int) and isinstance(current_page, int):
+                    bridge = bridge_adjacent_pages(
+                        previous_section.text,
+                        section.text,
+                        filename=upload_item.filename,
+                        previous_page=previous_page,
+                        current_page=current_page,
+                    )
+                    if bridge is not None:
+                        nodes.append(bridge)
             repo.save_nodes(nodes, session_id=session_id)
             total_chunks += len(nodes)
+            previous_section = section
         ingested_names.append(upload_item.filename)
 
     if len(ingested_names) == 1:
@@ -375,6 +404,24 @@ def query_rag(
             condenser = CondenseQuestionPipeline()
             condensed_query = condenser.condense(request.prompt, llama_chat_history)
             strategy = get_query_strategy(request.mode, repo=repo)
+            document_segments: list[tuple[str, str]] = []
+            if request.mode is not QueryMode.LLM_ONLY and "@{" in request.prompt:
+                try:
+                    available_files = repo.get_session_files(request.session_id or "")
+                    if request.file_filter is not None:
+                        available_files = [
+                            filename
+                            for filename in available_files
+                            if filename in request.file_filter
+                        ]
+                    document_segments = parse_tagged_segments(
+                        request.prompt, available_files
+                    )
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+            segment_args: ExecuteOptions = (
+                {"document_segments": document_segments} if document_segments else {}
+            )
             if request_id:
                 response = strategy.execute(
                     query=condensed_query,
@@ -383,6 +430,7 @@ def query_rag(
                     top_k=request.top_k,
                     file_filter=request.file_filter,
                     progress=lambda stage: set_query_stage(request_id, stage),
+                    **segment_args,
                 )
             else:
                 response = strategy.execute(
@@ -391,6 +439,7 @@ def query_rag(
                     session_id=request.session_id,
                     top_k=request.top_k,
                     file_filter=request.file_filter,
+                    **segment_args,
                 )
             if request_id:
                 set_query_stage(request_id, "complete")
@@ -427,6 +476,50 @@ def get_session_files(
             detail="Invalid session_id format. Must be 1-64 alphanumeric characters, hyphens, or underscores.",
         )
     return repo.get_session_files(session_id)
+
+
+@router.post("/sessions/{session_id}/files/reuse")
+def reuse_session_document(
+    session_id: str,
+    request: ReuseDocumentRequest,
+    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> dict[str, int | str]:
+    """Reuse a prior session's indexed vectors without storing raw upload bytes."""
+    if (
+        not SESSION_ID_REGEX.fullmatch(session_id)
+        or session_id == request.source_session_id
+    ):
+        raise HTTPException(status_code=400, detail="Invalid target session.")
+    locks = sorted(
+        {
+            _session_ingest_lock(session_id),
+            _session_ingest_lock(request.source_session_id),
+        },
+        key=id,
+    )
+    with _ingest_limiter.slot(), ExitStack() as stack:
+        for lock in locks:
+            stack.enter_context(lock)
+        if request.filename not in repo.get_session_files(request.source_session_id):
+            raise HTTPException(
+                status_code=404, detail="Source document was not found."
+            )
+        target_files = repo.get_session_files(session_id)
+        if request.filename in target_files:
+            raise HTTPException(
+                status_code=409,
+                detail="The target session already contains this filename.",
+            )
+        if len(target_files) >= UploadPolicy.from_environment().max_files_per_session:
+            raise HTTPException(status_code=400, detail="The target session is full.")
+        copied = repo.copy_document(
+            request.source_session_id, session_id, request.filename
+        )
+        if not copied:
+            raise HTTPException(
+                status_code=404, detail="Source document was not found."
+            )
+    return {"filename": request.filename, "chunks": copied}
 
 
 @router.delete("/sessions/{session_id}")

@@ -40,6 +40,7 @@ class LLMOnlyStrategy(RAGStrategy):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the LLM-only pipeline.
 
@@ -50,6 +51,7 @@ class LLMOnlyStrategy(RAGStrategy):
             top_k (int | None, optional): Ignored in this strategy.
             file_filter (list[str] | None, optional): Ignored in this strategy.
             progress (ProgressCallback | None, optional): Reports model generation.
+            document_segments: Ignored in this strategy.
 
         Returns:
             QueryResponse: The LLM's raw answer.

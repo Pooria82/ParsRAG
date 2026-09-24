@@ -1,17 +1,45 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
 from backend.core.models.domain import ExtractedNode, QueryResponse
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
+    parse_tagged_segments,
     resolve_target_files,
 )
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
+
+
+def test_tagged_prompt_keeps_each_question_with_its_document() -> None:
+    prompt = "مقایسه کن: @{الف.pdf} هزینه چقدر است؟ @{ب.pdf} زمان چقدر است؟"
+    assert parse_tagged_segments(prompt, ["الف.pdf", "ب.pdf"]) == [
+        ("الف.pdf", "مقایسه کن: هزینه چقدر است"),
+        ("ب.pdf", "زمان چقدر است؟"),
+    ]
+    assert parse_tagged_segments(
+        "در @{الف.pdf} هزینه را بگو و در @{ب.pdf} زمان را بگو",
+        ["الف.pdf", "ب.pdf"],
+    ) == [
+        ("الف.pdf", "در هزینه را بگو"),
+        ("ب.pdf", "در زمان را بگو"),
+    ]
+    assert parse_tagged_segments(
+        r"@{گزارش \{نهایی\}.pdf} بودجه را بگو", ["گزارش {نهایی}.pdf"]
+    ) == [("گزارش {نهایی}.pdf", "بودجه را بگو")]
+    with pytest.raises(ValueError, match="not indexed"):
+        parse_tagged_segments("@{secret.pdf} متن", ["الف.pdf"])
+    with pytest.raises(ValueError, match="malformed"):
+        parse_tagged_segments("@{الف.pdf متن", ["الف.pdf"])
+    with pytest.raises(ValueError, match="malformed"):
+        parse_tagged_segments("@{الف.pdf} هزینه و @{ب.pdf زمان", ["الف.pdf", "ب.pdf"])
+    with pytest.raises(ValueError, match="Too many"):
+        parse_tagged_segments(" ".join(["@{الف.pdf} سوال"] * 21), ["الف.pdf"])
 
 
 def test_multi_file_ingest_success() -> None:
@@ -75,6 +103,51 @@ def test_multi_file_ingest_success() -> None:
         assert mock_chunk_text.call_count == 3
         assert mock_repo.save_nodes.call_count == 3
 
+    app.dependency_overrides.clear()
+
+
+def test_reuse_document_copies_indexed_file_without_upload() -> None:
+    repo = MagicMock()
+    repo.get_session_files.side_effect = [["guide.pdf"], []]
+    repo.copy_document.return_value = 4
+    app.dependency_overrides[get_document_repository] = lambda: repo
+
+    response = client.post(
+        "/sessions/new/files/reuse",
+        json={
+            "source_session_id": "old",
+            "filename": "guide.pdf",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"filename": "guide.pdf", "chunks": 4}
+    repo.copy_document.assert_called_once_with("old", "new", "guide.pdf")
+    app.dependency_overrides.clear()
+
+
+def test_reuse_rejects_missing_or_duplicate_file() -> None:
+    repo = MagicMock()
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    repo.get_session_files.return_value = []
+    missing = client.post(
+        "/sessions/new/files/reuse",
+        json={
+            "source_session_id": "old",
+            "filename": "guide.pdf",
+        },
+    )
+    assert missing.status_code == 404
+    repo.get_session_files.side_effect = [["guide.pdf"], ["guide.pdf"]]
+    duplicate = client.post(
+        "/sessions/new/files/reuse",
+        json={
+            "source_session_id": "old",
+            "filename": "guide.pdf",
+        },
+    )
+    assert duplicate.status_code == 409
+    repo.copy_document.assert_not_called()
     app.dependency_overrides.clear()
 
 

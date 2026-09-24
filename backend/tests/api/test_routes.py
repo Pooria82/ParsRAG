@@ -16,6 +16,55 @@ from backend.main import app
 client = TestClient(app, raise_server_exceptions=False)
 
 
+@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.routes.get_query_strategy")
+def test_query_routes_explicit_document_segments(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    repo = MagicMock()
+    repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    mock_condenser_cls.return_value.condense.return_value = "comparison"
+    mock_get_strategy.return_value.execute.return_value = QueryResponse(answer="answer")
+    try:
+        response = client.post(
+            "/query",
+            json={
+                "prompt": "Compare @{a.pdf} costs and @{b.pdf} schedule",
+                "mode": "strict",
+                "session_id": "session-1",
+            },
+        )
+        assert response.status_code == 200
+        assert mock_get_strategy.return_value.execute.call_args.kwargs[
+            "document_segments"
+        ] == [
+            ("a.pdf", "Compare costs"),
+            ("b.pdf", "schedule"),
+        ]
+        rejected = client.post(
+            "/query",
+            json={
+                "prompt": "@{other.pdf} secret",
+                "mode": "strict",
+                "session_id": "session-1",
+            },
+        )
+        assert rejected.status_code == 400
+        excluded = client.post(
+            "/query",
+            json={
+                "prompt": "@{a.pdf} private section",
+                "mode": "strict",
+                "session_id": "session-1",
+                "file_filter": ["b.pdf"],
+            },
+        )
+        assert excluded.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
 @patch("backend.api.dependencies._shared_document_repository")
 def test_health_endpoints_separate_liveness_and_readiness(
     mock_repository: MagicMock,
@@ -77,6 +126,41 @@ def test_ingest_success() -> None:
         mock_repo.save_nodes.assert_called_once()
 
     app.dependency_overrides.clear()
+
+
+def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
+    """Cross-page OCR facts enter the same session without a separate upload."""
+    from backend.infrastructure.parsers.document_parser import ParsedSection
+
+    repo = MagicMock()
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    with (
+        patch("backend.api.routes._validate_file"),
+        patch("backend.api.routes.parse_document_sections") as parse,
+        patch("backend.api.routes.chunk_text") as chunk,
+    ):
+        parse.return_value = [
+            ParsedSection("The invoice total is", {"page": 3}),
+            ParsedSection("425 euros due today", {"page": 4}),
+        ]
+        chunk.side_effect = [
+            [ExtractedNode(text="The invoice total is", metadata={"page": 3})],
+            [ExtractedNode(text="425 euros due today", metadata={"page": 4})],
+        ]
+
+        response = client.post(
+            "/ingest",
+            files={"file": ("invoice.pdf", b"fake pdf bytes", "application/pdf")},
+            data={"session_id": "cross-page"},
+        )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert "3 chunks" in response.json()["message"]
+    bridge = repo.save_nodes.call_args_list[1].args[0][-1]
+    assert bridge.metadata["page"] == 3
+    assert bridge.metadata["page_end"] == 4
+    assert "invoice total is\n[page 4] 425 euros" in bridge.text
 
 
 def test_concurrent_uploads_recheck_session_duplicates() -> None:

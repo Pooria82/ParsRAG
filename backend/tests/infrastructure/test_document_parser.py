@@ -3,13 +3,14 @@ import os
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import fitz  # type: ignore  # PyMuPDF does not ship complete type information.
 import pytest
 from docx import Document
 from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 
-from backend.infrastructure.parsers.chunker import chunk_text
+from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
 from backend.infrastructure.parsers.document_parser import (
     EmptyDocumentError,
     ParsedSection,
@@ -102,6 +103,29 @@ def test_mixed_pdf_only_ocrs_scanned_pages(
 
 @patch("backend.infrastructure.parsers.document_parser.extract_page_text")
 @patch("backend.infrastructure.parsers.document_parser.fitz.open")
+def test_sparse_pdf_text_layer_does_not_hide_image_evidence(
+    mock_open: MagicMock,
+    mock_extract: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A short searchable title must not suppress OCR of the main page image."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    page = MagicMock()
+    page.get_text.return_value = "Invoice 42"
+    page.get_images.return_value = [(1,)]
+    mock_open.return_value.__iter__.return_value = [page]
+    mock_extract.return_value = "Total due: 425 euros"
+
+    sections = parse_document_sections(b"pdf", "invoice.pdf")
+
+    assert sections == [
+        ParsedSection("Invoice 42\n\nTotal due: 425 euros", {"page": 1})
+    ]
+    mock_extract.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.fitz.open")
 def test_pdf_ocr_page_limit_is_enforced(
     mock_fitz_open: MagicMock,
     mock_extract_page_text: MagicMock,
@@ -135,6 +159,53 @@ def test_chunk_text() -> None:
     # Ensure splitting happened (50 sentences should be split into multiple chunks)
     assert len(nodes) > 1
     assert len(nodes[0].text) > 0
+
+
+def test_page_bridge_keeps_both_sides_bounded_and_traceable() -> None:
+    """A sentence split by a page turn remains one searchable evidence chunk."""
+    previous = " ".join(["prefix"] * 150 + ["invoice", "total", "is"])
+    current = " ".join(["425", "euros"] + ["suffix"] * 150)
+
+    bridge = bridge_adjacent_pages(
+        previous, current, filename="scan.pdf", previous_page=3, current_page=4
+    )
+
+    assert bridge is not None
+    assert "invoice total is\n[page 4] 425 euros" in bridge.text
+    assert bridge.metadata == {
+        "filename": "scan.pdf",
+        "page": 3,
+        "page_end": 4,
+        "kind": "page_bridge",
+    }
+    assert len(bridge.text.split()) <= 184
+    assert (
+        bridge_adjacent_pages(
+            previous, current, filename="scan.pdf", previous_page=3, current_page=5
+        )
+        is None
+    )
+
+
+def test_real_two_page_pdf_preserves_one_split_fact() -> None:
+    """A real PDF page turn keeps both halves available to one retrieval chunk."""
+    document = fitz.open()
+    document.new_page().insert_text((72, 72), "The invoice total is")
+    document.new_page().insert_text((72, 72), "425 euros due today")
+    payload = document.tobytes()
+    document.close()
+
+    sections = parse_document_sections(payload, "invoice.pdf")
+    bridge = bridge_adjacent_pages(
+        sections[0].text,
+        sections[1].text,
+        filename="invoice.pdf",
+        previous_page=sections[0].metadata["page"],
+        current_page=sections[1].metadata["page"],
+    )
+
+    assert bridge is not None
+    assert "invoice total is\n[page 2] 425 euros" in bridge.text
 
 
 def test_real_docx_parsing() -> None:
