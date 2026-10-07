@@ -109,3 +109,4 @@
   .response-caret, .thinking-dots i, .connection-status .status-dot, .query-loader, .query-loader i, .query-progress-label { animation: none; }
   .query-progress-label { color: var(--secondary); background: none; }
 }
+.document-meta p.document-notice{display:flex;align-items:center;gap:5px;color:var(--warning);margin-top:4px}

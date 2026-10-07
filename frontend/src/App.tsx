@@ -17,6 +17,7 @@ import { usePwa } from './hooks/usePwa';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
+import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
 import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 
@@ -207,7 +208,8 @@ export function App() {
     } catch (error: unknown) {
       if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
       const content = controller.signal.reason === 'timeout' ? t.timeout
-        : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
+        : error instanceof ApiError ? queryErrorMessage(error.code, settings.language) ?? t.queryFailed
+          : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
       const variant: ResponseVariant = { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
       updateSession(session.id, s => {
         if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
@@ -246,15 +248,17 @@ export function App() {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 600000);
         try {
-          await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
+          const [indexed] = await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
             ? { ...d, status: 'processing', uploadProgress: undefined }
             : { ...d, status: 'uploading', uploadProgress } : d) })));
-          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined } : d) }));
-        } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
-            ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'ocr_unavailable'
-              ? settings.language === 'fa' ? 'OCR این فایل تصویری در دسترس نیست یا غیرفعال شده است.' : 'OCR for this image-based file is unavailable or disabled.'
-              : t.uploadFailed,
+            ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined,
+            chunks: indexed?.chunks, sections: indexed?.sections, notices: indexed?.notices.length ? indexed.notices : undefined,
+          } : d) }));
+        } catch (error: unknown) {
+          const reason = error instanceof ApiError ? uploadErrorMessage(error.code, settings.language) : undefined;
+          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
+            ...d, status: 'error', errorMessage: reason ?? t.uploadFailed,
           } : d) }));
         } finally { clearTimeout(timeout); }
       }
