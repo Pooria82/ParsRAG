@@ -13,6 +13,7 @@ from backend.core.dto.output.query import QueryResponse
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.citations import extract_citations
 from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
@@ -22,6 +23,7 @@ from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     has_tagged_evidence,
     include_tagged_anchors,
+    order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
 )
@@ -290,18 +292,21 @@ class StrictRAGStrategy(QueryStrategy):
             )
 
         # 5. Build Grouped Multi-Document Context within the model's window
-        filtered_nodes = fit_to_context(
-            filtered_nodes,
-            context_window=model_context_window(self.llm),
-            fixed_prompt=self.prompt_template.format(context_str="", query=query),
+        filtered_nodes = order_by_document(
+            fit_to_context(
+                filtered_nodes,
+                context_window=model_context_window(self.llm),
+                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+            )
         )
         context_str = format_multi_doc_context(filtered_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
 
         if progress:
             progress("generating")
-        response = self.llm.complete(prompt)
+        answer = str(self.llm.complete(prompt)).strip()
         return QueryResponse(
-            answer=str(response).strip(),
+            answer=answer,
             source_nodes=filtered_nodes,
+            cited=extract_citations(answer, len(filtered_nodes)),
         )

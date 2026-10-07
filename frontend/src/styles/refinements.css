@@ -110,3 +110,26 @@
   .query-progress-label { color: var(--secondary); background: none; }
 }
 .document-meta p.document-notice{display:flex;align-items:center;gap:5px;color:var(--warning);margin-top:4px}
+
+/* Numbered citations: chips in the answer, expandable source cards below it. */
+.cite-chip{display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;height:1.5em;padding:0 .35em;margin-inline:.12em;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:.72em;font-weight:700;vertical-align:.2em;line-height:1;cursor:pointer;border:1px solid color-mix(in srgb,var(--accent) 22%,transparent)}
+.cite-chip:hover,.cite-chip:focus-visible{background:var(--accent);color:var(--on-accent)}
+.source-list{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 12px}
+.source-list>header{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:8px}
+.source-list ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.source-card details{border-radius:10px;background:var(--surface-soft)}
+.source-card.is-active details{box-shadow:0 0 0 2px var(--accent);animation:source-flash 1.4s var(--ease-out)}
+.source-card summary{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;list-style:none}
+.source-card summary::-webkit-details-marker{display:none}
+.source-number{flex-shrink:0;display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:7px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:700}
+.source-title{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.source-title bdi{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-title small{font-size:10.5px;color:var(--muted)}
+.source-chevron{color:var(--muted);transition:transform var(--ease)}
+.source-card details[open] .source-chevron{transform:rotate(180deg)}
+.source-card blockquote{margin:0 10px 10px;padding:4px 12px 6px;font-size:12.5px;line-height:1.95;color:var(--secondary);white-space:pre-wrap;max-height:260px;overflow:auto;border-inline-start:3px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+.source-more{margin-top:8px}
+.source-more>summary{cursor:pointer;font-size:11.5px;color:var(--muted);padding:4px 2px}
+.source-more>ol{margin-top:6px}
+@keyframes source-flash{0%{background:var(--accent-soft)}100%{background:var(--surface-soft)}}
+@media (prefers-reduced-motion:reduce){.source-card.is-active details{animation:none}.source-chevron{transition:none}}

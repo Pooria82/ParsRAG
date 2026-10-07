@@ -187,7 +187,7 @@ export function App() {
     try {
       const data = parseAnswer(await api.query({ ...payload, request_id: requestId }, controller.signal));
       if (controller.signal.aborted) return;
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
       const responseMessageId = target?.assistantId ?? crypto.randomUUID();
       updateSession(session.id, s => {
         if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
@@ -196,7 +196,7 @@ export function App() {
             return appendResponseVariant(message, variant);
           }), updatedAt: Date.now() };
         }
-        const assistant: Message = { id: responseMessageId, role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+        const assistant: Message = { id: responseMessageId, role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, sources: variant.sources, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
         return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
       });
       setRevealingMessageId(responseMessageId);

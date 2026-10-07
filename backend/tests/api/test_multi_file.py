@@ -257,7 +257,26 @@ def test_context_exposes_reliable_location_to_the_model() -> None:
             )
         ]
     )
-    assert "[source: guide.pdf, page: 7]" in formatted
+    assert "[1] guide.pdf, page: 7\nLocated text" in formatted
+
+
+def test_excerpts_are_numbered_in_document_order_for_citation() -> None:
+    from backend.core.strategies.multi_doc_utils import order_by_document
+
+    nodes = order_by_document(
+        [
+            ExtractedNode(text="a1", metadata={"filename": "a.pdf", "page": 1}),
+            ExtractedNode(text="b1", metadata={"filename": "b.pdf", "page": 2}),
+            ExtractedNode(text="a2", metadata={"filename": "a.pdf", "page": 3}),
+        ]
+    )
+    formatted = format_multi_doc_context(nodes)
+
+    assert [node.text for node in nodes] == ["a1", "a2", "b1"]
+    assert formatted.index("[1] a.pdf, page: 1\na1") < formatted.index(
+        "[2] a.pdf, page: 3\na2"
+    )
+    assert "=== سند 2: b.pdf ===\n\n[3] b.pdf, page: 2\nb1" in formatted
 
 
 @patch("backend.core.strategies.strict_rag.Settings")

@@ -20,10 +20,11 @@ FORMATTING RULES:
 
 CITATION_RULES = """\
 CITATION RULES:
-- When a source label includes a page, slide, paragraph, or section, append that exact label at the end of the paragraph it supports. Never invent a location.
-- A page-boundary excerpt joins the end of one page to the start of the next. Read both labeled parts together and cite the page range when both support the answer.
+- Every context excerpt starts with a number in square brackets, such as [2]. Right after each sentence or paragraph that uses an excerpt, cite it with that number: [2], or [1][3] for several. Write the digits inside the brackets in ASCII (1, 2, 3) even in a Persian answer.
+- Cite only numbers that appear in the context. Never invent a number, a file name, or a page; do not write file names or page numbers as citations.
+- A page-boundary excerpt joins the end of one page to the start of the next. Read both parts together.
 - If the user asks about a specific document, focus on that document and name it when relevant."""
 
 CODE_VERIFICATION_RULES = """\
 CODE AND CONCEPT CHECKS:
-If the user asks whether a code snippet, function, command, library, or concept appears in the documents, compare it by meaning and structure, ignoring formatting differences (whitespace, parentheses, omitted declarations, reworded comments). If it is present, confirm it ("بله، این اطلاعات/کد در سند وجود دارد" or "Yes, this information/code is present in the document") and quote the relevant part with its location."""
+If the user asks whether a code snippet, function, command, library, or concept appears in the documents, compare it by meaning and structure, ignoring formatting differences (whitespace, parentheses, omitted declarations, reworded comments). If it is present, confirm it ("بله، این اطلاعات/کد در سند وجود دارد" or "Yes, this information/code is present in the document") and quote the relevant part with its citation number."""

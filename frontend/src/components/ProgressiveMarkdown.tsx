@@ -4,15 +4,21 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { normalizeMathMarkdown } from '../core/markdown';
+import { citationNumber, linkCitations } from '../core/citations';
 
 interface ProgressiveMarkdownProps {
   content: string;
   active: boolean;
   externalImageLabel: string;
   onComplete?: () => void;
+  /** Number of sources; [n] markers within range become citation chips. */
+  sourceCount?: number;
+  onCite?: (source: number) => void;
+  citeLabel?: (source: number) => string;
+  formatNumber?: (source: number) => string;
 }
 
-export function ProgressiveMarkdown({ content, active, externalImageLabel, onComplete }: ProgressiveMarkdownProps) {
+export function ProgressiveMarkdown({ content, active, externalImageLabel, onComplete, sourceCount = 0, onCite, citeLabel, formatNumber }: ProgressiveMarkdownProps) {
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [visibleLength, setVisibleLength] = useState(active && !reduceMotion ? 0 : content.length);
   const completeRef = useRef(onComplete);
@@ -46,10 +52,16 @@ export function ProgressiveMarkdown({ content, active, externalImageLabel, onCom
     return () => cancelAnimationFrame(frame);
   }, [active, content, reduceMotion]);
 
-  const visibleContent = normalizeMathMarkdown(content.slice(0, visibleLength));
+  const visibleContent = linkCitations(normalizeMathMarkdown(content.slice(0, visibleLength)), sourceCount);
   return <div className={'progressive-markdown' + (active && visibleLength < content.length ? ' is-revealing' : '')}>
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]} components={{
-      a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
+      a: ({ children, href }) => {
+        const source = citationNumber(href);
+        if (source !== undefined) {
+          return <button type="button" className="cite-chip" onClick={() => onCite?.(source)} aria-label={citeLabel?.(source)}>{formatNumber ? formatNumber(source) : source}</button>;
+        }
+        return <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
+      },
       img: ({ alt }) => <span className="external-image-note">[{alt || externalImageLabel}]</span>,
       table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
       pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,

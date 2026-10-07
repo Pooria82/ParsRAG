@@ -4,6 +4,7 @@ import type { Message, Language, QueryStage, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
+import { SourceList } from './SourceList';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
@@ -21,6 +22,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const [focusedSource, setFocusedSource] = useState<{ messageId: string; n: number; token: number } | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
   const toBottom = () => {
@@ -67,9 +69,16 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               {message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content" dir="auto">
                   <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
-                    externalImageLabel={t.externalImage} onComplete={onRevealComplete} />
+                    externalImageLabel={t.externalImage} onComplete={onRevealComplete}
+                    sourceCount={message.sources?.length ?? 0}
+                    onCite={n => setFocusedSource(current => ({ messageId: message.id, n, token: (current?.token ?? 0) + 1 }))}
+                    citeLabel={n => t.openSource.replace('{n}', n.toLocaleString(language))}
+                    formatNumber={n => n.toLocaleString(language)} />
                 </div>}
-              {Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
+              {!message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
+                focus={focusedSource?.messageId === message.id ? focusedSource.n : undefined}
+                focusToken={focusedSource?.messageId === message.id ? focusedSource.token : undefined} /> : null}
+              {!message.sources?.length && Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
                 <header><FileText size={15} /><span>{t.citationsTitle}</span></header>
                 <ul>{message.citations!.map(citation => <li key={citation.filename}><bdi>{citation.filename}</bdi>{citation.locations.length > 0 && <span className="source-locations">{citation.locations.map((location, locationIndex) => <span key={`${location.kind}-${location.start}-${location.end ?? ''}`}>{t.locationLabels[location.kind]} {location.start.toLocaleString(language)}{location.end && location.end !== location.start ? `–${location.end.toLocaleString(language)}` : ''}{locationIndex < citation.locations.length - 1 ? '، ' : ''}</span>)}</span>}</li>)}</ul>
               </section>}

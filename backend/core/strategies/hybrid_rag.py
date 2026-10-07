@@ -9,6 +9,7 @@ from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
 from backend.core.port.reranker import Reranker
+from backend.core.service.citations import extract_citations
 from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
@@ -16,6 +17,7 @@ from backend.core.service.retrieval_optimizer import (
 )
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
+    order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
 )
@@ -241,18 +243,21 @@ class HybridRAGStrategy(QueryStrategy):
             else 3,
         )
 
-        final_source_nodes = fit_to_context(
-            final_source_nodes,
-            context_window=model_context_window(self.llm),
-            fixed_prompt=self.prompt_template.format(context_str="", query=query),
+        final_source_nodes = order_by_document(
+            fit_to_context(
+                final_source_nodes,
+                context_window=model_context_window(self.llm),
+                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+            )
         )
         context_str = format_multi_doc_context(final_source_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
 
         if progress:
             progress("generating")
-        response = self.llm.complete(prompt)
+        answer = str(self.llm.complete(prompt)).strip()
         return QueryResponse(
-            answer=str(response).strip(),
+            answer=answer,
             source_nodes=final_source_nodes,
+            cited=extract_citations(answer, len(final_source_nodes)),
         )

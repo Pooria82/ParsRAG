@@ -27,9 +27,21 @@ export interface IngestionCapabilities {
 
 export interface AppCapabilities { ingestion: IngestionCapabilities }
 
+export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }
+
 export interface Citation {
   filename: string;
-  locations: Array<{ kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }>;
+  locations: SourceLocation[];
+}
+
+/** One numbered excerpt given to the model; `cited` when the answer used [n]. */
+export interface SourcePassage {
+  n: number;
+  filename: string;
+  location?: SourceLocation;
+  text: string;
+  cited: boolean;
+  score?: number;
 }
 
 export interface ResponseVariant {
@@ -37,6 +49,7 @@ export interface ResponseVariant {
   content: string;
   timestamp: number;
   citations?: Citation[];
+  sources?: SourcePassage[];
   error?: boolean;
   prompt?: string;
   continuation?: Message[];
@@ -48,6 +61,7 @@ export interface Message {
   content: string;
   timestamp: number;
   citations?: Citation[];
+  sources?: SourcePassage[];
   isStreaming?: boolean;
   error?: boolean;
   variants?: ResponseVariant[];

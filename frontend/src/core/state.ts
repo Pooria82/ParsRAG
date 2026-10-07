@@ -1,4 +1,8 @@
-import type { AppSettings, Citation, IngestionCapabilities, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument } from '../types';
+import type { AppSettings, Citation, IngestionCapabilities, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument, SourceLocation, SourcePassage } from '../types';
+import { summarizeSources } from './citations';
+
+/** Longest excerpt kept per source in the browser (characters). */
+export const MAX_SOURCE_TEXT = 1600;
 
 export const STORAGE = {
   sessions: 'parsrag_sessions_v1',
@@ -88,6 +92,38 @@ function parseCitations(value: unknown): Citation[] {
   return [...sources.values()];
 }
 
+function finite(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function parseLocation(value: unknown): SourceLocation | undefined {
+  if (!isRecord(value) || !['page', 'slide', 'paragraph', 'section'].includes(String(value.kind))) return undefined;
+  const start = finite(value.start);
+  if (start === undefined) return undefined;
+  const end = finite(value.end);
+  return { kind: value.kind as SourceLocation['kind'], start, ...(end !== undefined && end > start ? { end } : {}) };
+}
+
+function parseSources(value: unknown): SourcePassage[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sources = value.filter(isRecord).filter(source => finite(source.n) !== undefined
+    && typeof source.filename === 'string' && typeof source.text === 'string').map(source => ({
+    n: source.n as number, filename: source.filename as string, text: (source.text as string).slice(0, MAX_SOURCE_TEXT),
+    cited: source.cited === true, score: finite(source.score), location: parseLocation(source.location),
+  }));
+  return sources.length ? sources : undefined;
+}
+
+/** Map server chunk metadata to one citable location. */
+export function sourceLocation(metadata: Record<string, unknown>): SourceLocation | undefined {
+  const range = (kind: SourceLocation['kind'], start: number | undefined, end: number | undefined): SourceLocation | undefined =>
+    start === undefined ? undefined : { kind, start, ...(end !== undefined && end > start ? { end } : {}) };
+  return range('page', finite(metadata.page), finite(metadata.page_end))
+    ?? range('slide', finite(metadata.slide), undefined)
+    ?? range('paragraph', finite(metadata.paragraph_start ?? metadata.paragraph), finite(metadata.paragraph_end))
+    ?? range('section', finite(metadata.section), undefined);
+}
+
 function parseMessages(value: unknown, depth = 0): Message[] {
   if (!Array.isArray(value) || depth > 12) return [];
   return value.filter(isRecord).filter(m => typeof m.id === 'string'
@@ -96,7 +132,7 @@ function parseMessages(value: unknown, depth = 0): Message[] {
       const variants = Array.isArray(m.variants) ? m.variants.filter(isRecord).filter(variant => typeof variant.id === 'string' && typeof variant.content === 'string').map(variant => ({
         id: variant.id as string, content: variant.content as string,
         timestamp: typeof variant.timestamp === 'number' ? variant.timestamp : 0,
-        error: variant.error === true, citations: parseCitations(variant.citations),
+        error: variant.error === true, citations: parseCitations(variant.citations), sources: parseSources(variant.sources),
         prompt: typeof variant.prompt === 'string' ? variant.prompt : undefined,
         continuation: Array.isArray(variant.continuation) ? parseMessages(variant.continuation, depth + 1) : undefined,
       })) : [];
@@ -106,6 +142,7 @@ function parseMessages(value: unknown, depth = 0): Message[] {
         id: m.id as string, role: m.role as Message['role'], content: active?.content ?? m.content as string,
         timestamp: active?.timestamp ?? (typeof m.timestamp === 'number' ? m.timestamp : 0),
         error: active?.error ?? m.error === true, citations: active?.citations ?? parseCitations(m.citations),
+        sources: active ? active.sources : parseSources(m.sources),
         variants: variants.length ? variants : undefined, activeVariant,
         parentUserId: typeof m.parentUserId === 'string' ? m.parentUserId : undefined,
       };
@@ -204,25 +241,28 @@ export function buildQuery(session: Session, settings: AppSettings, prompt: stri
   };
 }
 
-export function parseAnswer(value: unknown): { answer: string; citations: Citation[] } {
+/** Read an answer: numbered sources (cited ones flagged) and a per-file summary. */
+export function parseAnswer(value: unknown): { answer: string; citations: Citation[]; sources: SourcePassage[] } {
   if (!isRecord(value) || typeof value.answer !== 'string' || !value.answer.trim()) {
     throw new Error('invalid_response');
   }
   const nodes = Array.isArray(value.source_nodes) ? value.source_nodes : [];
-  const sources = new Map<string, Citation>();
-  for (const node of nodes.filter(isRecord)) {
+  const cited = new Set(Array.isArray(value.cited) ? value.cited.filter(number => Number.isInteger(number)) : []);
+  const sources: SourcePassage[] = [];
+  nodes.forEach((node, index) => {
+    if (!isRecord(node)) return;
     const metadata = isRecord(node.metadata) ? node.metadata : {};
-    const filename = typeof metadata.filename === 'string' ? metadata.filename : 'Document';
-    const citation = sources.get(filename) ?? { filename, locations: [] };
-    const add = (kind: Citation['locations'][number]['kind'], start: unknown, end?: unknown) => {
-      if (typeof start !== 'number' || !Number.isFinite(start)) return;
-      const location = { kind, start, ...(typeof end === 'number' && Number.isFinite(end) ? { end } : {}) };
-      if (!citation.locations.some(item => item.kind === kind && item.start === start && item.end === location.end)) citation.locations.push(location);
-    };
-    add('page', metadata.page, metadata.page_end); add('slide', metadata.slide); add('paragraph', metadata.paragraph_start ?? metadata.paragraph, metadata.paragraph_end); add('section', metadata.section);
-    sources.set(filename, citation);
-  }
-  return { answer: value.answer, citations: [...sources.values()] };
+    sources.push({
+      n: index + 1,
+      filename: typeof metadata.filename === 'string' ? metadata.filename : 'Document',
+      location: sourceLocation(metadata),
+      text: typeof node.text === 'string' ? node.text.slice(0, MAX_SOURCE_TEXT) : '',
+      cited: cited.has(index + 1),
+      score: finite(node.score),
+    });
+  });
+  const used = sources.filter(source => source.cited);
+  return { answer: value.answer, citations: summarizeSources(used.length ? used : sources), sources };
 }
 
 export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown): SessionDocument[] {
@@ -237,15 +277,15 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
 
 export function appendResponseVariant(message: Message, variant: ResponseVariant): Message {
   const variants = message.variants?.length ? [...message.variants, variant] : [
-    { id: `${message.id}-original`, content: message.content, citations: message.citations, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
+    { id: `${message.id}-original`, content: message.content, citations: message.citations, sources: message.sources, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
     variant,
   ];
-  return { ...message, content: variant.content, citations: variant.citations, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
+  return { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
 }
 
 export function selectResponseVariant(message: Message, index: number): Message {
   const variant = message.variants?.[index];
-  return variant ? { ...message, content: variant.content, citations: variant.citations, error: variant.error, timestamp: variant.timestamp, activeVariant: index } : message;
+  return variant ? { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, error: variant.error, timestamp: variant.timestamp, activeVariant: index } : message;
 }
 
 export function prepareTurnRegeneration(messages: Message[], userId: string, assistantId: string | undefined, prompt: string, edit: boolean) {
@@ -272,7 +312,7 @@ function snapshotActiveBranch(message: Message, prompt: string, continuation: Me
     ...variant, prompt: variant.prompt ?? prompt,
   })) : [{
     id: `${message.id}-original`, content: message.content, timestamp: message.timestamp,
-    citations: message.citations, error: message.error, prompt,
+    citations: message.citations, sources: message.sources, error: message.error, prompt,
   }];
   const activeVariant = Math.max(0, Math.min(variants.length - 1, message.activeVariant ?? variants.length - 1));
   variants[activeVariant] = { ...variants[activeVariant], prompt, continuation };
@@ -298,7 +338,7 @@ export function selectConversationBranch(messages: Message[], assistantId: strin
   const prefix = messages.slice(0, assistantIndex + 1).map(message => {
     if (message.id === messages[userIndex].id) return { ...message, content: target.prompt ?? message.content };
     if (message.id === assistantId) return {
-      ...snapshotted, content: target.content, citations: target.citations, error: target.error,
+      ...snapshotted, content: target.content, citations: target.citations, sources: target.sources, error: target.error,
       timestamp: target.timestamp, activeVariant: index,
     };
     return message;
