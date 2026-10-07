@@ -2,7 +2,7 @@
 
 ## Context
 
-Before 1.0.0 the backend already separated `api`, `core`, and `infrastructure`,
+Before 0.2.0 the backend already separated `api`, `core`, and `infrastructure`,
 but three boundaries leaked:
 
 - `backend/api/routes.py` contained ingestion, query, and session business
