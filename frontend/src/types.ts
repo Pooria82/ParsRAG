@@ -62,6 +62,18 @@ export interface SessionDocument {
   errorMessage?: string;
   enabled?: boolean;
   uploadProgress?: number;
+  /** Chunks indexed and pages/slides/paragraphs read, from the ingest response. */
+  chunks?: number;
+  sections?: number;
+  /** Partial-indexing notice codes such as `ocr_page_limit`. */
+  notices?: string[];
+}
+
+export interface IngestedFile {
+  filename: string;
+  chunks?: number;
+  sections?: number;
+  notices: string[];
 }
 
 export interface Session {

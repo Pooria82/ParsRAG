@@ -92,7 +92,10 @@ def get_query_strategy(
 def require_runtime_ready() -> None:
     """Reject model work while adapters are preparing or unavailable."""
     if not runtime_state.is_ready():
-        raise HTTPException(status_code=503, detail={"status": runtime_state.status()})
+        raise HTTPException(
+            status_code=503,
+            detail={"status": runtime_state.status(), "code": "not_ready"},
+        )
 
 
 def get_ingest_documents(

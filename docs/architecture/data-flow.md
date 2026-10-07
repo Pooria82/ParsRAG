@@ -64,7 +64,7 @@ sequenceDiagram
         UC->>UC: read_bounded (413 over file/batch budget)
         UC->>V: validate_upload(name, bytes)
         V-->>UC: ok or ValueError (400)
-        UC->>DP: parse_sections(bytes, name)
+        UC->>DP: parse(bytes, name)
         DP-->>UC: ParsedSection[] (OCR inside adapter)
         loop each section
             UC->>TC: chunk(text, metadata)

@@ -123,6 +123,9 @@ function parseDocuments(value: unknown): SessionDocument[] {
       name: doc.name, size: typeof doc.size === 'number' ? doc.size : undefined,
       status: doc.status === 'indexed' ? 'indexed' : 'error',
       enabled: doc.enabled !== false,
+      chunks: typeof doc.chunks === 'number' ? doc.chunks : undefined,
+      sections: typeof doc.sections === 'number' ? doc.sections : undefined,
+      notices: Array.isArray(doc.notices) ? doc.notices.filter((notice): notice is string => typeof notice === 'string') : undefined,
       errorMessage: doc.status === 'uploading' || doc.status === 'processing' ? 'interrupted'
         : typeof doc.errorMessage === 'string' ? doc.errorMessage : undefined,
     });

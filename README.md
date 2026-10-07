@@ -321,8 +321,8 @@ load its weights.
 | `OCR_ENABLED` | `1` | Enable Tesseract paths |
 | `OCR_LANGUAGES` | `fas+eng` | OCR language set |
 | `OCR_DPI` | `200` | Rasterization DPI for scanned PDF pages |
-| `OCR_MAX_PAGES` | `30` | Scanned PDF page bound |
-| `OCR_MAX_IMAGES` | `30` | Embedded/direct image bound |
+| `OCR_MAX_PAGES` | `30` | Scanned PDF pages read with OCR; later scanned pages are skipped and the document shows a notice |
+| `OCR_MAX_IMAGES` | `30` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
 

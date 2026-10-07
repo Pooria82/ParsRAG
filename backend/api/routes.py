@@ -36,6 +36,7 @@ from backend.core.dto.input.query import QueryRequest
 from backend.core.dto.output.capabilities import AppCapabilitiesResponse
 from backend.core.dto.output.common import MessageResponse, StatusResponse
 from backend.core.dto.output.documents import ReusedDocumentResponse
+from backend.core.dto.output.ingestion import IngestResponse
 from backend.core.dto.output.model import (
     ConversationTitleResponse,
     ModelConfigurationResponse,
@@ -125,14 +126,14 @@ def read_ollama_models(
     return use_case.execute(base_url)
 
 
-@router.post("/ingest", response_model=MessageResponse)
+@router.post("/ingest", response_model=IngestResponse)
 def ingest_document(
     _ready: None = Depends(require_runtime_ready),
     file: UploadFile | None = File(None),  # noqa: B008
     files: list[UploadFile] | None = File(None),  # noqa: B008
     session_id: str = Form(...),
     use_case: IngestDocuments = Depends(get_ingest_documents),  # noqa: B008
-) -> MessageResponse:
+) -> IngestResponse:
     """Ingest a bounded set of supported files into one isolated session."""
     uploads = [*(files or []), *([file] if file else [])]
     command = IngestDocumentsCommand(

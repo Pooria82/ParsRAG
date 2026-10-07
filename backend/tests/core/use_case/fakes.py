@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from backend.core.domain.documents import ExtractedNode, ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
 
 
 class InMemoryRepository:
@@ -66,13 +66,18 @@ class InMemoryRepository:
 class FakeParser:
     """``DocumentParser`` fake returning preset sections."""
 
-    def __init__(self, sections: list[ParsedSection] | None = None) -> None:
+    def __init__(
+        self,
+        sections: list[ParsedSection] | None = None,
+        notices: tuple[str, ...] = (),
+    ) -> None:
         """Use one page of text unless sections are given."""
         self.sections = sections or [ParsedSection("text", {"page": 1})]
+        self.notices = notices
 
-    def parse_sections(self, file_bytes: bytes, filename: str) -> list[ParsedSection]:
-        """Return the preset sections."""
-        return self.sections
+    def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
+        """Return the preset sections and notices."""
+        return ParsedDocument(self.sections, self.notices)
 
 
 class FakeChunker:

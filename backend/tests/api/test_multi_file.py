@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.documents import ExtractedNode, ParsedDocument
 from backend.core.dto.output.query import QueryResponse
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
@@ -51,13 +51,13 @@ def test_multi_file_ingest_success() -> None:
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
         patch(
-            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+            "backend.infrastructure.parsers.document_parser.parse_document_file"
         ) as mock_parse_document,
         patch("backend.infrastructure.parsers.chunker.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_document.return_value = [
-            MagicMock(text="Extracted text content", metadata={"section": 1})
-        ]
+        mock_parse_document.return_value = ParsedDocument(
+            [MagicMock(text="Extracted text content", metadata={"section": 1})]
+        )
         mock_chunk_text.return_value = [
             ExtractedNode(text="Chunk 1", metadata={"filename": "doc.docx"})
         ]
