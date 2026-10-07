@@ -16,6 +16,7 @@ from backend.core.port.query_strategy import QueryStrategy
 from backend.core.port.question_condenser import QuestionCondenser
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.correlation import current_correlation_id
+from backend.core.service.text_normalization import normalize_persian
 from backend.core.strategies.multi_doc_utils import parse_tagged_segments
 
 logger = logging.getLogger("parsrag.operations")
@@ -84,8 +85,8 @@ class AnswerQuery:
             LlamaChatMessage(role=message.role, content=message.content)
             for message in request.chat_history
         ]
-        condensed_query = self._condenser_factory().condense(
-            request.prompt, chat_history
+        condensed_query = normalize_persian(
+            self._condenser_factory().condense(request.prompt, chat_history)
         )
         strategy = self._strategy_resolver(request.mode)
         options = self._execute_options(request, request_id)
@@ -132,6 +133,11 @@ class AnswerQuery:
                     for filename in available_files
                     if filename in request.file_filter
                 ]
-            return parse_tagged_segments(request.prompt, available_files)
+            return [
+                (filename, normalize_persian(question))
+                for filename, question in parse_tagged_segments(
+                    request.prompt, available_files
+                )
+            ]
         except ValueError as exc:
             raise InvalidInputError(str(exc)) from exc

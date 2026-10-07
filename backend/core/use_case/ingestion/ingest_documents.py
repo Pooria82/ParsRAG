@@ -22,6 +22,7 @@ from backend.core.port.text_chunker import TextChunker
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.correlation import current_correlation_id
 from backend.core.runtime.session_locks import SessionLocks
+from backend.core.service.text_normalization import normalize_persian
 from backend.core.use_case.ingestion.file_validation import validate_upload
 
 READ_CHUNK_BYTES = 1024 * 1024
@@ -210,6 +211,10 @@ class IngestDocuments:
         """Chunk and save each section; return the number of stored chunks."""
         stored = 0
         previous: ParsedSection | None = None
+        sections = [
+            ParsedSection(normalize_persian(section.text), section.metadata)
+            for section in sections
+        ]
         for section in sections:
             nodes = self._chunker.chunk(
                 section.text, {"filename": filename, **section.metadata}

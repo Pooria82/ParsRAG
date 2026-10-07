@@ -75,6 +75,11 @@ the code into a translated, actionable message (for example `model_auth`:
 check the API key, `model_timeout`, `vector_store_unavailable`).
 
 **Transform.**
+- Section text is normalized to one Persian spelling: Arabic Yeh/Kaf (ي, ك)
+  become Persian (ی, ک), presentation forms from old PDFs become base letters,
+  and tatweel, harakat, zero-width spaces, and stray ZWNJs are removed;
+  Arabic-Indic digits become Persian digits. Questions get the same mapping, so
+  a question typed on a Persian keyboard matches text typed on an Arabic one.
 - Each section is split with LlamaIndex `SentenceSplitter` (chunk size 512
   tokens, overlap 50), and every chunk inherits the section metadata plus
   `filename`.
