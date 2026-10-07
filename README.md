@@ -119,7 +119,7 @@ The same settings page lists shortcuts for the current operating system:
 | --- | --- | --- |
 | Documents | `.pdf`, `.docx`, `.pptx` | Native structured extraction; OCR for scanned/sparse image PDF pages and embedded images |
 | Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tif`, `.tiff` | Validated and OCR-processed |
-| Text and data | `.txt`, `.md`, `.markdown`, `.json`, `.csv`, `.tsv`, `.log` | UTF-8 extraction; JSON is validated and normalized |
+| Text and data | `.txt`, `.md`, `.markdown`, `.json`, `.csv`, `.tsv`, `.log` | UTF-8, UTF-16 (with BOM), or legacy Windows-1256 (Persian) / Windows-1252 text; JSON is validated and normalized |
 | Markup/config | `.html`, `.htm`, `.xml`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg` | Visible text or UTF-8 extraction |
 | Source code | `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.css`, `.sql` | UTF-8 extraction with section metadata |
 

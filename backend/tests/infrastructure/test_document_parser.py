@@ -230,10 +230,28 @@ def test_missing_tesseract_is_reported_instead_of_skipped() -> None:
     assert raised.value.code == "ocr_unavailable"
 
 
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        # Windows-1256 has Arabic Yeh (ي) only; ingestion later maps it to ی.
+        ("گزارش نهايي پروژه با ي و ک".encode("cp1256"), "گزارش نهايي پروژه با ي و ک"),
+        ("سلام دنیا".encode("utf-16"), "سلام دنیا"),
+        ("Café résumé naïve".encode("cp1252"), "Café résumé naïve"),
+        ("﻿متن UTF-8".encode(), "متن UTF-8"),
+    ],
+)
+def test_legacy_and_unicode_text_encodings_are_read(
+    payload: bytes, expected: str
+) -> None:
+    """Persian Windows (1256), UTF-16, Western Windows, and UTF-8 BOM files."""
+    sections = parse_document_sections(payload, "notes.txt")
+    assert sections[0].text == expected
+
+
 def test_non_utf8_text_has_an_encoding_code() -> None:
     with pytest.raises(DocumentError) as raised:
-        parse_document_file("سلام".encode("utf-16"), "notes.txt")
-    assert raised.value.code in {"text_encoding", "unsupported_file"}
+        parse_document_file(b"abc \x81 def ghi", "notes.txt")
+    assert raised.value.code == "text_encoding"
 
 
 def test_chunk_text() -> None:
