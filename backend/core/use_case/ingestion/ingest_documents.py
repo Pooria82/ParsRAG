@@ -124,24 +124,40 @@ class IngestDocuments:
     def _ingest(
         self, files: list[IncomingFile], session_id: str, policy: UploadPolicy
     ) -> MessageResponse:
-        """Perform bounded parsing, chunking, and persistence for one batch."""
+        """Perform bounded parsing, chunking, and persistence for one batch.
+
+        The batch is all-or-nothing: when any file fails, every chunk this
+        request stored is deleted, so a failed upload never leaves a partial
+        document that looks indexed and blocks a retry with a name conflict.
+        """
         total_chunks = 0
         total_bytes = 0
         ingested_names: list[str] = []
-        for item in files:
-            if not item.filename:
-                raise InvalidInputError("Missing filename.")
-            file_bytes = read_bounded(
-                item.stream, item.filename, policy.max_batch_bytes - total_bytes, policy
-            )
-            total_bytes += len(file_bytes)
-            try:
-                validate_upload(item.filename, file_bytes)
-                sections = self._parser.parse_sections(file_bytes, item.filename)
-            except ValueError as exc:
-                raise InvalidInputError(str(exc)) from exc
-            total_chunks += self._index_sections(sections, item.filename, session_id)
-            ingested_names.append(item.filename)
+        written_names: list[str] = []
+        try:
+            for item in files:
+                if not item.filename:
+                    raise InvalidInputError("Missing filename.")
+                file_bytes = read_bounded(
+                    item.stream,
+                    item.filename,
+                    policy.max_batch_bytes - total_bytes,
+                    policy,
+                )
+                total_bytes += len(file_bytes)
+                try:
+                    validate_upload(item.filename, file_bytes)
+                    sections = self._parser.parse_sections(file_bytes, item.filename)
+                except ValueError as exc:
+                    raise InvalidInputError(str(exc)) from exc
+                written_names.append(item.filename)
+                total_chunks += self._index_sections(
+                    sections, item.filename, session_id
+                )
+                ingested_names.append(item.filename)
+        except BaseException:
+            self._roll_back(session_id, written_names)
+            raise
 
         if len(ingested_names) == 1:
             return MessageResponse(
@@ -153,6 +169,23 @@ class IngestDocuments:
                 f"{', '.join(ingested_names)} ({total_chunks} chunks total)."
             )
         )
+
+    def _roll_back(self, session_id: str, filenames: list[str]) -> None:
+        """Delete chunks stored by a failed batch, keeping the original error."""
+        for filename in filenames:
+            try:
+                self._repository.delete_document(session_id, filename)
+            except Exception:  # the ingestion error must surface, not this one
+                logger.exception(
+                    "ingest_rollback_failed correlation_id=%s",
+                    current_correlation_id(),
+                )
+        if filenames:
+            logger.warning(
+                "ingest_rolled_back correlation_id=%s file_count=%d",
+                current_correlation_id(),
+                len(filenames),
+            )
 
     def _index_sections(
         self, sections: list[ParsedSection], filename: str, session_id: str

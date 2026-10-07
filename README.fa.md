@@ -274,6 +274,11 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d -
 
 برنامه در `http://127.0.0.1:8000` یا پورت `PARSRAG_PORT` در دسترس است.
 
+API فقط به نام‌های `localhost`، `127.0.0.1` و `::1` پاسخ می‌دهد. اگر با
+`PARSRAG_BIND_HOST` برنامه را روی رابط شبکهٔ دیگری در دسترس می‌گذارید، نام یا
+آدرسی را که با آن برنامه را باز می‌کنید در `PARSRAG_ALLOWED_HOSTS` (با کاما جدا)
+بنویسید؛ درخواست با نام‌های دیگر پاسخ `400 Host is not trusted` می‌گیرد.
+
 ```powershell
 docker compose ps
 docker compose logs -f app
@@ -314,6 +319,7 @@ docker compose down
 | `PARSRAG_TMPFS_SIZE` | `576m` | حجم `/tmp` مبتنی بر RAM در Docker که فایل‌ها هنگام درخواست آپلود در آن نگه داشته می‌شوند؛ دست‌کم به اندازهٔ `PARSRAG_MAX_REQUEST_BYTES` |
 | `OCR_ENABLED` | `1` | فعال‌سازی مسیرهای Tesseract |
 | `OCR_LANGUAGES` | `fas+eng` | زبان‌های OCR |
+| `OCR_DPI` | `200` | وضوح تصویرسازی صفحه‌های اسکن‌شده PDF |
 | `OCR_MAX_PAGES` | `30` | سقف صفحات تصویری PDF |
 | `OCR_MAX_IMAGES` | `30` | سقف تصاویر مستقیم یا داخل Office |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | محافظ ابعاد بازشده تصویر |

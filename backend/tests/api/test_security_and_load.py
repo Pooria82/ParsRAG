@@ -223,7 +223,7 @@ async def test_concurrent_queries_no_race_condition(
     mock_get_strategy.return_value = mock_strategy
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         tasks = [
             ac.post(
                 "/query",

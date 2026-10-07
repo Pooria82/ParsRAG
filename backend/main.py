@@ -18,8 +18,10 @@ from backend.api.errors import register_exception_handlers
 from backend.api.middleware import (
     ContentLengthLimitMiddleware,
     RequestContextMiddleware,
+    TrustedHostMiddleware,
     TrustedOriginMiddleware,
     configured_browser_origins,
+    configured_hosts,
 )
 from backend.api.routes import router as api_router
 from backend.core.domain.upload_policy import UploadPolicy
@@ -103,6 +105,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(TrustedOriginMiddleware, allowed_origins=trusted_origins)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=configured_hosts())
 app.add_middleware(ContentLengthLimitMiddleware, max_bytes=_max_request_bytes())
 register_exception_handlers(app)
 app.include_router(api_router)

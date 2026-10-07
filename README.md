@@ -275,6 +275,11 @@ should use the CPU profile or an API provider.
 
 Open `http://127.0.0.1:8000` or the port configured by `PARSRAG_PORT`.
 
+The API answers only to `localhost`, `127.0.0.1`, and `::1`. If you bind the
+app to another interface with `PARSRAG_BIND_HOST`, list the names or addresses
+you will open it with in `PARSRAG_ALLOWED_HOSTS` (comma-separated); other host
+names receive `400 Host is not trusted`.
+
 ```powershell
 docker compose ps
 docker compose logs -f app
@@ -315,6 +320,7 @@ load its weights.
 | `PARSRAG_TMPFS_SIZE` | `576m` | RAM-backed `/tmp` in Docker that holds uploads during a request; keep it at least `PARSRAG_MAX_REQUEST_BYTES` |
 | `OCR_ENABLED` | `1` | Enable Tesseract paths |
 | `OCR_LANGUAGES` | `fas+eng` | OCR language set |
+| `OCR_DPI` | `200` | Rasterization DPI for scanned PDF pages |
 | `OCR_MAX_PAGES` | `30` | Scanned PDF page bound |
 | `OCR_MAX_IMAGES` | `30` | Embedded/direct image bound |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
