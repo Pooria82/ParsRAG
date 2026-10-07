@@ -7,11 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.core.domain.documents import ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedSection
 from backend.core.domain.exceptions import (
     ConflictError,
     InvalidInputError,
     PayloadTooLargeError,
+    VectorDBConnectionError,
 )
 from backend.core.domain.upload_policy import UploadPolicy
 from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
@@ -65,6 +66,79 @@ def test_ingests_sections_and_bridges_consecutive_pages(
     assert result == MessageResponse(message="Successfully ingested a.pdf (3 chunks).")
     bridge = repository.sessions["session-1"][-1]
     assert bridge.text == "first page second"
+
+
+class FailingRepository(InMemoryRepository):
+    """Store chunks until a configured save call fails."""
+
+    def __init__(self, fail_on_save: int) -> None:
+        """Fail on the given 1-based ``save_nodes`` call."""
+        super().__init__()
+        self.fail_on_save = fail_on_save
+        self.saves = 0
+
+    def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
+        """Raise like a dropped Qdrant connection on the configured call."""
+        self.saves += 1
+        if self.saves == self.fail_on_save:
+            raise VectorDBConnectionError("connection reset")
+        super().save_nodes(nodes, session_id)
+
+
+def test_failed_file_is_rolled_back_so_it_can_be_retried() -> None:
+    """A failure after some pages were stored leaves no partial document."""
+    repository = FailingRepository(fail_on_save=2)
+    parser = FakeParser(
+        [ParsedSection("first", {"page": 1}), ParsedSection("second", {"page": 2})]
+    )
+    use_case = _use_case(repository, parser)
+
+    with pytest.raises(VectorDBConnectionError):
+        use_case.execute(_command("a.pdf"))
+
+    assert repository.get_session_files("session-1") == []
+    repository.fail_on_save = 0
+    assert use_case.execute(_command("a.pdf")).message.startswith(
+        "Successfully ingested a.pdf"
+    )
+
+
+def test_failed_batch_removes_files_already_stored_by_the_request(
+    repository: InMemoryRepository,
+) -> None:
+    """A later invalid file rolls back earlier files of the same batch only."""
+    repository.save_nodes(
+        [ExtractedNode(text="kept", metadata={"filename": "old.pdf"})],
+        session_id="session-1",
+    )
+    command = IngestDocumentsCommand(
+        session_id="session-1",
+        files=[
+            IncomingFile("a.pdf", io.BytesIO(PDF)),
+            IncomingFile("b.pdf", io.BytesIO(b"not a pdf")),
+        ],
+    )
+    policy = UploadPolicy(
+        max_files_per_session=3, max_file_bytes=1024 * 1024, max_batch_bytes=1024**2
+    )
+
+    with pytest.raises(InvalidInputError):
+        _use_case(repository, policy=policy).execute(command)
+
+    assert repository.get_session_files("session-1") == ["old.pdf"]
+
+
+def test_rollback_failure_does_not_hide_the_ingestion_error() -> None:
+    """The caller sees the original error even when cleanup also fails."""
+    repository = FailingRepository(fail_on_save=1)
+
+    def broken_delete(session_id: str, filename: str) -> None:
+        raise VectorDBConnectionError("still down")
+
+    repository.delete_document = broken_delete  # type: ignore[method-assign]
+
+    with pytest.raises(VectorDBConnectionError, match="connection reset"):
+        _use_case(repository).execute(_command("a.pdf"))
 
 
 def test_summarizes_multi_file_batches(repository: InMemoryRepository) -> None:
