@@ -34,6 +34,7 @@ from backend.infrastructure.parsers.pdf_text import (
 NOTICE_OCR_PAGE_LIMIT = "ocr_page_limit"
 NOTICE_OCR_IMAGE_LIMIT = "ocr_image_limit"
 NOTICE_OCR_PARTIAL = "ocr_partial"
+NOTICE_OCR_UNAVAILABLE = "ocr_unavailable"
 
 __all__ = [
     "LocalDocumentParser",
@@ -136,6 +137,11 @@ def parse_document_file(file_bytes: bytes, filename: str) -> ParsedDocument:
     else:
         raise DocumentError("Unsupported file format.", "unsupported_file")
     if not sections:
+        if NOTICE_OCR_UNAVAILABLE in notices:
+            raise DocumentError(
+                "The document needs OCR, but Tesseract OCR is not installed.",
+                "ocr_unavailable",
+            )
         needs_ocr = lower_name.endswith((".pdf", *IMAGE_EXTENSIONS))
         if needs_ocr and not settings.enabled:
             raise EmptyDocumentError(
@@ -328,7 +334,7 @@ def _docx_paragraph_images(paragraph: Paragraph, document: Any) -> list[bytes]:
 
 
 def _ocr_unavailable(exc: OCRUnavailableError) -> DocumentError:
-    """OCR cannot run at all; partial results would hide a setup problem."""
+    """OCR cannot run at all for a file that is only an image."""
     return DocumentError(f"OCR is unavailable: {exc}", "ocr_unavailable")
 
 
@@ -346,8 +352,9 @@ def _extract_embedded_image(
         return "", next_count
     try:
         return extract_image_text(image, settings), next_count
-    except OCRUnavailableError as exc:
-        raise _ocr_unavailable(exc) from exc
+    except OCRUnavailableError:
+        notices.append(NOTICE_OCR_UNAVAILABLE)
+        return "", next_count
     except (OCRError, ValueError):
         notices.append(NOTICE_OCR_PARTIAL)
         return "", next_count
@@ -566,8 +573,10 @@ def _pdf_page_text(
         return "" if text_layer_is_garbled(text) else text, scanned_pages
     try:
         recognized = extract_page_text(page, settings)
-    except OCRUnavailableError as exc:
-        raise _ocr_unavailable(exc) from exc
+    except OCRUnavailableError:
+        # The text pages are still useful; the notice names the setup problem.
+        notices.append(NOTICE_OCR_UNAVAILABLE)
+        return "" if text_layer_is_garbled(text) else text, scanned_pages
     except OCRError:
         notices.append(NOTICE_OCR_PARTIAL)
         return "" if text_layer_is_garbled(text) else text, scanned_pages
