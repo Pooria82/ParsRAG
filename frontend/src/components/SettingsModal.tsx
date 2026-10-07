@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleHelp, Database, Download, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, CircleHelp, Database, Download, FileUp, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { isLocalEndpoint, MODES } from '../core/state';
@@ -12,6 +12,10 @@ interface SettingsModalProps {
   open?: boolean;
   onClose: () => void; settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void; onClearAllData: () => Promise<void>; busy: boolean;
+  /** Download every conversation as a backup file. */
+  onExportBackup?: () => void;
+  /** Restore conversations from a backup file; resolves with the counts merged. */
+  onImportBackup?: (file: File) => Promise<{ added: number; updated: number }>;
   onModelConfigured?: (configuration: ModelConfiguration) => void;
   onStartGuide: () => void;
   canInstall?: boolean; onInstall?: () => void;
@@ -20,7 +24,9 @@ interface SettingsModalProps {
   guidedProvider?: ModelProvider;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, busy, onModelConfigured, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
+  const backupInput = useRef<HTMLInputElement>(null);
+  const [backupStatus, setBackupStatus] = useState<{ kind: 'done' | 'error'; text: string } | null>(null);
   const t = translations[settings.language];
   const applePlatform = isApplePlatform(navigator.platform || navigator.userAgent);
   const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
@@ -164,6 +170,19 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           {invalid && <p className="inline-error" role="alert">{t.invalidEndpoint}</p>}
           <div className="endpoint-save"><button className="button secondary" disabled={busy}>{t.save}</button>{saved && <span role="status"><Check size={14} />{t.saved}</span>}</div>
         </form>
+        {(onExportBackup || onImportBackup) && <div className="data-setting backup-setting"><h3>{t.backupTitle}</h3><p>{t.backupDesc}</p>
+          <input ref={backupInput} type="file" accept="application/json,.json" className="visually-hidden" tabIndex={-1} aria-label={t.importBackup} onChange={event => {
+            const file = event.target.files?.[0]; event.target.value = '';
+            if (!file || !onImportBackup) return;
+            void onImportBackup(file).then(({ added, updated }) => setBackupStatus({ kind: 'done', text: t.importDone.replace('{added}', added.toLocaleString(settings.language)).replace('{updated}', updated.toLocaleString(settings.language)) }))
+              .catch((error: unknown) => setBackupStatus({ kind: 'error', text: error instanceof Error && error.message === 'unsupported_version' ? t.importNewerVersion : t.importInvalid }));
+          }} />
+          <div className="model-actions">
+            {onExportBackup && <button type="button" className="button secondary" onClick={() => { onExportBackup(); setBackupStatus(null); }}><Download size={16} />{t.exportBackup}</button>}
+            {onImportBackup && <button type="button" className="button secondary" disabled={busy} onClick={() => backupInput.current?.click()}><FileUp size={16} />{t.importBackup}</button>}
+          </div>
+          {backupStatus && <p className={backupStatus.kind === 'done' ? 'success-note' : 'inline-error'} role="status">{backupStatus.kind === 'done' && <Check size={14} />}{backupStatus.text}</p>}
+        </div>}
         <div className="data-setting" data-tour="settings-data"><h3>{t.clearAllData}</h3><p>{t.clearAllDesc}</p>
           {!clearConfirm ? <button className="button danger-outline" disabled={busy} onClick={() => setClearConfirm(true)}><Trash2 size={16} />{t.clearAllData}</button>
             : <div className="clear-confirm"><strong>{t.clearAllConfirm}</strong><div className="dialog-actions"><button className="button secondary" disabled={clearStatus === 'loading'} onClick={() => { setClearConfirm(false); setClearStatus('idle'); }}>{t.cancel}</button><button className="button danger" disabled={busy || clearStatus === 'loading'} onClick={() => {

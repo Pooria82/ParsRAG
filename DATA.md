@@ -17,10 +17,11 @@ covered in [ARCHITECTURE.md](ARCHITECTURE.md); trust boundaries in
 
 | Data | Created by | Stored in | Leaves the workstation? |
 | --- | --- | --- | --- |
-| Uploaded file bytes | Browser upload | Process memory only, during ingestion | No — raw files are never written to disk or Qdrant |
+| Uploaded file bytes | Browser upload | Process memory and the RAM-backed `/tmp` (Docker), only while the upload request runs | No — raw files are never written to disk or Qdrant in Docker. A source install spools uploads above 1 MiB to the OS temporary directory and deletes them when the request ends |
 | Parsed text chunks and metadata | `IngestDocuments` | Qdrant payload (`text`, `filename`, location fields, `session_id`) | No |
 | Embedding vectors | Local `multilingual-e5-base` | Qdrant vectors | No |
-| Conversations, branches, preferences | Frontend | Browser `localStorage` | No |
+| Conversations, branches, answer sources | Frontend | Browser IndexedDB (`parsrag` database; `localStorage` where IndexedDB is unavailable) | No |
+| Interface preferences, active conversation | Frontend | Browser `localStorage` | No |
 | Non-secret model settings | `ConfigureModel` | `app_config` volume (JSON) | No |
 | API key | Environment or settings form | Process memory | Only to the configured model endpoint, as a credential |
 | Prompt and retrieved excerpts | `AnswerQuery` | Not persisted by the backend | Only when an API model is selected (disclosed in the UI) |
@@ -47,6 +48,9 @@ flowchart LR
   ID, at most 10 files, no duplicate names, and no names already in the session.
 - It then reads each file in 1 MiB chunks, stopping at 100 MiB per file and
   500 MiB per batch.
+- A file whose bytes match a document already in the conversation (SHA-256,
+  stored as `content_sha256` on its chunks) is refused with `duplicate_content`,
+  even under another name; two identical files in one upload are refused too.
 - Content must match its extension: PDFs start with `%PDF-`; DOCX/PPTX are ZIP
   archives with the expected parts, at most 10,000 entries, at most 200 MiB
   expanded, and at most a 200:1 compression ratio per entry.
@@ -55,17 +59,31 @@ flowchart LR
 | Format | Section unit | Metadata |
 | --- | --- | --- |
 | PDF | Page | `page` |
-| DOCX | Paragraph (with embedded-image OCR) or table | `paragraph` or `section` |
+| DOCX | Paragraphs under the same heading, grouped up to about 180 words and prefixed with the heading path (`Title › Heading 1 › …`); tables separately, also with the path. Embedded images are OCR'd in place | `paragraph` (+ `paragraph_end`) or `section` |
 | PPTX | Slide, including tables | `slide` |
 | Images | Whole image (OCR) | `page` = 1 |
 | Text, Markdown, JSON, CSV, HTML/XML, YAML, config, logs, code | Whole file or normalized blocks | `section` |
 
 OCR (Tesseract, `fas+eng`) runs only when native text is missing or sparse: for
 scanned PDF pages, standalone images, and images embedded in DOCX/PPTX. It is
-bounded by page count, image count, pixel count, and a per-page timeout. A
-document that yields no text raises `EmptyDocumentError` (HTTP 400).
+bounded by page count, image count, pixel count, and a per-page timeout. Pages
+and images past those bounds, or ones OCR cannot read, are skipped: the rest of
+the document is indexed and the upload response lists a notice code
+(`ocr_page_limit`, `ocr_image_limit`, `ocr_partial`) that the interface shows
+under the document. A document that yields no text raises `EmptyDocumentError`
+(HTTP 400). Password-protected PDF and Office files are rejected with the code
+`encrypted_document`.
+
+Every API error body is `{"detail": ..., "code": ...}`; the interface turns
+the code into a translated, actionable message (for example `model_auth`:
+check the API key, `model_timeout`, `vector_store_unavailable`).
 
 **Transform.**
+- Section text is normalized to one Persian spelling: Arabic Yeh/Kaf (ي, ك)
+  become Persian (ی, ک), presentation forms from old PDFs become base letters,
+  and tatweel, harakat, zero-width spaces, and stray ZWNJs are removed;
+  Arabic-Indic digits become Persian digits. Questions get the same mapping, so
+  a question typed on a Persian keyboard matches text typed on an Arabic one.
 - Each section is split with LlamaIndex `SentenceSplitter` (chunk size 512
   tokens, overlap 50), and every chunk inherits the section metadata plus
   `filename`.
@@ -88,7 +106,7 @@ repeated, and the copies are independent afterwards.
 
 | Aspect | Value |
 | --- | --- |
-| Collection | `parsrag_<first 12 hex of SHA-256(EMBED_MODEL_NAME)>`, or `QDRANT_COLLECTION` |
+| Collection | `parsrag_<first 12 hex of SHA-256(EMBED_MODEL_NAME)>` (the digest also covers the prefixes when `EMBED_E5_PREFIXES=1`), or `QDRANT_COLLECTION` |
 | Vector | Dense, cosine distance, size probed from the embedding model |
 | Payload | `text`, `filename`, `session_id`, and location fields (`page`, `page_end`, `kind`, `slide`, `paragraph`, `section`) |
 | Payload indexes | `session_id` (keyword), `filename` (keyword) |
@@ -111,10 +129,10 @@ flowchart TB
     M -->|Strict / Hybrid| F[Resolve target files<br>@mentions, filters, names]
     F --> D[Adaptive depth<br>8 to 30 chunks]
     D --> S[(Session-filtered<br>similarity search)]
-    S -->|Strict| T{Evidence gate<br>score at least threshold<br>or lexical match}
+    S -->|Strict| T{Evidence gate<br>score at least threshold,<br>lexical match, or<br>whole-document question}
     T -->|fails| N[Refuse: not in documents]
     T -->|passes| X[Relevance cutoff<br>max 0.55, 0.7 x best]
-    S -->|Hybrid| R[FlashRank rerank<br>keep dense anchors]
+    S -->|Hybrid| R[Cross-encoder rerank<br>keep dense anchors]
     X --> G
     R --> G
     G --> A[Answer + cited source chunks]
@@ -123,12 +141,32 @@ flowchart TB
 **Conversational memory.** When history exists, `CondenseQuestionPipeline` asks
 the active model to rewrite the follow-up as a standalone question in the same
 language, preserving code and identifiers. Retrieval then uses the rewritten
-question.
+question. Only the last six messages (1,200 characters each) are sent, with a
+short timeout (`CONDENSE_TIMEOUT_SECONDS`); if the rewrite fails, the question
+is used as asked.
+
+**Context budget.** Before generation, retrieved chunks are fitted to the
+model's context window (`OLLAMA_CONTEXT_LENGTH`, passed to Ollama as `num_ctx`,
+or `MODEL_CONTEXT_WINDOW` for APIs) after reserving room for the answer. The
+lowest-scoring chunks are dropped first, so an over-long prompt never pushes
+the grounding rules out of the window. Only the chunks the model received are
+returned as sources.
 
 **Targeting.** Explicit `@{file}` mentions split the question into per-file
 segments, each retrieved from its own document. Otherwise an explicit file
 filter or filenames named in the question narrow the search. Broad questions
 spread retrieval across files so one large document cannot crowd out the rest.
+
+**Search.** Every search fuses two rankings with reciprocal-rank fusion:
+vector similarity (meaning) and BM25 keyword matching over the session's
+chunks (exact terms such as tool names, identifiers, and numbers, after
+Persian normalization). Chunks found only by keywords carry their cosine
+similarity, so Strict mode's thresholds apply to them unchanged. The keyword
+index is built in memory per session from Qdrant payloads and dropped when the
+session's documents change (`KEYWORD_SEARCH=0` disables it). On a generated
+set of 127 keyword-style queries, fusion raised mean reciprocal rank from
+0.748 to 0.823 (0.851 with the Hybrid reranker); on 125 paraphrased questions
+it changed it by −0.01, within noise.
 
 **Depth.** `RetrievalOptimizer` adapts the number of chunks (8–30, base 12) to
 the question type: summaries, comparisons, enumerations, and tables get more
@@ -138,13 +176,18 @@ adaptive depth.
 
 | Mode | Retrieval | Gate | Context sent to the model |
 | --- | --- | --- | --- |
-| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.80), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present; every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
-| Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with FlashRank | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
+| Strict | Vector + keyword search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.75), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present (Persian and Latin digits match), or a whole-document question (topic, type, summary); every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
+| Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with an Arabic-script FlashRank cross-encoder | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
 | LLM-only | None | None | Question and history only |
 
-Strict mode's prompt forbids outside knowledge and requires a refusal when the
-context is insufficient. These safeguards reduce, but cannot eliminate,
-unsupported answers; the UI therefore always shows the cited chunks.
+The gate only filters clearly unrelated material: on the private evaluation
+set, top similarity scores of relevant and off-topic questions overlap
+(medians 0.806 and 0.807 for whole-document and off-topic questions), so the
+decision is left to the model, which sees the excerpts. Strict mode's prompt
+forbids outside knowledge but allows answering by meaning rather than exact
+wording, combining excerpts, conclusions that follow directly from them, and
+partial answers that name what the documents do not cover. It refuses only
+when nothing in the context is relevant.
 
 ## 5. Why Qdrant
 
@@ -170,9 +213,15 @@ recorded in [ADR 02](.context/02_Architecture_and_Patterns.md).
 | Clear all data | Deletes every known session in Qdrant before clearing browser storage, and reports partial failures |
 | Change embedding model | New collection; re-upload documents |
 
-There is no automatic expiry. For a full backup, snapshot the `qdrant_data`
-volume and export browser storage together, because conversations reference
-session IDs stored in Qdrant. Removing the volume securely deletes all vectors
+There is no automatic expiry. **Settings → Model & connection → Conversation
+backup** downloads every conversation, its answer sources, and the interface
+preferences as a versioned JSON file (`parsrag-workspace`, version 1; no API
+key, no backend address) and restores it, adding new conversations and
+replacing a local copy only when the imported one is newer. Each conversation
+can also be downloaded as Markdown from its menu. Documents are not part of
+the file: for a full backup, also snapshot the `qdrant_data` volume, because
+conversations reference session IDs stored in Qdrant; on another machine,
+upload the documents again. Removing the volume securely deletes all vectors
 and chunk text.
 
 ## 7. Configuration reference
@@ -180,15 +229,20 @@ and chunk text.
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `EMBED_MODEL_NAME` | `intfloat/multilingual-e5-base` | Embedding model; also versions the collection name |
+| `EMBED_E5_PREFIXES` | `0` | `1` embeds questions with `query: ` and chunks with `passage: ` (the E5 training format). Starts a new collection, so documents must be uploaded again; measured gain was small (vector-search MRR 0.672 → 0.682) |
+| `EMBED_QUERY_PREFIX` / `EMBED_PASSAGE_PREFIX` | empty | Custom instructions for other embedding models; `none` disables one |
 | `EMBED_DEVICE` | `auto` | `auto`, `cpu`, `cuda`, or `mps` |
 | `EMBED_BATCH_SIZE` | `8` (`32` on CUDA) | Embedding batch, 1–128 |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector store address |
 | `QDRANT_COLLECTION` | derived | Explicit collection override |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | Upsert batch, 1–512 |
-| `STRICT_RAG_THRESHOLD` | `0.80` | Strict mode evidence gate |
+| `STRICT_RAG_THRESHOLD` | `0.75` | Strict mode evidence gate |
 | `STRICT_RAG_TOP_K` (alias `RAG_TOP_K`) | empty | Fixed Strict retrieval depth (1–50); empty uses adaptive depth |
 | `HYBRID_RERANK_TOP_K` | empty | Fixed Hybrid reranked chunk count (1–50); empty uses adaptive depth |
 | `HYBRID_RETRIEVE_TOP_K` | `25` | Minimum Hybrid candidate pool |
+| `KEYWORD_SEARCH` | `1` | Fuse BM25 keyword matches with vector search; `0` uses vector search only |
+| `RERANK_MODEL` | `miniReranker_arabic_v1` | Hybrid FlashRank cross-encoder; `none` keeps vector order. Downloaded once into the model cache; without network on first start, Hybrid uses vector order |
+| `RERANK_CACHE_DIR` | `~/.cache/flashrank` | Persistent reranker cache (Compose: the `model_cache` volume) |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
-| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds |
+| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_ORIENTATION` (1), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds and page orientation/skew correction |

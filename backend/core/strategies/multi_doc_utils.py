@@ -190,6 +190,14 @@ def _location_tag(node: ExtractedNode) -> str:
     page_end = metadata.get("page_end")
     if isinstance(page, int) and isinstance(page_end, int) and page_end > page:
         return f", pages: {page}-{page_end}"
+    paragraph = metadata.get("paragraph")
+    paragraph_end = metadata.get("paragraph_end")
+    if (
+        isinstance(paragraph, int)
+        and isinstance(paragraph_end, int)
+        and paragraph_end > paragraph
+    ):
+        return f", paragraphs: {paragraph}-{paragraph_end}"
     for key, label in (
         ("page", "page"),
         ("slide", "slide"),
@@ -232,44 +240,35 @@ def resolve_target_files(
     return _match_named_files(query_lower, available_files) or None
 
 
+def order_by_document(nodes: list[ExtractedNode]) -> list[ExtractedNode]:
+    """Group chunks by file (first appearance first), keeping order inside a file.
+
+    The result is the order in which excerpts are numbered for the model and
+    returned as sources, so citation ``[n]`` always means ``sources[n - 1]``.
+    """
+    groups: dict[str, list[ExtractedNode]] = {}
+    for node in nodes:
+        groups.setdefault(str(node.metadata.get("filename", "")), []).append(node)
+    return [node for group in groups.values() for node in group]
+
+
 def format_multi_doc_context(nodes: list[ExtractedNode]) -> str:
-    """Formats retrieved nodes into structured markdown grouped by document.
+    """Number excerpts [1], [2], ... in the given order for citation.
 
-    Args:
-        nodes (list[ExtractedNode]): The retrieved nodes.
-
-    Returns:
-        str: Grouped and labeled context string.
+    Several documents are separated by a header per file. Pass nodes through
+    ``order_by_document`` first so each file's excerpts are contiguous.
     """
     if not nodes:
         return ""
-
-    # Group by filename
-    groups: dict[str, list[ExtractedNode]] = {}
-    for node in nodes:
-        fn = node.metadata.get("filename", "سند نامشخص")
-        groups.setdefault(fn, []).append(node)
-
-    # If only one document, format simply
-    if len(groups) <= 1:
-        parts: list[str] = []
-        for idx, n in enumerate(nodes, start=1):
-            fn = n.metadata.get("filename", "")
-            fn_tag = f" [source: {fn}{_location_tag(n)}]" if fn else ""
-            score_tag = f" (امتیاز: {n.score:.2f})" if n.score is not None else ""
-            parts.append(f"--- بخش {idx}{fn_tag}{score_tag} ---\n{n.text}")
-        return "\n\n".join(parts)
-
-    # If multiple documents, format with clear document headers
-    doc_sections: list[str] = []
-    for doc_idx, (fn, doc_nodes) in enumerate(groups.items(), start=1):
-        doc_header = f"=== سند {doc_idx}: {fn} ==="
-        chunk_parts: list[str] = []
-        for chunk_idx, n in enumerate(doc_nodes, start=1):
-            score_tag = f" (امتیاز: {n.score:.2f})" if n.score is not None else ""
-            chunk_parts.append(
-                f"--- بخش {chunk_idx} [source: {fn}{_location_tag(n)}]{score_tag} ---\n{n.text}"
-            )
-        doc_sections.append(f"{doc_header}\n" + "\n\n".join(chunk_parts))
-
-    return "\n\n" + "\n\n".join(doc_sections)
+    filenames = [str(node.metadata.get("filename", "سند نامشخص")) for node in nodes]
+    several = len(set(filenames)) > 1
+    parts: list[str] = []
+    current: str | None = None
+    document = 0
+    for number, (node, filename) in enumerate(zip(nodes, filenames, strict=True), 1):
+        if several and filename != current:
+            document += 1
+            parts.append(f"=== سند {document}: {filename} ===")
+            current = filename
+        parts.append(f"[{number}] {filename}{_location_tag(node)}\n{node.text}")
+    return "\n\n".join(parts)

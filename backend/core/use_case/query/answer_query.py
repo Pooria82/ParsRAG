@@ -1,12 +1,13 @@
 """Use case: answer a question in the requested trust and grounding mode."""
 
 import logging
-from collections.abc import Callable
-from typing import TypedDict
+from collections.abc import Callable, Generator, Iterator
+from dataclasses import dataclass
+from typing import Any, Literal, TypedDict
 
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
 
-from backend.core.domain.enums import QueryMode
+from backend.core.domain.enums import QueryMode, QueryStage
 from backend.core.domain.exceptions import InvalidInputError
 from backend.core.dto.input.query import QueryRequest
 from backend.core.dto.output.query import QueryResponse
@@ -16,9 +17,19 @@ from backend.core.port.query_strategy import QueryStrategy
 from backend.core.port.question_condenser import QuestionCondenser
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.correlation import current_correlation_id
+from backend.core.service.text_normalization import normalize_persian
+from backend.core.strategies.generation import build_response
 from backend.core.strategies.multi_doc_utils import parse_tagged_segments
 
 logger = logging.getLogger("parsrag.operations")
+
+
+@dataclass(frozen=True)
+class QueryEvent:
+    """One step of a streamed answer: stage, sources, token, or done."""
+
+    kind: Literal["stage", "sources", "token", "done"]
+    data: dict[str, Any]
 
 
 class _ExecuteOptions(TypedDict, total=False):
@@ -71,6 +82,91 @@ class AnswerQuery:
             self._progress.set_stage(request_id, "complete")
         return response
 
+    def stream(self, request: QueryRequest) -> Generator[QueryEvent, None, None]:
+        """Answer the request as events: stages, sources, text deltas, result.
+
+        The query slot is held while the caller iterates and is released when
+        the stream ends or the caller stops reading (client disconnect), which
+        also stops generation.
+
+        Raises:
+            InvalidInputError: A document mention is invalid for the session.
+            CapacityExceededError: Every query slot is busy.
+        """
+        request_id = str(request.request_id) if request.request_id else None
+        try:
+            with self._limiter.slot():
+                yield from self._stream(request, request_id)
+        except Exception:
+            if request_id:
+                self._progress.set_stage(request_id, "failed")
+            raise
+        if request_id:
+            self._progress.set_stage(request_id, "complete")
+
+    def _stream(
+        self, request: QueryRequest, request_id: str | None
+    ) -> Iterator[QueryEvent]:
+        """Condense, prepare, then stream generation from the selected strategy."""
+        logger.info(
+            "query_stream_started correlation_id=%s mode=%s",
+            current_correlation_id(),
+            request.mode,
+        )
+        stage = self._stage_reporter(request_id)
+        yield stage("understanding")
+        chat_history = [
+            LlamaChatMessage(role=message.role, content=message.content)
+            for message in request.chat_history
+        ]
+        condensed_query = normalize_persian(
+            self._condenser_factory().condense(request.prompt, chat_history)
+        )
+        strategy = self._strategy_resolver(request.mode)
+        if request.mode is not QueryMode.LLM_ONLY:
+            yield stage("retrieving")
+        options = self._execute_options(request, request_id)
+        prepared = strategy.prepare(
+            query=condensed_query,
+            chat_history=chat_history,
+            session_id=request.session_id,
+            top_k=request.top_k,
+            file_filter=request.file_filter,
+            **options,
+        )
+        if prepared.prompt is None:
+            yield QueryEvent("done", build_response(prepared).model_dump())
+            return
+        yield QueryEvent(
+            "sources",
+            {"source_nodes": [node.model_dump() for node in prepared.sources]},
+        )
+        yield stage("generating")
+        parts: list[str] = []
+        for delta in strategy.stream(prepared):
+            parts.append(delta)
+            yield QueryEvent("token", {"text": delta})
+        response = build_response(prepared, "".join(parts))
+        logger.info(
+            "query_stream_complete correlation_id=%s source_count=%d cited=%d",
+            current_correlation_id(),
+            len(response.source_nodes),
+            len(response.cited),
+        )
+        yield QueryEvent("done", response.model_dump())
+
+    def _stage_reporter(
+        self, request_id: str | None
+    ) -> Callable[[QueryStage], QueryEvent]:
+        """Record a stage for polling clients and return it as a stream event."""
+
+        def report(stage: QueryStage) -> QueryEvent:
+            if request_id:
+                self._progress.set_stage(request_id, stage)
+            return QueryEvent("stage", {"stage": stage})
+
+        return report
+
     def _answer(self, request: QueryRequest, request_id: str | None) -> QueryResponse:
         """Run the condense-route-execute pipeline inside a reserved slot."""
         logger.info(
@@ -84,8 +180,8 @@ class AnswerQuery:
             LlamaChatMessage(role=message.role, content=message.content)
             for message in request.chat_history
         ]
-        condensed_query = self._condenser_factory().condense(
-            request.prompt, chat_history
+        condensed_query = normalize_persian(
+            self._condenser_factory().condense(request.prompt, chat_history)
         )
         strategy = self._strategy_resolver(request.mode)
         options = self._execute_options(request, request_id)
@@ -132,6 +228,11 @@ class AnswerQuery:
                     for filename in available_files
                     if filename in request.file_filter
                 ]
-            return parse_tagged_segments(request.prompt, available_files)
+            return [
+                (filename, normalize_persian(question))
+                for filename, question in parse_tagged_segments(
+                    request.prompt, available_files
+                )
+            ]
         except ValueError as exc:
             raise InvalidInputError(str(exc)) from exc

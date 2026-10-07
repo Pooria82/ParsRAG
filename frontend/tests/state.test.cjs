@@ -143,9 +143,20 @@ test('builds all three API modes with scoped documents and clean conversational 
 test('rejects invalid answers and deduplicates compact source locations', () => {
   assert.throws(() => parseAnswer({ answer: '' }), /invalid_response/);
   assert.throws(() => parseAnswer(null), /invalid_response/);
-  assert.deepEqual(parseAnswer({ answer: 'پاسخ', source_nodes: [{ text: 'متن', metadata: { filename: 'a.pdf', page: 2 } }, { text: 'بیشتر', metadata: { filename: 'a.pdf', page: 2 } }] }), {
-    answer: 'پاسخ', citations: [{ filename: 'a.pdf', locations: [{ kind: 'page', start: 2 }] }],
-  });
+  const parsed = parseAnswer({ answer: 'پاسخ', source_nodes: [{ text: 'متن', metadata: { filename: 'a.pdf', page: 2 } }, { text: 'بیشتر', metadata: { filename: 'a.pdf', page: 2 } }] });
+  assert.equal(parsed.answer, 'پاسخ');
+  assert.deepEqual(parsed.citations, [{ filename: 'a.pdf', locations: [{ kind: 'page', start: 2 }] }]);
+  assert.deepEqual(parsed.sources.map(source => [source.n, source.text, source.cited]), [[1, 'متن', false], [2, 'بیشتر', false]]);
+});
+
+test('only cited passages form the source summary; the rest stay available', () => {
+  const parsed = parseAnswer({ answer: 'جواب [2]', cited: [2], source_nodes: [
+    { text: 'unused', score: 0.8, metadata: { filename: 'a.pdf', page: 1 } },
+    { text: 'used', score: 0.9, metadata: { filename: 'b.docx', paragraph: 3, paragraph_end: 6 } },
+  ] });
+  assert.deepEqual(parsed.citations, [{ filename: 'b.docx', locations: [{ kind: 'paragraph', start: 3, end: 6 }] }]);
+  assert.deepEqual(parsed.sources.map(source => source.cited), [false, true]);
+  assert.equal(parsed.sources[1].score, 0.9);
 });
 
 test('cross-page evidence is shown as one traceable page range', () => {

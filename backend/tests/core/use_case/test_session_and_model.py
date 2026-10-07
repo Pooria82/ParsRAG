@@ -77,6 +77,12 @@ class FakeGateway:
         """Echo a short title."""
         return f"{language}: {prompt[:10]}"
 
+    def suggest_questions(
+        self, excerpts: list[str], language: Literal["fa", "en"]
+    ) -> list[str]:
+        """Return one question per excerpt."""
+        return [f"{language}?" for _ in excerpts]
+
 
 def _seed(repository: InMemoryRepository, session_id: str, *names: str) -> None:
     for name in names:

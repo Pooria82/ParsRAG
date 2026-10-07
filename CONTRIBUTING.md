@@ -20,6 +20,8 @@ request is under review.
 .\.venv\Scripts\python.exe -m ruff check backend backend/tests
 .\.venv\Scripts\python.exe -m mypy backend --strict
 .\.venv\Scripts\python.exe -m pytest --cov=backend --cov-report=term-missing
+# Upload-to-answer pipeline; needs Qdrant on localhost:6333 (CI runs it too)
+$env:PARSRAG_E2E = "1"; .\.venv\Scripts\python.exe -m pytest backend/tests/e2e --no-cov
 cd frontend
 npm ci
 npm test

@@ -5,6 +5,89 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-08
+
+### Added
+
+- Answers stream token by token (`POST /query/stream`, Server-Sent Events):
+  stages, the numbered sources, text, and the final result. Stopping keeps
+  what was already written.
+- Numbered citations: the model cites excerpts as `[n]`, the response lists
+  which ones it used (`cited`), and the interface turns them into chips that
+  open the cited passage. Uncited passages fold under "more passages
+  consulted".
+- Questions your documents can answer: an empty conversation suggests three
+  specific questions written from its documents (`POST
+  /sessions/{id}/suggestions`).
+- Every answer shows where its content came from (documents only, documents
+  and model knowledge, model knowledge, or not found in the documents).
+- Conversation backup and restore (versioned JSON) and per-conversation
+  Markdown export.
+- Keyword (BM25) search fused with vector search; on keyword-style queries it
+  raised mean reciprocal rank from 0.748 to 0.823.
+- OCR re-reads sideways, upside-down, and skewed scans (character error for
+  pages rotated 90° fell from 0.85 to 0.09).
+- Windows-1256 (Persian), UTF-16, and Windows-1252 text files.
+- Duplicate uploads are recognized by content, not only by name.
+- Opt-in E5 query/passage prefixes (`EMBED_E5_PREFIXES=1`).
+- End-to-end CI job: upload to cited answer through real parsing, embeddings,
+  Qdrant, and reranking, with a retrieval quality gate.
+
+### Improved
+
+- Documents-only (Strict) mode answers by meaning: paraphrased questions,
+  whole-document questions, and partial answers no longer get refused, while
+  facts must still come from the documents.
+- Persian PDF text is rebuilt in reading order from glyph positions; the ezafe
+  mark stays on its letter; text layers without usable Unicode go to OCR.
+- OCR: grayscale at 200 dpi, no contrast stretching, a confidence-based second
+  pass, and no invisible bidi marks (mean character error 0.225 → 0.133).
+- Mathematical answers: Persian words are never typeset as math, bare LaTeX
+  commands are rendered, and unclosed delimiters are removed.
+- Hybrid reranks with an Arabic-script cross-encoder that is cached on disk
+  (MRR 0.354 → 0.710 against the previous English model).
+- Persian spelling is normalized in indexed text and questions (Arabic Yeh and
+  Kaf, presentation forms, diacritics, digits).
+- Word documents are chunked under their headings (median chunk 13 → 91 words)
+  and each chunk carries its heading path.
+- Prompts fit the model's context window, and Ollama receives `num_ctx`.
+- Conversations are stored in IndexedDB (migrated automatically from
+  localStorage).
+
+### Fixed
+
+- A failed upload no longer leaves a partly indexed document behind.
+- Word and PowerPoint files with more than 30 images, and scans longer than
+  `OCR_MAX_PAGES`, are indexed in part with a notice instead of rejected.
+- A PDF with a few image pages is indexed when Tesseract is not installed;
+  the skipped pages are named in a notice.
+- Uploads up to the advertised 500 MiB fit the container's temporary storage.
+- Server timeouts no longer outlive the browser's wait.
+- A rendering error shows a recovery screen instead of a blank page.
+
+### Security
+
+- Requests addressed to host names other than localhost, 127.0.0.1, and ::1
+  are rejected (DNS rebinding); `PARSRAG_ALLOWED_HOSTS` adds names for LAN use.
+
+### Changed
+
+- Error responses carry a stable `code` next to `detail`, and the interface
+  explains each one (for example an encrypted PDF or a rejected API key).
+- `POST /ingest` returns per-file chunk counts and notices; `POST /query`
+  returns `cited` and `outcome`.
+- The project website moved to its own repository,
+  [ParsRAG-Landing](https://github.com/Pooria82/ParsRAG-Landing), published at
+  <https://pooria82.github.io/ParsRAG-Landing/>; the old GitHub Pages address
+  redirects there.
+
+### Upgrade note
+
+- Documents indexed by 0.2.0 keep working. Upload them again to gain Persian
+  normalization, heading-based Word chunks, content-based duplicate detection,
+  and the improved PDF text and OCR.
+- The first start downloads the reranker (about 100 MB) into the model cache.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
@@ -100,6 +183,7 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.1.0

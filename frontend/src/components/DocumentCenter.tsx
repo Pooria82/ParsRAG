@@ -3,6 +3,7 @@ import { AlertCircle, Check, FileText, FolderOpen, Loader2, LockKeyhole, Plus, T
 import type { SessionDocument, IngestionCapabilities, Language, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
 import { DEFAULT_INGESTION_CAPABILITIES } from '../core/state';
+import { noticeMessage } from '../i18n/errors';
 import { Dialog } from './Dialog';
 
 interface DocumentCenterProps {
@@ -62,7 +63,9 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
               {doc.status === 'uploading' || doc.status === 'processing' ? <Loader2 size={12} className="spin" /> : doc.status === 'indexed' ? <Check size={12} /> : <AlertCircle size={12} />}
               {doc.status === 'uploading' ? t.docUploading : doc.status === 'processing' ? t.docProcessing : doc.status === 'indexed' ? t.docIndexed : t.docError}
               {doc.size ? <small dir="ltr">{(doc.size / 1024 / 1024).toFixed(1)} MB</small> : null}
+              {doc.status === 'indexed' && doc.chunks ? <small>{doc.chunks.toLocaleString(language)} {t.docChunks}</small> : null}
             </span>
+              {doc.status === 'indexed' && doc.notices?.map(notice => <p className="document-notice" key={notice}><AlertCircle size={12} />{noticeMessage(notice, language)}</p>)}
               {(doc.status === 'uploading' || doc.status === 'processing') && <UploadJourney status={doc.status} progress={doc.uploadProgress ?? 0} language={language} />}
               {doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}
             </div>

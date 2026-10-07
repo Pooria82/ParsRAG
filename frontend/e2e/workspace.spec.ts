@@ -340,12 +340,15 @@ test('two document mentions survive submission with a scoped file filter', async
   await page.route('**/queries/*/progress', route => route.fulfill({ status: 404 }));
   await page.route('**/conversations/title', route => route.fulfill({ json: { title: 'Cost and schedule' } }));
   let submitted: { prompt: string; file_filter: string[] } | undefined;
-  await page.route('**/query', async route => {
+  await page.route('**/query/stream', async route => {
     submitted = route.request().postDataJSON();
-    await route.fulfill({ json: { answer: 'The costs and schedule are documented.', source_nodes: [
+    const done = { answer: 'The costs [1] and schedule [2] are documented.', cited: [1, 2], source_nodes: [
       { text: 'cost', score: 0.9, metadata: { filename: 'costs.pdf', page: 2 } },
       { text: 'date', score: 0.9, metadata: { filename: 'schedule.pdf', page: 4 } },
-    ] } });
+    ] };
+    const event = (kind: string, data: unknown) => `event: ${kind}\ndata: ${JSON.stringify(data)}\n\n`;
+    await route.fulfill({ contentType: 'text/event-stream', body: event('stage', { stage: 'retrieving' })
+      + event('sources', { source_nodes: done.source_nodes }) + event('token', { text: done.answer }) + event('done', done) });
   });
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Your message' });
@@ -361,6 +364,8 @@ test('two document mentions survive submission with a scoped file filter', async
   expect(submitted!.prompt).toContain('@{costs.pdf}');
   expect(submitted!.prompt).toContain('@{schedule.pdf}');
   expect(submitted!.file_filter).toEqual(['costs.pdf', 'schedule.pdf']);
+  await page.getByRole('button', { name: 'Show source 2' }).click();
+  await expect(page.locator('.source-card.is-active')).toContainText('schedule.pdf');
 });
 
 test('selected color palette survives a reload in light and dark mode', async ({ page }) => {

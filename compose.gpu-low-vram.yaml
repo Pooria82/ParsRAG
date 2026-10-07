@@ -4,6 +4,8 @@ services:
       # Preserve scarce VRAM for generation while retaining the CUDA-capable image.
       EMBED_DEVICE: cpu
       EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
+      # The app budgets prompts for the same context Ollama allocates.
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_LOW_VRAM_CONTEXT_LENGTH:-2048}"
 
   ollama:
     environment:

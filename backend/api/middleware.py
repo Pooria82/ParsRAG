@@ -17,7 +17,72 @@ from backend.core.runtime.correlation import bind_correlation_id, reset_correlat
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _SENSITIVE_READ_PREFIXES = ("/models",)
+_LOOPBACK_HOSTS = "localhost,127.0.0.1,::1"
 logger = logging.getLogger("parsrag.requests")
+
+
+def configured_hosts() -> list[str]:
+    """Return the Host header names this server answers to.
+
+    Only loopback names are accepted by default, so a public domain that a
+    malicious page rebinds to 127.0.0.1 cannot reach the API. Deployments
+    that serve other machines list their names in ``PARSRAG_ALLOWED_HOSTS``;
+    ``*`` disables the check.
+    """
+    configured = os.getenv("PARSRAG_ALLOWED_HOSTS", "").strip() or _LOOPBACK_HOSTS
+    return [
+        host.strip().lower().strip("[]").rstrip(".")
+        for host in configured.split(",")
+        if host.strip()
+    ]
+
+
+def request_hostname(host_header: str) -> str:
+    """Return the lower-case host name of a Host header without its port."""
+    value = host_header.strip().lower()
+    if value.startswith("["):
+        return value[1 : value.find("]")] if "]" in value else ""
+    if value.count(":") == 1:
+        value = value.split(":", 1)[0]
+    return value.rstrip(".")
+
+
+class TrustedHostMiddleware:
+    """Reject requests addressed to host names outside the configured set.
+
+    This closes DNS rebinding: a page on ``attacker.example`` that rebinds
+    its name to 127.0.0.1 is same-origin with itself, so origin checks pass,
+    but its requests still carry ``Host: attacker.example``.
+    """
+
+    def __init__(self, app: ASGIApp, allowed_hosts: Iterable[str]) -> None:
+        """Initialize the middleware with normalized host names."""
+        self.app = app
+        self.allowed_hosts = {host.lower() for host in allowed_hosts}
+        self.allow_any = "*" in self.allowed_hosts
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Forward requests whose Host header names this server."""
+        if scope["type"] != "http" or self.allow_any:
+            await self.app(scope, receive, send)
+            return
+        hostname = request_hostname(Headers(scope=scope).get("host", ""))
+        if hostname in self.allowed_hosts:
+            await self.app(scope, receive, send)
+            return
+        logger.warning("untrusted_host_rejected path=%s", scope.get("path"))
+        response = b'{"detail":"Host is not trusted.","code":"untrusted_host"}'
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 400,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(response)).encode("ascii")),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": response})
 
 
 def configured_browser_origins() -> list[str]:
@@ -63,7 +128,9 @@ class TrustedOriginMiddleware:
             or _same_origin(origin, headers.get("host", ""))
         )
         if protects_request and not trusted:
-            response = b'{"detail":"Browser origin is not trusted."}'
+            response = (
+                b'{"detail":"Browser origin is not trusted.","code":"untrusted_origin"}'
+            )
             await send(
                 {
                     "type": "http.response.start",

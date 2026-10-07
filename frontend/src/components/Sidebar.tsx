@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
+import { Check, FileDown, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
+import { conversationMarkdown, downloadText, exportFilename } from '../core/workspaceTransfer';
 import type { Language, ModelConfiguration, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
@@ -70,6 +71,7 @@ export function Sidebar(props: SidebarProps) {
             <summary aria-label={t.chatOptions + ': ' + session.title}><MoreHorizontal size={17} /></summary>
             <div className="history-menu-popover">
               <button onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); setTitle(session.title); setEdit({ session, action: 'rename' }); }}><Pencil size={14} />{t.rename}</button>
+              <button disabled={!session.messages.length} onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); downloadText(exportFilename(session.title, 'md'), conversationMarkdown(session, language), 'text/markdown;charset=utf-8'); }}><FileDown size={14} />{t.exportMarkdown}</button>
               <button className="danger-text" disabled={props.uploadingSessionId === session.id} onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); setDeleteError(false); setEdit({ session, action: 'delete' }); }}><Trash2 size={14} />{t.delete}</button>
             </div>
           </details>

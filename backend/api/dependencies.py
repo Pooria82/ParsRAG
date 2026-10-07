@@ -31,6 +31,7 @@ from backend.core.use_case.model.list_ollama_models import ListOllamaModels
 from backend.core.use_case.model.read_model_configuration import (
     ReadModelConfiguration,
 )
+from backend.core.use_case.model.suggest_questions import SuggestQuestions
 from backend.core.use_case.query.answer_query import AnswerQuery
 from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
@@ -40,7 +41,9 @@ from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
+from backend.infrastructure.llm.factory import condensing_llm
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
+from backend.infrastructure.llm.reranker import FlashRankReranker
 from backend.infrastructure.parsers.chunker import SentenceWindowChunker
 from backend.infrastructure.parsers.document_parser import LocalDocumentParser
 
@@ -50,6 +53,7 @@ ingest_limiter = WorkLimiter(
 query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
 session_locks = SessionLocks()
 model_gateway = LlamaIndexModelGateway()
+reranker = FlashRankReranker.from_environment()
 
 
 @lru_cache(maxsize=1)
@@ -86,13 +90,16 @@ def get_query_strategy(
     active_repo = repo if repo is not None else _shared_document_repository()
     if mode is QueryMode.STRICT:
         return StrictRAGStrategy(active_repo)
-    return HybridRAGStrategy(active_repo)
+    return HybridRAGStrategy(active_repo, reranker=reranker)
 
 
 def require_runtime_ready() -> None:
     """Reject model work while adapters are preparing or unavailable."""
     if not runtime_state.is_ready():
-        raise HTTPException(status_code=503, detail={"status": runtime_state.status()})
+        raise HTTPException(
+            status_code=503,
+            detail={"status": runtime_state.status(), "code": "not_ready"},
+        )
 
 
 def get_ingest_documents(
@@ -114,7 +121,7 @@ def get_answer_query(
     """Build the query use case; model-bound collaborators are created lazily."""
     return AnswerQuery(
         repository=repo,
-        condenser_factory=lambda: CondenseQuestionPipeline(),
+        condenser_factory=lambda: CondenseQuestionPipeline(condensing_llm()),
         strategy_resolver=lambda mode: get_query_strategy(mode, repo=repo),
         progress=query_progress,
         limiter=query_limiter,
@@ -167,6 +174,13 @@ def get_configure_model() -> ConfigureModel:
 def get_list_ollama_models() -> ListOllamaModels:
     """Build the Ollama model listing use case."""
     return ListOllamaModels(model_gateway)
+
+
+def get_suggest_questions(
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> SuggestQuestions:
+    """Build the document question suggestion use case."""
+    return SuggestQuestions(repo, model_gateway, query_limiter)
 
 
 def get_generate_conversation_title() -> GenerateConversationTitle:

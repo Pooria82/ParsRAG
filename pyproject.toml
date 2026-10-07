@@ -1,6 +1,6 @@
 [project]
 name = "parsrag"
-version = "0.2.0"
+version = "1.0.0"
 description = "Offline-first Persian (Farsi) and English RAG workspace for chatting with documents using local LLMs"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

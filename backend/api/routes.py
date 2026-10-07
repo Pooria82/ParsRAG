@@ -8,7 +8,7 @@ are mapped centrally by ``backend.api.errors``.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
@@ -24,22 +24,27 @@ from backend.api.dependencies import (
     get_read_model_configuration,
     get_read_query_progress,
     get_reuse_document,
+    get_suggest_questions,
     require_runtime_ready,
 )
+from backend.api.streaming import event_stream
 from backend.core.dto.input.documents import DeleteDocumentRequest, ReuseDocumentRequest
 from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
 from backend.core.dto.input.model import (
     ConversationTitleRequest,
     ModelConfigurationRequest,
+    QuestionSuggestionRequest,
 )
 from backend.core.dto.input.query import QueryRequest
 from backend.core.dto.output.capabilities import AppCapabilitiesResponse
 from backend.core.dto.output.common import MessageResponse, StatusResponse
 from backend.core.dto.output.documents import ReusedDocumentResponse
+from backend.core.dto.output.ingestion import IngestResponse
 from backend.core.dto.output.model import (
     ConversationTitleResponse,
     ModelConfigurationResponse,
     OllamaModel,
+    QuestionSuggestionResponse,
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
@@ -51,6 +56,7 @@ from backend.core.use_case.model.list_ollama_models import ListOllamaModels
 from backend.core.use_case.model.read_model_configuration import (
     ReadModelConfiguration,
 )
+from backend.core.use_case.model.suggest_questions import SuggestQuestions
 from backend.core.use_case.query.answer_query import AnswerQuery
 from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
@@ -125,14 +131,14 @@ def read_ollama_models(
     return use_case.execute(base_url)
 
 
-@router.post("/ingest", response_model=MessageResponse)
+@router.post("/ingest", response_model=IngestResponse)
 def ingest_document(
     _ready: None = Depends(require_runtime_ready),
     file: UploadFile | None = File(None),  # noqa: B008
     files: list[UploadFile] | None = File(None),  # noqa: B008
     session_id: str = Form(...),
     use_case: IngestDocuments = Depends(get_ingest_documents),  # noqa: B008
-) -> MessageResponse:
+) -> IngestResponse:
     """Ingest a bounded set of supported files into one isolated session."""
     uploads = [*(files or []), *([file] if file else [])]
     command = IngestDocumentsCommand(
@@ -150,6 +156,20 @@ def query_rag(
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""
     return use_case.execute(request)
+
+
+@router.post("/query/stream")
+def stream_query(
+    request: QueryRequest,
+    _ready: None = Depends(require_runtime_ready),
+    use_case: AnswerQuery = Depends(get_answer_query),  # noqa: B008
+) -> StreamingResponse:
+    """Stream stages, numbered sources, answer text, and the final result (SSE)."""
+    return StreamingResponse(
+        event_stream(use_case.stream(request)),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/queries/{request_id}/progress", response_model=QueryProgressResponse)
@@ -179,6 +199,19 @@ def reuse_session_document(
     use_case: ReuseDocument = Depends(get_reuse_document),  # noqa: B008
 ) -> ReusedDocumentResponse:
     """Reuse a prior session's indexed vectors without storing raw upload bytes."""
+    return use_case.execute(session_id, request)
+
+
+@router.post(
+    "/sessions/{session_id}/suggestions", response_model=QuestionSuggestionResponse
+)
+def suggest_session_questions(
+    session_id: str,
+    request: QuestionSuggestionRequest,
+    _ready: None = Depends(require_runtime_ready),
+    use_case: SuggestQuestions = Depends(get_suggest_questions),  # noqa: B008
+) -> QuestionSuggestionResponse:
+    """Propose questions the session's documents can answer."""
     return use_case.execute(session_id, request)
 
 

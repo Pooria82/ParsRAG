@@ -5,6 +5,7 @@ import pytest
 from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.infrastructure.llm.factory import (
+    condensing_llm,
     configure_model,
     generate_conversation_title,
     list_ollama_models,
@@ -31,9 +32,56 @@ def test_embedding_device_can_be_forced_to_cpu(monkeypatch: pytest.MonkeyPatch) 
 
 @patch("backend.infrastructure.llm.factory.Ollama")
 @patch("backend.infrastructure.llm.factory.Settings")
-def test_configure_local_model_updates_active_runtime(
-    mock_settings: MagicMock, mock_ollama: MagicMock
+def test_ollama_receives_the_configured_context_length(
+    mock_settings: MagicMock, mock_ollama: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """num_ctx follows OLLAMA_CONTEXT_LENGTH instead of the model maximum."""
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "2048")
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_SECONDS", "90")
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.OLLAMA,
+            model_name="gemma3:12b",
+            base_url="http://localhost:11434",
+        ),
+        verify=False,
+        persist=False,
+    )
+    assert mock_ollama.call_args_list[0].kwargs["context_window"] == 2048
+    assert mock_ollama.call_args_list[0].kwargs["request_timeout"] == 90.0
+
+
+@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_api_requests_stay_within_the_browser_timeout(
+    mock_settings: MagicMock, mock_openai: MagicMock
+) -> None:
+    """Answer (two attempts) plus rewrite fit in the client's 330 s window."""
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="api-model",
+            base_url="https://127.0.0.1/v1",
+            api_key="key",
+        ),
+        verify=False,
+        persist=False,
+    )
+    answer, condense = (call.kwargs for call in mock_openai.call_args_list)
+    worst_case = answer["timeout"] * (answer["max_retries"] + 1) + condense[
+        "timeout"
+    ] * (condense["max_retries"] + 1)
+    assert worst_case < 330
+    assert answer["context_window"] == 32768
+    assert condensing_llm() is mock_openai.return_value
+
+
+@patch("backend.infrastructure.llm.factory.Ollama")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_configure_local_model_updates_active_runtime(
+    mock_settings: MagicMock, mock_ollama: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OLLAMA_CONTEXT_LENGTH", raising=False)
     response = configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.OLLAMA,
@@ -43,11 +91,14 @@ def test_configure_local_model_updates_active_runtime(
         verify=False,
         persist=False,
     )
-    mock_ollama.assert_called_once_with(
-        model="gemma3:12b",
-        base_url="http://localhost:11434",
-        request_timeout=120.0,
-    )
+    answer_call, condense_call = mock_ollama.call_args_list
+    assert answer_call.kwargs == {
+        "model": "gemma3:12b",
+        "base_url": "http://localhost:11434",
+        "request_timeout": 120.0,
+        "context_window": 8192,
+    }
+    assert condense_call.kwargs["request_timeout"] == 30.0
     assert mock_settings.llm is mock_ollama.return_value
     assert response.model_name == "gemma3:12b"
     assert response.provider is ModelProvider.OLLAMA

@@ -59,6 +59,36 @@ jobs:
       - if: matrix.os == 'ubuntu-latest'
         run: npm run test:pwa
 
+  end-to-end:
+    # Real parsing, multilingual-e5 embeddings, Qdrant, reranking, and SSE
+    # streaming; a deterministic model stands in for the LLM.
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.19.1
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt -c requirements.lock
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/flashrank
+          key: e2e-models-${{ hashFiles('backend/infrastructure/llm/reranker.py') }}-e5-base
+      - run: python -m pytest backend/tests/e2e --no-cov -v
+        env:
+          PARSRAG_E2E: "1"
+          QDRANT_HOST: localhost
+          QDRANT_PORT: "6333"
+          EMBED_DEVICE: cpu
+          HF_HUB_DISABLE_XET: "1"
+
   packaging:
     runs-on: ubuntu-latest
     steps:

@@ -19,6 +19,7 @@ client = TestClient(app, raise_server_exceptions=False)
 @pytest.fixture(autouse=True)
 def override_repo() -> Generator[MagicMock, None, None]:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
     yield mock_repo
     app.dependency_overrides.clear()
@@ -223,7 +224,7 @@ async def test_concurrent_queries_no_race_condition(
     mock_get_strategy.return_value = mock_strategy
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         tasks = [
             ac.post(
                 "/query",

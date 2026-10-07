@@ -11,10 +11,11 @@ from pptx import Presentation
 from pptx.util import Inches
 
 from backend.core.domain.documents import ParsedSection
-from backend.core.domain.exceptions import EmptyDocumentError
+from backend.core.domain.exceptions import DocumentError, EmptyDocumentError
 from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
 from backend.infrastructure.parsers.document_parser import (
     parse_document,
+    parse_document_file,
     parse_document_sections,
 )
 
@@ -30,8 +31,9 @@ def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     mock_doc.__iter__.return_value = [mock_page]
     mock_fitz_open.return_value = mock_doc
 
-    with pytest.raises(EmptyDocumentError, match="Scanned PDFs require OCR"):
+    with pytest.raises(EmptyDocumentError, match="require OCR") as raised:
         parse_document(b"fake pdf bytes", "fake.pdf")
+    assert raised.value.code == "ocr_disabled"
 
     mock_doc.close.assert_called_once()
 
@@ -72,6 +74,27 @@ def test_scanned_pdf_uses_ocr_when_enabled(
     assert sections[0].text == "متن فارسی اسکن‌شده"
     assert sections[0].metadata == {"page": 1}
     mock_extract_page_text.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_garbled_text_layers_are_replaced_by_ocr(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pages whose fonts lack Unicode maps are read by OCR, not appended to it."""
+    monkeypatch.setenv("OCR_ENABLED", "true")
+    garbled = MagicMock()
+    garbled.get_text.return_value = "ÊÌåÇ ÈÑÇí ÊÓÊ ÇÓÊ " * 5
+    document = MagicMock()
+    document.__iter__.return_value = [garbled]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.return_value = "متن بازخوانی شده"
+
+    sections = parse_document_sections(b"pdf", "broken-font.pdf")
+
+    assert [section.text for section in sections] == ["متن بازخوانی شده"]
     document.close.assert_called_once()
 
 
@@ -142,11 +165,125 @@ def test_pdf_ocr_page_limit_is_enforced(
     mock_fitz_open.return_value = document
     mock_extract_page_text.return_value = "ocr text"
 
-    with pytest.raises(ValueError, match="limited to 1 OCR pages"):
-        parse_document_sections(b"pdf", "large-scan.pdf")
+    parsed = parse_document_file(b"pdf", "large-scan.pdf")
 
+    assert [section.metadata for section in parsed.sections] == [{"page": 1}]
+    assert parsed.notices == ("ocr_page_limit",)
     assert mock_extract_page_text.call_count == 1
     document.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_password_protected_pdf_is_reported_as_encrypted(
+    mock_fitz_open: MagicMock,
+) -> None:
+    document = MagicMock()
+    document.needs_pass = True
+    mock_fitz_open.return_value = document
+
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file(b"%PDF-1.7", "secret.pdf")
+
+    assert raised.value.code == "encrypted_document"
+    document.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_office_images_past_the_limit_are_skipped_not_fatal(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Text around the 31st image is still indexed; a notice says what was skipped."""
+    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.ocr import OCRError, OCRSettings
+
+    monkeypatch.setenv("OCR_MAX_IMAGES", "1")
+    settings = OCRSettings.from_environment()
+    notices: list[str] = []
+    mock_extract.return_value = "chart caption"
+
+    first = _extract_embedded_image(b"img", settings, 0, notices)
+    second = _extract_embedded_image(b"img", settings, 1, notices)
+    mock_extract.side_effect = OCRError("unreadable")
+    third = _extract_embedded_image(
+        b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+    )
+
+    assert first == ("chart caption", 1)
+    assert second == ("", 2)
+    assert third == ("", 1)
+    assert notices == ["ocr_image_limit", "ocr_partial"]
+
+
+def test_missing_tesseract_skips_images_with_a_notice() -> None:
+    """Word text is indexed even when the images cannot be read."""
+    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.ocr import OCRSettings, OCRUnavailableError
+
+    notices: list[str] = []
+    with patch(
+        "backend.infrastructure.parsers.document_parser.extract_image_text",
+        side_effect=OCRUnavailableError("missing"),
+    ):
+        result = _extract_embedded_image(
+            b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+        )
+    assert result == ("", 1)
+    assert notices == ["ocr_unavailable"]
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_missing_tesseract_keeps_text_pages_of_a_pdf(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One scanned page no longer rejects a PDF whose other pages have text."""
+    from backend.infrastructure.parsers.ocr import OCRUnavailableError
+
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    text_page, scanned_page = MagicMock(), MagicMock()
+    text_page.get_text.return_value = "این صفحه متن کافی دارد و نیازی به OCR ندارد."
+    scanned_page.get_text.return_value = ""
+    document = MagicMock()
+    document.needs_pass = False
+    document.__iter__.return_value = [text_page, scanned_page]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.side_effect = OCRUnavailableError("missing")
+
+    parsed = parse_document_file(b"pdf", "mixed.pdf")
+
+    assert [section.metadata for section in parsed.sections] == [{"page": 1}]
+    assert parsed.notices == ("ocr_unavailable",)
+
+    document.__iter__.return_value = [scanned_page]
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file(b"pdf", "scan.pdf")
+    assert raised.value.code == "ocr_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        # Windows-1256 has Arabic Yeh (ي) only; ingestion later maps it to ی.
+        ("گزارش نهايي پروژه با ي و ک".encode("cp1256"), "گزارش نهايي پروژه با ي و ک"),
+        ("سلام دنیا".encode("utf-16"), "سلام دنیا"),
+        ("Café résumé naïve".encode("cp1252"), "Café résumé naïve"),
+        ("﻿متن UTF-8".encode(), "متن UTF-8"),
+    ],
+)
+def test_legacy_and_unicode_text_encodings_are_read(
+    payload: bytes, expected: str
+) -> None:
+    """Persian Windows (1256), UTF-16, Western Windows, and UTF-8 BOM files."""
+    sections = parse_document_sections(payload, "notes.txt")
+    assert sections[0].text == expected
+
+
+def test_non_utf8_text_has_an_encoding_code() -> None:
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file(b"abc \x81 def ghi", "notes.txt")
+    assert raised.value.code == "text_encoding"
 
 
 def test_chunk_text() -> None:

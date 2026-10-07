@@ -76,7 +76,7 @@ def test_qdrant_similarity_search(
     mock_client = MagicMock()
     mock_qdrant_client_cls.return_value = mock_client
 
-    mock_settings.embed_model.get_text_embedding.return_value = [0.1] * 768
+    mock_settings.embed_model.get_query_embedding.return_value = [0.1] * 768
 
     mock_point = MagicMock()
     mock_point.payload = {"text": "Found text", "page": 1}
@@ -98,6 +98,9 @@ def test_qdrant_similarity_search(
     _, kwargs = mock_client.query_points.call_args
     assert kwargs["collection_name"] == "test_collection"
     assert kwargs["limit"] == 1
+    assert kwargs["query"] == [0.1] * 768
+    mock_settings.embed_model.get_query_embedding.assert_called_once_with("query")
+    mock_settings.embed_model.get_text_embedding.assert_not_called()
     session_condition = kwargs["query_filter"].must[0]
     assert session_condition.match.value == "test_session"
 
@@ -136,7 +139,7 @@ def test_empty_file_filter_returns_no_results_without_embedding(
 ) -> None:
     repo = QdrantRepository(collection_name="test_collection", vector_size=768)
     assert repo.similarity_search("query", file_filter=[]) == []
-    mock_settings.embed_model.get_text_embedding.assert_not_called()
+    mock_settings.embed_model.get_query_embedding.assert_not_called()
 
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
@@ -220,6 +223,37 @@ def test_document_copy_reuses_vectors_in_bounded_pages(
     assert client.scroll.call_args_list[1].kwargs["offset"] == 77
     assert client.upsert.call_args.kwargs["wait"] is True
     mock_settings.embed_model.get_text_embedding_batch.assert_not_called()
+
+
+def test_documents_are_found_by_content_digest_within_a_session() -> None:
+    """The real local engine filters on session and content digest."""
+    client = QdrantClient(location=":memory:")
+    client.create_collection(
+        collection_name="digest_test",
+        vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+    )
+    client.upsert(
+        collection_name="digest_test",
+        points=[
+            qmodels.PointStruct(
+                id=1,
+                vector=[0.2, 0.8],
+                payload={
+                    "session_id": "s1",
+                    "filename": "report.pdf",
+                    "content_sha256": "abc",
+                    "text": "evidence",
+                },
+            )
+        ],
+    )
+    repo = object.__new__(QdrantRepository)
+    repo.client = client
+    repo.collection_name = "digest_test"
+
+    assert repo.find_document_by_content("s1", "abc") == "report.pdf"
+    assert repo.find_document_by_content("s2", "abc") is None
+    assert repo.find_document_by_content("s1", "other") is None
 
 
 def test_document_copy_is_searchable_in_target_session() -> None:

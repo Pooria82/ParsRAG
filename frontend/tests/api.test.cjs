@@ -1,6 +1,7 @@
 const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { ApiError, ParsRagApiClient } = require('./.compiled/services/api.js');
+const { ApiError, ParsRagApiClient, errorFromBody } = require('./.compiled/services/api.js');
+const { noticeMessage, queryErrorMessage, uploadErrorMessage } = require('./.compiled/i18n/errors.js');
 
 const originalFetch = global.fetch;
 const originalXhr = global.XMLHttpRequest;
@@ -33,19 +34,55 @@ test('API client discovers ingestion capabilities from the backend', async () =>
   assert.deepEqual(capabilities.ingestion.supported_extensions, ['.pdf', '.png']);
 });
 
-test('API client classifies OCR failures for localized UI handling', async () => {
+test('API client keeps the server error code for localized upload messages', async () => {
   global.XMLHttpRequest = class {
-    upload = {}; status = 422; responseText = JSON.stringify({ detail: 'Scanned PDFs are not supported' });
+    upload = {}; status = 400; responseText = JSON.stringify({ detail: 'The PDF is password-protected.', code: 'encrypted_document' });
     open() {} abort() { this.onabort?.(); }
     send() { this.onload?.(); }
   };
   const client = new ParsRagApiClient('http://localhost:8000');
   await assert.rejects(() => client.ingest(new File(['scan'], 'scan.pdf'), 'session-1'), error => {
     assert.equal(error instanceof ApiError, true);
-    assert.equal(error.code, 'ocr_unavailable');
-    assert.equal(error.status, 422);
+    assert.equal(error.code, 'encrypted_document');
+    assert.equal(error.status, 400);
     return true;
   });
+});
+
+test('error bodies without a code, nested codes, and HTML stay usable', () => {
+  assert.equal(errorFromBody(503, JSON.stringify({ detail: { status: 'preparing', code: 'not_ready' } })).code, 'not_ready');
+  assert.equal(errorFromBody(500, '<html>boom</html>').code, 'request_failed');
+  assert.equal(errorFromBody(502, JSON.stringify({ detail: 'x', code: 'model_auth' })).detail, 'x');
+});
+
+test('every error code shown to users has Persian and English text', () => {
+  const codes = ['encrypted_document', 'corrupt_file', 'ocr_disabled', 'duplicate_file', 'duplicate_content', 'vector_store_unavailable', 'busy'];
+  for (const code of codes) {
+    assert.ok(uploadErrorMessage(code, 'fa'));
+    assert.ok(uploadErrorMessage(code, 'en'));
+  }
+  for (const code of ['model_timeout', 'model_auth', 'model_rate_limited', 'model_not_found', 'model_unavailable', 'network', 'not_ready']) {
+    assert.ok(queryErrorMessage(code, 'fa'));
+    assert.ok(queryErrorMessage(code, 'en'));
+  }
+  assert.equal(queryErrorMessage('something_new', 'fa'), undefined);
+  assert.match(noticeMessage('ocr_page_limit', 'fa'), /OCR/);
+});
+
+test('successful uploads return per-file chunks and notices', async () => {
+  global.XMLHttpRequest = class {
+    upload = {}; status = 200;
+    responseText = JSON.stringify({ message: 'ok', files: [{ filename: 'scan.pdf', chunks: 12, sections: 30, notices: ['ocr_page_limit'] }] });
+    open() {} abort() { this.onabort?.(); }
+    send() { this.onload?.(); }
+  };
+  const [file] = await new ParsRagApiClient('').ingest(new File(['x'], 'scan.pdf'), 'session-1');
+  assert.deepEqual(file, { filename: 'scan.pdf', chunks: 12, sections: 30, notices: ['ocr_page_limit'] });
+});
+
+test('unreachable services are reported as network failures', async () => {
+  global.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  await assert.rejects(() => new ParsRagApiClient('').query({}), error => error.code === 'network');
 });
 
 test('upload reports byte progress and reaches 100 percent', async () => {
