@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.documents import ExtractedNode, ParsedDocument
 from backend.core.domain.exceptions import EmptyDocumentError
 from backend.core.dto.output.query import QueryResponse
 from backend.core.runtime.readiness import runtime_state
@@ -99,13 +99,13 @@ def test_ingest_success() -> None:
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
         patch(
-            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+            "backend.infrastructure.parsers.document_parser.parse_document_file"
         ) as mock_parse_document,
         patch("backend.infrastructure.parsers.chunker.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_document.return_value = [
-            MagicMock(text="Extracted text", metadata={"page": 1})
-        ]
+        mock_parse_document.return_value = ParsedDocument(
+            [MagicMock(text="Extracted text", metadata={"page": 1})]
+        )
         mock_chunk_text.return_value = [
             ExtractedNode(text="Extracted text", metadata={"filename": "test.pdf"})
         ]
@@ -135,14 +135,16 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
         patch(
-            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+            "backend.infrastructure.parsers.document_parser.parse_document_file"
         ) as parse,
         patch("backend.infrastructure.parsers.chunker.chunk_text") as chunk,
     ):
-        parse.return_value = [
-            ParsedSection("The invoice total is", {"page": 3}),
-            ParsedSection("425 euros due today", {"page": 4}),
-        ]
+        parse.return_value = ParsedDocument(
+            [
+                ParsedSection("The invoice total is", {"page": 3}),
+                ParsedSection("425 euros due today", {"page": 4}),
+            ]
+        )
         chunk.side_effect = [
             [ExtractedNode(text="The invoice total is", metadata={"page": 3})],
             [ExtractedNode(text="425 euros due today", metadata={"page": 4})],
@@ -170,7 +172,7 @@ def test_ingest_empty_document() -> None:
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
         patch(
-            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+            "backend.infrastructure.parsers.document_parser.parse_document_file"
         ) as mock_parse_document,
     ):
         mock_parse_document.side_effect = EmptyDocumentError("No text found")

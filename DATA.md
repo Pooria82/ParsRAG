@@ -62,8 +62,17 @@ flowchart LR
 
 OCR (Tesseract, `fas+eng`) runs only when native text is missing or sparse: for
 scanned PDF pages, standalone images, and images embedded in DOCX/PPTX. It is
-bounded by page count, image count, pixel count, and a per-page timeout. A
-document that yields no text raises `EmptyDocumentError` (HTTP 400).
+bounded by page count, image count, pixel count, and a per-page timeout. Pages
+and images past those bounds, or ones OCR cannot read, are skipped: the rest of
+the document is indexed and the upload response lists a notice code
+(`ocr_page_limit`, `ocr_image_limit`, `ocr_partial`) that the interface shows
+under the document. A document that yields no text raises `EmptyDocumentError`
+(HTTP 400). Password-protected PDF and Office files are rejected with the code
+`encrypted_document`.
+
+Every API error body is `{"detail": ..., "code": ...}`; the interface turns
+the code into a translated, actionable message (for example `model_auth`:
+check the API key, `model_timeout`, `vector_store_unavailable`).
 
 **Transform.**
 - Each section is split with LlamaIndex `SentenceSplitter` (chunk size 512

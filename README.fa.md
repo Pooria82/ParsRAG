@@ -319,8 +319,8 @@ docker compose down
 | `OCR_ENABLED` | `1` | فعال‌سازی مسیرهای Tesseract |
 | `OCR_LANGUAGES` | `fas+eng` | زبان‌های OCR |
 | `OCR_DPI` | `200` | وضوح تصویرسازی صفحه‌های اسکن‌شده PDF |
-| `OCR_MAX_PAGES` | `30` | سقف صفحات تصویری PDF |
-| `OCR_MAX_IMAGES` | `30` | سقف تصاویر مستقیم یا داخل Office |
+| `OCR_MAX_PAGES` | `30` | تعداد صفحه‌های اسکن‌شدهٔ PDF که با OCR خوانده می‌شود؛ صفحه‌های بعدی کنار گذاشته و در فهرست سند اعلام می‌شوند |
+| `OCR_MAX_IMAGES` | `30` | تعداد تصویرهای داخل DOCX/PPTX که با OCR خوانده می‌شود؛ تصویرهای بعدی با اعلان کنار گذاشته می‌شوند |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | محافظ ابعاد بازشده تصویر |
 | `OCR_TIMEOUT_SECONDS` | `45` | timeout هر صفحه یا تصویر |
 

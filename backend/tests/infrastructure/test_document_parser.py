@@ -11,10 +11,11 @@ from pptx import Presentation
 from pptx.util import Inches
 
 from backend.core.domain.documents import ParsedSection
-from backend.core.domain.exceptions import EmptyDocumentError
+from backend.core.domain.exceptions import DocumentError, EmptyDocumentError
 from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
 from backend.infrastructure.parsers.document_parser import (
     parse_document,
+    parse_document_file,
     parse_document_sections,
 )
 
@@ -30,8 +31,9 @@ def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     mock_doc.__iter__.return_value = [mock_page]
     mock_fitz_open.return_value = mock_doc
 
-    with pytest.raises(EmptyDocumentError, match="Scanned PDFs require OCR"):
+    with pytest.raises(EmptyDocumentError, match="require OCR") as raised:
         parse_document(b"fake pdf bytes", "fake.pdf")
+    assert raised.value.code == "ocr_disabled"
 
     mock_doc.close.assert_called_once()
 
@@ -163,11 +165,75 @@ def test_pdf_ocr_page_limit_is_enforced(
     mock_fitz_open.return_value = document
     mock_extract_page_text.return_value = "ocr text"
 
-    with pytest.raises(ValueError, match="limited to 1 OCR pages"):
-        parse_document_sections(b"pdf", "large-scan.pdf")
+    parsed = parse_document_file(b"pdf", "large-scan.pdf")
 
+    assert [section.metadata for section in parsed.sections] == [{"page": 1}]
+    assert parsed.notices == ("ocr_page_limit",)
     assert mock_extract_page_text.call_count == 1
     document.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_password_protected_pdf_is_reported_as_encrypted(
+    mock_fitz_open: MagicMock,
+) -> None:
+    document = MagicMock()
+    document.needs_pass = True
+    mock_fitz_open.return_value = document
+
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file(b"%PDF-1.7", "secret.pdf")
+
+    assert raised.value.code == "encrypted_document"
+    document.close.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_office_images_past_the_limit_are_skipped_not_fatal(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Text around the 31st image is still indexed; a notice says what was skipped."""
+    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.ocr import OCRError, OCRSettings
+
+    monkeypatch.setenv("OCR_MAX_IMAGES", "1")
+    settings = OCRSettings.from_environment()
+    notices: list[str] = []
+    mock_extract.return_value = "chart caption"
+
+    first = _extract_embedded_image(b"img", settings, 0, notices)
+    second = _extract_embedded_image(b"img", settings, 1, notices)
+    mock_extract.side_effect = OCRError("unreadable")
+    third = _extract_embedded_image(
+        b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+    )
+
+    assert first == ("chart caption", 1)
+    assert second == ("", 2)
+    assert third == ("", 1)
+    assert notices == ["ocr_image_limit", "ocr_partial"]
+
+
+def test_missing_tesseract_is_reported_instead_of_skipped() -> None:
+    """OCR that cannot run at all is a setup problem, not a partial result."""
+    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.ocr import OCRSettings, OCRUnavailableError
+
+    with (
+        patch(
+            "backend.infrastructure.parsers.document_parser.extract_image_text",
+            side_effect=OCRUnavailableError("missing"),
+        ),
+        pytest.raises(DocumentError) as raised,
+    ):
+        _extract_embedded_image(b"img", OCRSettings(True, "fas", 200, 30, 30), 0, [])
+    assert raised.value.code == "ocr_unavailable"
+
+
+def test_non_utf8_text_has_an_encoding_code() -> None:
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file("سلام".encode("utf-16"), "notes.txt")
+    assert raised.value.code in {"text_encoding", "unsupported_file"}
 
 
 def test_chunk_text() -> None:

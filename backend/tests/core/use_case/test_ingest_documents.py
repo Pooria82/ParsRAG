@@ -7,9 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.core.domain.documents import ExtractedNode, ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
 from backend.core.domain.exceptions import (
     ConflictError,
+    DocumentError,
     InvalidInputError,
     PayloadTooLargeError,
     VectorDBConnectionError,
@@ -63,7 +64,8 @@ def test_ingests_sections_and_bridges_consecutive_pages(
 
     result = _use_case(repository, parser).execute(_command("a.pdf"))
 
-    assert result == MessageResponse(message="Successfully ingested a.pdf (3 chunks).")
+    assert result.message == "Successfully ingested a.pdf (3 chunks)."
+    assert result.files[0].chunks == 3
     bridge = repository.sessions["session-1"][-1]
     assert bridge.text == "first page second"
 
@@ -185,13 +187,47 @@ def test_parser_value_errors_become_invalid_input(
     repository: InMemoryRepository,
 ) -> None:
     class BrokenParser(FakeParser):
-        def parse_sections(
-            self, file_bytes: bytes, filename: str
-        ) -> list[ParsedSection]:
-            raise ValueError("OCR page limit exceeded.")
+        def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
+            raise ValueError("Parser failure.")
 
-    with pytest.raises(InvalidInputError, match="OCR page limit exceeded"):
+    with pytest.raises(InvalidInputError, match="Parser failure") as raised:
         _use_case(repository, BrokenParser()).execute(_command("a.pdf"))
+    assert raised.value.code == "invalid_document"
+
+
+def test_document_error_codes_reach_the_caller(
+    repository: InMemoryRepository,
+) -> None:
+    """Encrypted or corrupted files keep their specific reason code."""
+
+    class EncryptedParser(FakeParser):
+        def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
+            raise DocumentError("The PDF is password-protected.", "encrypted_document")
+
+    with pytest.raises(InvalidInputError) as raised:
+        _use_case(repository, EncryptedParser()).execute(_command("a.pdf"))
+    assert raised.value.code == "encrypted_document"
+
+
+def test_response_lists_each_file_with_its_notices(
+    repository: InMemoryRepository,
+) -> None:
+    """Partial OCR is reported per file while the document stays indexed."""
+    parser = FakeParser(
+        [ParsedSection("one", {"page": 1}), ParsedSection("two", {"page": 3})],
+        notices=("ocr_page_limit",),
+    )
+
+    result = _use_case(repository, parser).execute(_command("scan.pdf"))
+
+    assert [file.model_dump() for file in result.files] == [
+        {
+            "filename": "scan.pdf",
+            "chunks": 2,
+            "sections": 2,
+            "notices": ["ocr_page_limit"],
+        }
+    ]
 
 
 def test_enforces_file_and_batch_byte_limits(repository: InMemoryRepository) -> None:
