@@ -161,6 +161,10 @@ Embeddings and Qdrant remain local in all modes. API keys stay in process memory
 or environment variables; they are not written to browser storage, logs, API
 responses, or the persisted non-secret model configuration.
 
+The layered backend design (ports, use cases, and DTOs) is described in
+[ARCHITECTURE.md](ARCHITECTURE.md). Ingestion, vector storage, retrieval, and
+retention are described in [DATA.md](DATA.md).
+
 ## Docker quick start
 
 Requirements: Docker Engine with Compose, enough disk space for images and
@@ -421,6 +425,9 @@ committed.
 ## Project documents
 
 - [Persian README](README.fa.md)
+- [Architecture](ARCHITECTURE.md) and blueprints for [data flow](docs/architecture/data-flow.md), [use cases](docs/architecture/use-cases.md), and [DTOs](docs/architecture/dtos.md)
+- [Data, ingestion, and RAG guide](DATA.md)
+- [Architecture decision records](.context/)
 - [Visual identity and motion rules](frontend/BRAND.md)
 - [Implementation roadmap](.context/05_Implementation_Roadmap.md)
 - [Security policy](SECURITY.md)
