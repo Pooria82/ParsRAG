@@ -10,6 +10,7 @@ Pages and blocks without Arabic-script letters keep the parser's native text.
 """
 
 import re
+import unicodedata
 from collections.abc import Sequence
 from typing import Any, Protocol
 
@@ -26,6 +27,11 @@ _MOJIBAKE = re.compile(r"[À-ÿ]")
 _BASELINE_TOLERANCE = 0.45
 _WORD_GAP = 0.12
 _MIRRORED_PAIRS = (("(", ")"), ("[", "]"))
+# Some PDF writers map the medial Lam glyph of Naskh fonts to U+01C1 (ǁ),
+# which has the same shape. That letter never occurs in Persian or Arabic.
+_MISMAPPED_LAM = re.compile(
+    r"(?<=[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF])\u01c1|\u01c1(?=[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF])"
+)
 
 Glyph = dict[str, Any]
 
@@ -68,23 +74,46 @@ def _repair_mirrored_brackets(line: str) -> str:
     return line
 
 
+def _clusters(glyphs: Sequence[Glyph]) -> list[list[Glyph]]:
+    """Attach each combining mark to the glyph before it in content order.
+
+    Marks such as the ezafe hamza (هٔ) are zero-width glyphs drawn on the edge
+    between two letters, so their position cannot tell which letter they
+    belong to; the content stream draws them right after their base letter.
+    """
+    clusters: list[list[Glyph]] = []
+    for glyph in glyphs:
+        character = str(glyph["c"])
+        if character.isspace():
+            continue
+        if clusters and unicodedata.combining(character):
+            clusters[-1].append(glyph)
+        else:
+            clusters.append([glyph])
+    return clusters
+
+
 def _right_to_left_line(glyphs: Sequence[Glyph]) -> str:
     """Order one right-to-left visual line and restore embedded LTR runs."""
-    letters = [glyph for glyph in glyphs if not str(glyph["c"]).isspace()]
-    letters.sort(
-        key=lambda glyph: (float(glyph["bbox"][0]) + float(glyph["bbox"][2])) / 2,
+    clusters = _clusters(glyphs)
+    clusters.sort(
+        key=lambda cluster: (
+            (float(cluster[0]["bbox"][0]) + float(cluster[0]["bbox"][2])) / 2
+        ),
         reverse=True,
     )
     parts: list[str] = []
     previous: Glyph | None = None
-    for glyph in letters:
+    for cluster in clusters:
+        glyph = cluster[0]
         if previous is not None:
             gap = float(previous["bbox"][0]) - float(glyph["bbox"][2])
             if gap > _WORD_GAP * _glyph_size(glyph):
                 parts.append(" ")
-        parts.append(str(glyph["c"]))
+        parts.extend(str(item["c"]) for item in cluster)
         previous = glyph
     text = _LTR_RUN.sub(lambda match: match.group(0)[::-1], "".join(parts))
+    text = _MISMAPPED_LAM.sub("ل", text)
     return _repair_mirrored_brackets(" ".join(text.split()))
 
 
