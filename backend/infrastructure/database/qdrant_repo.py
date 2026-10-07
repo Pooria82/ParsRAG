@@ -1,8 +1,9 @@
 import os
 import uuid
 from contextlib import suppress
-from typing import cast
+from typing import Any, cast
 
+import numpy as np
 from llama_index.core import Settings
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
@@ -10,7 +11,37 @@ from qdrant_client.http import models as qmodels
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.exceptions import VectorDBConnectionError
 from backend.core.port.document_repository import DocumentRepository
+from backend.infrastructure.database.keyword_index import (
+    SessionCorpus,
+    SessionCorpusCache,
+)
 from backend.infrastructure.embedding_profile import active_embedding_profile
+
+# Reciprocal-rank fusion constant (Cormack et al.); 60 is the usual default.
+_RRF_K = 60
+
+
+def keyword_search_enabled() -> bool:
+    """Fuse BM25 keyword matches with vector search unless disabled."""
+    value = os.getenv("KEYWORD_SEARCH", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def fuse_rankings(
+    dense: list[tuple[Any, ExtractedNode]],
+    keyword: list[tuple[Any, ExtractedNode]],
+    *,
+    limit: int,
+) -> list[ExtractedNode]:
+    """Reciprocal-rank fusion of two ranked lists of (point id, node)."""
+    scores: dict[Any, float] = {}
+    nodes: dict[Any, ExtractedNode] = {}
+    for ranking in (dense, keyword):
+        for rank, (point_id, node) in enumerate(ranking):
+            scores[point_id] = scores.get(point_id, 0.0) + 1 / (_RRF_K + rank + 1)
+            nodes.setdefault(point_id, node)
+    ordered = sorted(scores, key=lambda point_id: scores[point_id], reverse=True)
+    return [nodes[point_id] for point_id in ordered[:limit]]
 
 
 class QdrantRepository(DocumentRepository):
@@ -117,6 +148,7 @@ class QdrantRepository(DocumentRepository):
         """
         if not nodes:
             return
+        self._keywords.invalidate(session_id)
 
         try:
             try:
@@ -198,20 +230,131 @@ class QdrantRepository(DocumentRepository):
                 limit=top_k,
             ).points
 
-            extracted_nodes = []
-            for hit in search_result:
-                payload = hit.payload or {}
-                text = payload.pop("text", "")
-                payload.pop("session_id", None)
-                extracted_nodes.append(
-                    ExtractedNode(text=text, metadata=payload, score=hit.score)
-                )
-
-            return extracted_nodes
+            dense = [
+                (hit.id, self._node(hit.payload or {}, hit.score))
+                for hit in search_result
+            ]
+            if not keyword_search_enabled():
+                return [node for _, node in dense]
+            keyword = self._keyword_hits(
+                query, query_embedding, session_id, file_filter, top_k, dense
+            )
+            return fuse_rankings(dense, keyword, limit=top_k)
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to perform similarity search in Qdrant: {exc}"
             ) from exc
+
+    @property
+    def _keywords(self) -> SessionCorpusCache:
+        """Per-instance keyword index cache, created on first use."""
+        cache = self.__dict__.get("_keyword_cache")
+        if cache is None:
+            cache = SessionCorpusCache()
+            self.__dict__["_keyword_cache"] = cache
+        return cast(SessionCorpusCache, cache)
+
+    @staticmethod
+    def _node(payload: dict[str, Any], score: float | None) -> ExtractedNode:
+        """Turn a stored payload into a node without its session field."""
+        metadata = dict(payload)
+        text = str(metadata.pop("text", ""))
+        metadata.pop("session_id", None)
+        return ExtractedNode(text=text, metadata=metadata, score=score)
+
+    def _keyword_hits(
+        self,
+        query: str,
+        query_embedding: list[float],
+        session_id: str,
+        file_filter: list[str] | None,
+        top_k: int,
+        dense: list[tuple[Any, ExtractedNode]],
+    ) -> list[tuple[Any, ExtractedNode]]:
+        """BM25 matches, scored by cosine similarity like the vector hits.
+
+        Keeping the cosine score means Strict mode's evidence threshold
+        applies unchanged to chunks that only keyword search found.
+        """
+        corpus = self._keywords.get(session_id, lambda: self._load_corpus(session_id))
+        allowed_files = set(file_filter) if file_filter else None
+        matches = corpus.search(
+            query,
+            top_k,
+            lambda payload: (
+                allowed_files is None or payload.get("filename") in allowed_files
+            ),
+        )
+        known = {point_id: node for point_id, node in dense}
+        missing = [
+            corpus.ids[index] for index, _ in matches if corpus.ids[index] not in known
+        ]
+        cosine = self._cosine_scores(query_embedding, missing)
+        hits: list[tuple[Any, ExtractedNode]] = []
+        for index, _ in matches:
+            point_id = corpus.ids[index]
+            node = known.get(point_id) or self._node(
+                {"text": corpus.texts[index], **corpus.payloads[index]},
+                cosine.get(point_id),
+            )
+            hits.append((point_id, node))
+        return hits
+
+    def _cosine_scores(
+        self, query_embedding: list[float], point_ids: list[Any]
+    ) -> dict[Any, float]:
+        """Fetch stored (normalized) vectors and score them against the query."""
+        if not point_ids:
+            return {}
+        query = np.asarray(query_embedding, dtype=np.float32)
+        query /= np.linalg.norm(query) or 1.0
+        points = self.client.retrieve(
+            collection_name=self.collection_name,
+            ids=point_ids,
+            with_payload=False,
+            with_vectors=True,
+        )
+        scores: dict[Any, float] = {}
+        for point in points:
+            if isinstance(point.vector, list):
+                vector = np.asarray(point.vector, dtype=np.float32)
+                scores[point.id] = float(
+                    vector @ query / (np.linalg.norm(vector) or 1.0)
+                )
+        return scores
+
+    def _load_corpus(self, session_id: str) -> SessionCorpus:
+        """Read every chunk text and payload of a session (no vectors)."""
+        ids: list[Any] = []
+        texts: list[str] = []
+        payloads: list[dict[str, Any]] = []
+        offset: int | str | uuid.UUID | None = None
+        session_filter = qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key="session_id", match=qmodels.MatchValue(value=session_id)
+                )
+            ]
+        )
+        while True:
+            points, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=session_filter,
+                limit=512,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                payload = dict(point.payload or {})
+                ids.append(point.id)
+                texts.append(str(payload.pop("text", "")))
+                payload.pop("session_id", None)
+                payloads.append(payload)
+            if next_offset is None:
+                break
+            offset = cast(int | str | uuid.UUID, next_offset)
+        return SessionCorpus(ids=ids, texts=texts, payloads=payloads)
 
     def get_session_files(self, session_id: str) -> list[str]:
         """Returns the list of distinct filenames indexed in the given session.
@@ -259,6 +402,7 @@ class QdrantRepository(DocumentRepository):
         """Reuse stored vectors without reading the original file or embedding again."""
         if source_session_id == target_session_id:
             raise ValueError("Source and target sessions must differ.")
+        self._keywords.invalidate(target_session_id)
         source_filter = qmodels.Filter(
             must=[
                 qmodels.FieldCondition(
@@ -320,6 +464,7 @@ class QdrantRepository(DocumentRepository):
         Args:
             session_id (str): The session ID to delete.
         """
+        self._keywords.invalidate(session_id)
         try:
             self.client.delete(
                 collection_name=self.collection_name,
@@ -341,6 +486,7 @@ class QdrantRepository(DocumentRepository):
 
     def delete_document(self, session_id: str, filename: str) -> None:
         """Deletes every chunk for one document in a session."""
+        self._keywords.invalidate(session_id)
         try:
             self.client.delete(
                 collection_name=self.collection_name,

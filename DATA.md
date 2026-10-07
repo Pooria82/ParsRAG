@@ -20,7 +20,8 @@ covered in [ARCHITECTURE.md](ARCHITECTURE.md); trust boundaries in
 | Uploaded file bytes | Browser upload | Process memory and the RAM-backed `/tmp` (Docker), only while the upload request runs | No — raw files are never written to disk or Qdrant in Docker. A source install spools uploads above 1 MiB to the OS temporary directory and deletes them when the request ends |
 | Parsed text chunks and metadata | `IngestDocuments` | Qdrant payload (`text`, `filename`, location fields, `session_id`) | No |
 | Embedding vectors | Local `multilingual-e5-base` | Qdrant vectors | No |
-| Conversations, branches, preferences | Frontend | Browser `localStorage` | No |
+| Conversations, branches, answer sources | Frontend | Browser IndexedDB (`parsrag` database; `localStorage` where IndexedDB is unavailable) | No |
+| Interface preferences, active conversation | Frontend | Browser `localStorage` | No |
 | Non-secret model settings | `ConfigureModel` | `app_config` volume (JSON) | No |
 | API key | Environment or settings form | Process memory | Only to the configured model endpoint, as a credential |
 | Prompt and retrieved excerpts | `AnswerQuery` | Not persisted by the backend | Only when an API model is selected (disclosed in the UI) |
@@ -153,6 +154,17 @@ segments, each retrieved from its own document. Otherwise an explicit file
 filter or filenames named in the question narrow the search. Broad questions
 spread retrieval across files so one large document cannot crowd out the rest.
 
+**Search.** Every search fuses two rankings with reciprocal-rank fusion:
+vector similarity (meaning) and BM25 keyword matching over the session's
+chunks (exact terms such as tool names, identifiers, and numbers, after
+Persian normalization). Chunks found only by keywords carry their cosine
+similarity, so Strict mode's thresholds apply to them unchanged. The keyword
+index is built in memory per session from Qdrant payloads and dropped when the
+session's documents change (`KEYWORD_SEARCH=0` disables it). On a generated
+set of 127 keyword-style queries, fusion raised mean reciprocal rank from
+0.748 to 0.823 (0.851 with the Hybrid reranker); on 125 paraphrased questions
+it changed it by −0.01, within noise.
+
 **Depth.** `RetrievalOptimizer` adapts the number of chunks (8–30, base 12) to
 the question type: summaries, comparisons, enumerations, and tables get more
 context, factoid questions less. Precedence: a request's `top_k`, then an
@@ -161,7 +173,7 @@ adaptive depth.
 
 | Mode | Retrieval | Gate | Context sent to the model |
 | --- | --- | --- | --- |
-| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.75), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present (Persian and Latin digits match), or a whole-document question (topic, type, summary); every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
+| Strict | Vector + keyword search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.75), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present (Persian and Latin digits match), or a whole-document question (topic, type, summary); every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
 | Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with an Arabic-script FlashRank cross-encoder | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
 | LLM-only | None | None | Question and history only |
 
@@ -225,8 +237,9 @@ and chunk text.
 | `STRICT_RAG_TOP_K` (alias `RAG_TOP_K`) | empty | Fixed Strict retrieval depth (1–50); empty uses adaptive depth |
 | `HYBRID_RERANK_TOP_K` | empty | Fixed Hybrid reranked chunk count (1–50); empty uses adaptive depth |
 | `HYBRID_RETRIEVE_TOP_K` | `25` | Minimum Hybrid candidate pool |
+| `KEYWORD_SEARCH` | `1` | Fuse BM25 keyword matches with vector search; `0` uses vector search only |
 | `RERANK_MODEL` | `miniReranker_arabic_v1` | Hybrid FlashRank cross-encoder; `none` keeps vector order. Downloaded once into the model cache; without network on first start, Hybrid uses vector order |
 | `RERANK_CACHE_DIR` | `~/.cache/flashrank` | Persistent reranker cache (Compose: the `model_cache` volume) |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
-| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds |
+| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_ORIENTATION` (1), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds and page orientation/skew correction |

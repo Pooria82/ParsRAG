@@ -128,6 +128,7 @@ def client() -> Iterator[TestClient]:
     """Run the app on a throwaway Qdrant collection with real embeddings."""
     collection = f"parsrag_e2e_{uuid.uuid4().hex[:10]}"
     os.environ["QDRANT_COLLECTION"] = collection
+    os.environ["KEYWORD_SEARCH"] = "1"
     from backend.api import dependencies
     from backend.infrastructure.llm import factory
 

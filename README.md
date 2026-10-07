@@ -324,6 +324,7 @@ load its weights.
 | `OCR_ENABLED` | `1` | Enable Tesseract paths |
 | `OCR_LANGUAGES` | `fas+eng` | OCR language set |
 | `OCR_DPI` | `200` | Rasterization DPI for scanned PDF pages |
+| `OCR_ORIENTATION` | `1` | Re-read sideways/upside-down pages (Tesseract orientation detection) and pages skewed 2° or more; `0` disables it |
 | `OCR_MAX_PAGES` | `30` | Scanned PDF pages read with OCR; later scanned pages are skipped and the document shows a notice |
 | `OCR_MAX_IMAGES` | `30` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
@@ -385,7 +386,9 @@ families to `http://127.0.0.1:8000` when the frontend backend URL is blank. Set
 - `/health/ready` returns `200` after model initialization and Qdrant access;
   `503 {"status":"preparing"}` is expected during first model/cache startup.
 - `/capabilities` reports effective upload types and limits to the UI.
-- Browser preferences and conversation branches live in `localStorage`.
+- Conversations, their branches, and answer sources live in the browser's
+  IndexedDB (older `localStorage` data moves there on first start);
+  interface preferences stay in `localStorage`.
 - Parsed chunks and vectors live in Qdrant under a session identifier.
 - Embedding caches, Qdrant data, Ollama models, and non-secret model settings use
   separate named volumes.
