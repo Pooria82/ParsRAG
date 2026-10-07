@@ -175,7 +175,7 @@ recorded in [ADR 02](.context/02_Architecture_and_Patterns.md).
 | Clear all data | Deletes every known session in Qdrant before clearing browser storage, and reports partial failures |
 | Change embedding model | New collection; re-upload documents |
 
-There is no automatic expiry. **Settings → Model and data → Conversation
+There is no automatic expiry. **Settings → Model & connection → Conversation
 backup** downloads every conversation, its answer sources, and the interface
 preferences as a versioned JSON file (`parsrag-workspace`, version 1; no API
 key, no backend address) and restores it, adding new conversations and
