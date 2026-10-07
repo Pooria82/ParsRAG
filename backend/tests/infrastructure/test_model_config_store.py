@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from backend.core.models.domain import ModelConfigurationRequest, ModelProvider
+from backend.core.domain.enums import ModelProvider
+from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.infrastructure.llm.config_store import (
     load_model_configuration,
     save_model_configuration,

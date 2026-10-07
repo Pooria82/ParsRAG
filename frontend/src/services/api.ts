@@ -133,6 +133,14 @@ export class ParsRagApiClient {
     if (!response.ok) throw new ApiError('request_failed', response.status);
   }
 
+  async reuseDocument(sessionId: string, sourceSessionId: string, filename: string, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}/files/reuse`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_session_id: sourceSessionId, filename }), signal,
+    });
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+  }
+
   async deleteSession(sessionId: string, signal?: AbortSignal): Promise<void> {
     const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}`), { method: 'DELETE', signal });
     if (!response.ok) throw new ApiError('request_failed', response.status);

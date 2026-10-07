@@ -2,7 +2,37 @@ from typing import Any
 
 from llama_index.core.node_parser import SentenceSplitter
 
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.documents import ExtractedNode
+
+PAGE_BRIDGE_WORDS = 90
+
+
+def bridge_adjacent_pages(
+    previous_text: str,
+    current_text: str,
+    *,
+    filename: str,
+    previous_page: int,
+    current_page: int,
+) -> ExtractedNode | None:
+    """Keep a bounded page-boundary window searchable with both page citations."""
+    if current_page != previous_page + 1:
+        return None
+    previous_words = previous_text.split()
+    current_words = current_text.split()
+    if not previous_words or not current_words:
+        return None
+    tail = " ".join(previous_words[-PAGE_BRIDGE_WORDS:])
+    head = " ".join(current_words[:PAGE_BRIDGE_WORDS])
+    return ExtractedNode(
+        text=f"[page {previous_page}] {tail}\n[page {current_page}] {head}",
+        metadata={
+            "filename": filename,
+            "page": previous_page,
+            "page_end": current_page,
+            "kind": "page_bridge",
+        },
+    )
 
 
 def chunk_text(
@@ -37,3 +67,29 @@ def chunk_text(
         nodes.append(ExtractedNode(text=chunk, metadata=metadata))
 
     return nodes
+
+
+class SentenceWindowChunker:
+    """``TextChunker`` adapter using LlamaIndex sentence-aware splitting."""
+
+    def chunk(self, text: str, metadata: dict[str, Any]) -> list[ExtractedNode]:
+        """Split one parsed section into embedding-sized chunks."""
+        return chunk_text(text, metadata=metadata)
+
+    def bridge(
+        self,
+        previous_text: str,
+        current_text: str,
+        *,
+        filename: str,
+        previous_page: int,
+        current_page: int,
+    ) -> ExtractedNode | None:
+        """Return a bounded window across adjacent pages, if they are adjacent."""
+        return bridge_adjacent_pages(
+            previous_text,
+            current_text,
+            filename=filename,
+            previous_page=previous_page,
+            current_page=current_page,
+        )

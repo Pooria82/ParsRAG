@@ -18,6 +18,7 @@ def test_dockerfile_builds_frontend_and_runs_as_non_root() -> None:
     assert "npm ci" in dockerfile and "npm run build" in dockerfile
     assert "requirements-runtime.txt" in dockerfile
     assert "download.pytorch.org/whl/cpu" in dockerfile
+    assert "ARG TORCH_VERSION=2.13.0" in dockerfile
     assert "COPY requirements.txt" not in dockerfile
     assert "tesseract-ocr-fas" in dockerfile
     assert "USER parsrag" in dockerfile
@@ -81,7 +82,7 @@ def test_gpu_override_accelerates_embeddings_and_ollama() -> None:
     """The optional NVIDIA overlay grants both model services GPU access."""
     gpu = (ROOT / "compose.gpu.yaml").read_text(encoding="utf-8")
 
-    assert "download.pytorch.org/whl/cu124" in gpu
+    assert "download.pytorch.org/whl/cu126" in gpu
     assert "EMBED_DEVICE: cuda" in gpu
     assert gpu.count("driver: nvidia") == 2
     assert gpu.count("capabilities: [gpu]") == 2
@@ -101,6 +102,7 @@ def test_amd_override_uses_rocm_for_embeddings_and_ollama() -> None:
     gpu = (ROOT / "compose.amd.yaml").read_text(encoding="utf-8")
 
     assert "download.pytorch.org/whl/rocm6.2" in gpu
+    assert "TORCH_VERSION: 2.6.0" in gpu
     assert "ollama/ollama:rocm" in gpu
     assert gpu.count("/dev/kfd:/dev/kfd") == 2
     assert gpu.count("/dev/dri:/dev/dri") == 2
@@ -110,6 +112,7 @@ def test_vite_development_proxy_covers_every_backend_route_family() -> None:
     """Local hot reload forwards every API route used by the workspace."""
     config = (ROOT / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
 
+    assert "const localApi = 'http://127.0.0.1:8000'" in config
     for route in (
         "/health",
         "/capabilities",
@@ -120,7 +123,7 @@ def test_vite_development_proxy_covers_every_backend_route_family() -> None:
         "/models",
         "/conversations",
     ):
-        assert f"'{route}': 'http://localhost:8000'" in config
+        assert f"'{route}': localApi" in config
     assert "codeSplitting" in config
     assert "maxSize: 250_000" in config
 

@@ -11,6 +11,9 @@ test('recovers malformed storage and validates settings without external endpoin
   const settings = parseSettings(JSON.stringify({ language: 'xx', theme: 'neon', topK: 100, backendUrl: 'https://example.com' }));
   assert.equal(settings.language, 'fa');
   assert.equal(settings.theme, 'light');
+  assert.equal(settings.palette, 'evergreen');
+  assert.equal(parseSettings(JSON.stringify({ palette: 'ocean' })).palette, 'ocean');
+  assert.equal(parseSettings(JSON.stringify({ palette: 'unsafe' })).palette, 'evergreen');
   assert.equal(settings.topK, 50);
   assert.equal(settings.backendUrl, '');
   assert.equal(settings.apiModelName, 'google/gemma-4-26b-a4b-it');
@@ -143,6 +146,16 @@ test('rejects invalid answers and deduplicates compact source locations', () => 
   assert.deepEqual(parseAnswer({ answer: 'پاسخ', source_nodes: [{ text: 'متن', metadata: { filename: 'a.pdf', page: 2 } }, { text: 'بیشتر', metadata: { filename: 'a.pdf', page: 2 } }] }), {
     answer: 'پاسخ', citations: [{ filename: 'a.pdf', locations: [{ kind: 'page', start: 2 }] }],
   });
+});
+
+test('cross-page evidence is shown as one traceable page range', () => {
+  const response = parseAnswer({ answer: '425 euros', source_nodes: [{
+    text: '[page 3] total is [page 4] 425 euros',
+    metadata: { filename: 'invoice.pdf', page: 3, page_end: 4 },
+  }] });
+  assert.deepEqual(response.citations, [{
+    filename: 'invoice.pdf', locations: [{ kind: 'page', start: 3, end: 4 }],
+  }]);
 });
 
 test('synchronizes real server documents, preserving choices and partial-upload outcomes', () => {

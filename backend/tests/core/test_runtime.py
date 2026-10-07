@@ -1,4 +1,4 @@
-from backend.core.runtime import RuntimeState
+from backend.core.runtime.readiness import RuntimeState
 
 
 def test_runtime_state_hides_failure_details() -> None:

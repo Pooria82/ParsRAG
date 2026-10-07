@@ -1,18 +1,28 @@
 import os
+import re
+import unicodedata
+from math import ceil
 
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.core.query_progress import ProgressCallback
-from backend.core.retrieval_optimizer import RetrievalOptimizer
-from backend.core.strategies.base_strategy import RAGStrategy
+from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.port.progress_tracker import ProgressCallback
+from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.retrieval_optimizer import (
+    RetrievalOptimizer,
+    configured_depth,
+)
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
+    has_tagged_evidence,
+    include_tagged_anchors,
     resolve_target_files,
+    retrieve_document_nodes,
 )
 
 STRICT_RAG_PROMPT_TEMPLATE = """\
@@ -40,6 +50,8 @@ CONTENT & CODE VERIFICATION RULES:
 
 DOCUMENT SYNTHESIS RULES:
 - If asked to summarize, compare, or draw conclusions across documents, synthesize the facts comprehensively and state the overarching conclusion clearly.
+- A page-boundary excerpt joins the end of one page to the start of the next. Read both labeled portions together, and cite the supplied page range when both support the answer.
+- OCR text may contain recognition errors. Do not invent a missing word, number, or relationship to repair it.
 - If asked about a specific document, focus your answer on that document while citing the document name where relevant.
 - When a source label includes a page, slide, paragraph, or section, append that exact source label at the end of the relevant answer paragraph. Never invent a location.
 
@@ -49,8 +61,73 @@ Context:
 Query: {query}
 Answer:"""
 
+DEFAULT_STRICT_THRESHOLD = 0.80
+_WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
+_QUERY_STOPWORDS = {
+    "and",
+    "are",
+    "based",
+    "does",
+    "from",
+    "how",
+    "the",
+    "this",
+    "what",
+    "when",
+    "where",
+    "which",
+    "with",
+    "چه",
+    "چگونه",
+    "چیست",
+    "است",
+    "این",
+    "آن",
+    "برای",
+    "درباره",
+    "براساس",
+    "اسناد",
+    "سند",
+    "صفحه",
+    "های",
+    "در",
+    "از",
+    "به",
+    "را",
+    "که",
+    "آیا",
+    "کن",
+    "بگو",
+    "کرده",
+    "شده",
+}
 
-class StrictRAGStrategy(RAGStrategy):
+
+def _evidence_terms(value: str) -> set[str]:
+    """Extract distinctive multilingual words for a conservative text check."""
+    normalized = unicodedata.normalize("NFKC", value.lower())
+    normalized = normalized.replace("ي", "ی").replace("ك", "ک").replace("\u200c", "")
+    return set(_WORD.findall(normalized)) - _QUERY_STOPWORDS
+
+
+def _has_lexical_evidence(
+    query: str, nodes: list[ExtractedNode], threshold: float
+) -> bool:
+    """Allow borderline vectors only when their text supports most query terms."""
+    terms = _evidence_terms(query)
+    if len(terms) < 2:
+        return False
+    minimum_score = max(0.55, threshold - 0.20)
+    candidates = [
+        node for node in nodes if node.score is not None and node.score >= minimum_score
+    ][:5]
+    if not candidates:
+        return False
+    evidence = _evidence_terms(" ".join(node.text for node in candidates))
+    return len(terms & evidence) >= max(2, ceil(len(terms) * 0.6))
+
+
+class StrictRAGStrategy(QueryStrategy):
     """Executes a strict Retrieval-Augmented Generation strategy.
 
     This strategy only uses retrieved context to answer the user's question.
@@ -60,17 +137,37 @@ class StrictRAGStrategy(RAGStrategy):
 
     def __init__(
         self,
-        repo: AbstractDocumentRepository,
-        default_top_k: int = 15,
+        repo: DocumentRepository,
+        default_top_k: int | None = None,
     ) -> None:
-        """Configure the repository, evidence threshold, and active model."""
+        """Configure the repository, evidence threshold, depth, and active model.
+
+        Args:
+            repo: The session-scoped document repository.
+            default_top_k: Fixed retrieval depth; defaults to ``STRICT_RAG_TOP_K``
+                or ``RAG_TOP_K`` when set, otherwise adaptive depth is used.
+        """
         self.repo = repo
-        self.threshold = float(os.getenv("STRICT_RAG_THRESHOLD", "0.75"))
-        self.default_top_k = int(
-            os.getenv("STRICT_RAG_TOP_K", os.getenv("RAG_TOP_K", str(default_top_k)))
+        self.threshold = float(
+            os.getenv("STRICT_RAG_THRESHOLD", "").strip() or DEFAULT_STRICT_THRESHOLD
+        )
+        self.default_top_k = (
+            default_top_k
+            if default_top_k is not None
+            else configured_depth("STRICT_RAG_TOP_K", "RAG_TOP_K")
         )
         self.prompt_template = PromptTemplate(STRICT_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
+
+    def _retrieval_depth(
+        self, top_k: int | None, query: str, available_files: list[str]
+    ) -> int:
+        """Prefer the request depth, then the configured depth, then adaptive."""
+        if top_k is not None:
+            return top_k
+        if self.default_top_k is not None:
+            return self.default_top_k
+        return RetrievalOptimizer.calculate_optimal_depth(query, available_files)
 
     def execute(
         self,
@@ -80,6 +177,7 @@ class StrictRAGStrategy(RAGStrategy):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the strict RAG pipeline.
 
@@ -90,6 +188,7 @@ class StrictRAGStrategy(RAGStrategy):
             top_k (int | None, optional): Optional override for retrieval depth.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
+            document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
             QueryResponse: The generated answer or a refusal if context is insufficient.
@@ -110,32 +209,19 @@ class StrictRAGStrategy(RAGStrategy):
         )
 
         # 2. Determine Optimal Retrieval Depth (Dynamic Optimizer)
-        fetch_k = (
-            top_k
-            if top_k is not None
-            else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
-        )
+        fetch_k = self._retrieval_depth(top_k, query, available_files)
 
         # 2. Retrieve Nodes (Balanced Multi-File vs. Single-File Search)
-        nodes: list[ExtractedNode] = []
-        if len(available_files) > 1 and effective_filter is None:
-            # Multi-document balanced retrieval: fetch top chunks per document
-            k_per_file = max(3, fetch_k // len(available_files))
-            for fn in available_files:
-                file_nodes = self.repo.similarity_search(
-                    query,
-                    top_k=k_per_file,
-                    session_id=session_id,
-                    file_filter=[fn],
-                )
-                nodes.extend(file_nodes)
-        else:
-            nodes = self.repo.similarity_search(
-                query,
-                top_k=fetch_k,
-                session_id=session_id,
-                file_filter=effective_filter,
-            )
+        nodes = retrieve_document_nodes(
+            self.repo,
+            query,
+            available_files,
+            effective_filter,
+            session_id,
+            fetch_k,
+            3,
+            document_segments,
+        )
 
         # 3. Threshold Check
         if not nodes:
@@ -147,19 +233,35 @@ class StrictRAGStrategy(RAGStrategy):
         highest_score = max(
             [n.score for n in nodes if n.score is not None], default=0.0
         )
-        if highest_score < self.threshold:
+        if highest_score < self.threshold and not _has_lexical_evidence(
+            query, nodes, self.threshold
+        ):
             return QueryResponse(
                 answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
+                source_nodes=[],
+            )
+        if document_segments and not has_tagged_evidence(
+            nodes, document_segments, self.threshold
+        ):
+            return QueryResponse(
+                answer="برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد. (Insufficient evidence across the mentioned documents.)",
                 source_nodes=[],
             )
 
         # 4. Adaptive Relevance Filtering
         relevance_cutoff = max(0.55, highest_score * 0.70)
-        filtered_nodes = [
-            n for n in nodes if n.score is not None and n.score >= relevance_cutoff
-        ]
+        cutoff = (
+            max(relevance_cutoff, self.threshold)
+            if document_segments
+            else relevance_cutoff
+        )
+        filtered_nodes = [n for n in nodes if n.score is not None and n.score >= cutoff]
         if not filtered_nodes:
             filtered_nodes = [nodes[0]]
+        if document_segments:
+            filtered_nodes = include_tagged_anchors(
+                nodes, filtered_nodes, document_segments, self.threshold
+            )
 
         # 5. Build Grouped Multi-Document Context
         context_str = format_multi_doc_context(filtered_nodes)

@@ -103,6 +103,9 @@ def test_extract_image_text_validates_and_normalizes_raster(
 
     assert result == "متن تصویر"
     assert mock_run.call_args.kwargs["input"].startswith(b"\x89PNG")
+    with Image.open(BytesIO(mock_run.call_args.kwargs["input"])) as normalized:
+        assert normalized.size == (1280, 960)
+        assert normalized.mode == "L"
 
 
 def test_extract_image_text_rejects_invalid_raster() -> None:

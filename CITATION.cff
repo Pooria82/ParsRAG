@@ -2,11 +2,28 @@ cff-version: 1.2.0
 message: "If you use ParsRAG in research or a publication, cite this software."
 type: software
 title: "ParsRAG"
-abstract: "An offline-first Persian document conversation workspace with local and explicitly configured model runtimes."
+abstract: >-
+  ParsRAG is a bilingual, offline-first retrieval-augmented generation (RAG)
+  workspace for chatting with Persian (Farsi) and English documents. Parsing,
+  OCR, multilingual embeddings, LlamaIndex retrieval, and Qdrant vector search
+  run locally; answers come from a local LLM through Ollama or an explicitly
+  configured OpenAI-compatible endpoint, with cited sources.
+keywords:
+  - Persian
+  - Farsi
+  - retrieval-augmented generation
+  - RAG
+  - document question answering
+  - OCR
+  - local LLM
+  - Ollama
+  - LlamaIndex
+  - Qdrant
 authors:
   - family-names: "Madani"
     given-names: "Pooria"
 repository-code: "https://github.com/Pooria82/ParsRAG"
 url: "https://github.com/Pooria82/ParsRAG"
-version: 0.1.0
-date-released: 2026-09-23
+license-url: "https://github.com/Pooria82/ParsRAG/blob/main/LICENSE"
+version: 0.2.0
+date-released: 2026-10-07

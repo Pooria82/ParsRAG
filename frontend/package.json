@@ -1,31 +1,38 @@
 {
   "name": "parsrag-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Bilingual Persian (Farsi) and English workspace for offline-first document RAG",
+  "keywords": ["persian", "farsi", "rag", "document-qa", "ocr", "ollama", "local-llm"],
+  "author": "Pooria Madani",
+  "homepage": "https://github.com/Pooria82/ParsRAG#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Pooria82/ParsRAG.git", "directory": "frontend" },
+  "bugs": { "url": "https://github.com/Pooria82/ParsRAG/issues" },
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/build-service-worker.mjs",
     "preview": "vite preview",
     "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:pwa": "npm run build && playwright test --config=playwright.pwa.config.ts"
   },
   "dependencies": {
-    "katex": "^0.18.7",
-    "lucide-react": "^0.453.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^9.0.1",
+    "katex": "^0.18.9",
+    "lucide-react": "^1.48.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "typescript": "^5.6.3",
-    "vite": "^8.3.0"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
   }
 }

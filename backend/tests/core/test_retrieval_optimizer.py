@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.core.retrieval_optimizer import RetrievalOptimizer
+from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 
 
 def test_base_depth_for_standard_query() -> None:

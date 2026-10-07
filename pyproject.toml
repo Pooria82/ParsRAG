@@ -1,10 +1,38 @@
 [project]
 name = "parsrag"
-version = "0.1.0"
-description = "Offline-first Persian document conversation workspace"
+version = "0.2.0"
+description = "Offline-first Persian (Farsi) and English RAG workspace for chatting with documents using local LLMs"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
+authors = [{ name = "Pooria Madani" }]
+keywords = [
+  "persian",
+  "farsi",
+  "rag",
+  "retrieval-augmented-generation",
+  "document-qa",
+  "ocr",
+  "ollama",
+  "llamaindex",
+  "qdrant",
+  "local-llm",
+]
+classifiers = [
+  "License :: Other/Proprietary License",
+  "Natural Language :: English",
+  "Natural Language :: Persian",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Indexing",
+]
+
+[project.urls]
+Homepage = "https://github.com/Pooria82/ParsRAG"
+Documentation = "https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md"
+Repository = "https://github.com/Pooria82/ParsRAG"
+Issues = "https://github.com/Pooria82/ParsRAG/issues"
+Changelog = "https://github.com/Pooria82/ParsRAG/blob/main/CHANGELOG.md"
 
 [tool.ruff]
 line-length = 88
@@ -24,6 +52,14 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 files = ["backend"]
+
+[[tool.mypy.overrides]]
+# PyMuPDF's partial annotations leave core calls untyped; treat it as dynamic,
+# as the former ``fitz`` alias was, and type the used surface via Protocols.
+module = ["pymupdf"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

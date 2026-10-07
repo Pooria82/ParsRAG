@@ -1,20 +1,23 @@
-import os
-
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.postprocessor.flashrank_rerank import FlashRankRerank  # type: ignore
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.core.query_progress import ProgressCallback
-from backend.core.retrieval_optimizer import RetrievalOptimizer
-from backend.core.strategies.base_strategy import RAGStrategy
+from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.port.progress_tracker import ProgressCallback
+from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.retrieval_optimizer import (
+    RetrievalOptimizer,
+    configured_depth,
+)
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     resolve_target_files,
+    retrieve_document_nodes,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = """\
@@ -89,9 +92,10 @@ def _merge_evidence(
     reranked_nodes: list[ExtractedNode],
     *,
     limit: int,
+    min_anchors: int = 3,
 ) -> list[ExtractedNode]:
     """Protect multilingual dense hits while retaining cross-encoder ordering."""
-    anchors = _select_dense_anchors(dense_nodes, limit=min(3, limit))
+    anchors = _select_dense_anchors(dense_nodes, limit=min(min_anchors, limit))
     merged: list[ExtractedNode] = []
     seen: set[tuple[str, str, object]] = set()
     for node in [*anchors, *reranked_nodes]:
@@ -105,7 +109,7 @@ def _merge_evidence(
     return merged
 
 
-class HybridRAGStrategy(RAGStrategy):
+class HybridRAGStrategy(QueryStrategy):
     """Executes a hybrid RAG strategy with fallback, reranking, and multi-file support.
 
     This strategy retrieves a broad candidate pool across the document collection
@@ -115,25 +119,32 @@ class HybridRAGStrategy(RAGStrategy):
 
     def __init__(
         self,
-        repo: AbstractDocumentRepository,
+        repo: DocumentRepository,
         top_k_retrieve: int | None = None,
         top_n_rerank: int | None = None,
     ) -> None:
-        """Configure retrieval depth, reranking, and the active model adapter."""
+        """Configure retrieval depth, reranking, and the active model adapter.
+
+        Args:
+            repo: The session-scoped document repository.
+            top_k_retrieve: Minimum candidate pool; defaults to
+                ``HYBRID_RETRIEVE_TOP_K`` or 25.
+            top_n_rerank: Fixed reranked chunk count; defaults to
+                ``HYBRID_RERANK_TOP_K`` when set, otherwise adaptive depth.
+        """
         self.repo = repo
         self.prompt_template = PromptTemplate(HYBRID_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
         self.default_retrieve_k = (
             top_k_retrieve
             if top_k_retrieve is not None
-            else int(os.getenv("HYBRID_RETRIEVE_TOP_K", "25"))
+            else configured_depth("HYBRID_RETRIEVE_TOP_K") or 25
         )
         self.default_rerank_n = (
             top_n_rerank
             if top_n_rerank is not None
-            else int(os.getenv("HYBRID_RERANK_TOP_K", "15"))
+            else configured_depth("HYBRID_RERANK_TOP_K")
         )
-        self.reranker = FlashRankRerank(top_n=self.default_rerank_n)
 
     def execute(
         self,
@@ -143,6 +154,7 @@ class HybridRAGStrategy(RAGStrategy):
         top_k: int | None = None,
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
+        document_segments: list[tuple[str, str]] | None = None,
     ) -> QueryResponse:
         """Executes the hybrid RAG pipeline.
 
@@ -153,6 +165,7 @@ class HybridRAGStrategy(RAGStrategy):
             top_k (int | None, optional): Optional override for number of reranked chunks.
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
+            document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
             QueryResponse: The generated answer and source citations.
@@ -173,33 +186,28 @@ class HybridRAGStrategy(RAGStrategy):
         )
 
         # 2. Determine Optimal Retrieval Depth (Dynamic Optimizer)
-        rerank_n = (
-            top_k
-            if top_k is not None
-            else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
-        )
+        rerank_n = top_k if top_k is not None else self.default_rerank_n
+        if rerank_n is None:
+            rerank_n = RetrievalOptimizer.calculate_optimal_depth(
+                query, available_files
+            )
+        if document_segments:
+            rerank_n = max(
+                rerank_n, len({filename for filename, _ in document_segments})
+            )
         retrieve_k = max(rerank_n * 2, self.default_retrieve_k)
 
         # 3. Broad Candidate Retrieval
-        extracted_nodes: list[ExtractedNode] = []
-        if len(available_files) > 1 and effective_filter is None:
-            # Multi-document balanced candidate retrieval
-            k_per_file = max(5, retrieve_k // len(available_files))
-            for fn in available_files:
-                file_nodes = self.repo.similarity_search(
-                    query,
-                    top_k=k_per_file,
-                    session_id=session_id,
-                    file_filter=[fn],
-                )
-                extracted_nodes.extend(file_nodes)
-        else:
-            extracted_nodes = self.repo.similarity_search(
-                query,
-                top_k=retrieve_k,
-                session_id=session_id,
-                file_filter=effective_filter,
-            )
+        extracted_nodes = retrieve_document_nodes(
+            self.repo,
+            query,
+            available_files,
+            effective_filter,
+            session_id,
+            retrieve_k,
+            5,
+            document_segments,
+        )
 
         if not extracted_nodes:
             return QueryResponse(
@@ -217,11 +225,7 @@ class HybridRAGStrategy(RAGStrategy):
         ]
 
         # 4. Rerank
-        reranker = (
-            FlashRankRerank(top_n=rerank_n)
-            if rerank_n != self.default_rerank_n
-            else self.reranker
-        )
+        reranker = FlashRankRerank(top_n=rerank_n)
         query_bundle = QueryBundle(query_str=query)
         reranked_nodes = reranker.postprocess_nodes(
             nodes_with_score, query_bundle=query_bundle
@@ -241,6 +245,9 @@ class HybridRAGStrategy(RAGStrategy):
             extracted_nodes,
             reranked_source_nodes,
             limit=rerank_n,
+            min_anchors=max(3, len({filename for filename, _ in document_segments}))
+            if document_segments
+            else 3,
         )
 
         context_str = format_multi_doc_context(final_source_nodes)

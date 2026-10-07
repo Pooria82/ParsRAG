@@ -3,6 +3,7 @@ export type RAGMode = 'hybrid' | 'strict' | 'llm-only';
 export type Language = 'fa' | 'en';
 
 export type Theme = 'dark' | 'light';
+export type Palette = 'evergreen' | 'ocean' | 'indigo' | 'sienna';
 export type ModelProvider = 'api' | 'ollama';
 export type QueryStage = 'understanding' | 'retrieving' | 'generating' | 'complete' | 'failed';
 
@@ -77,6 +78,7 @@ export interface Session {
 export interface AppSettings {
   language: Language;
   theme: Theme;
+  palette: Palette;
   defaultMode: RAGMode;
   strictThreshold: number;
   dynamicDepth: boolean;

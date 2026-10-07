@@ -74,6 +74,18 @@ test('deletes one document with a JSON filename payload', async () => {
   assert.deepEqual(JSON.parse(body), { filename: 'راهنما.pdf' });
 });
 
+test('reuses a document by referencing its source session without uploading bytes', async () => {
+  let request;
+  global.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return new Response(JSON.stringify({ filename: 'راهنما.pdf', chunks: 4 }), { status: 200 });
+  };
+  await new ParsRagApiClient('').reuseDocument('new-session', 'old-session', 'راهنما.pdf');
+  assert.equal(request.url, '/sessions/new-session/files/reuse');
+  assert.equal(request.init.method, 'POST');
+  assert.deepEqual(JSON.parse(request.init.body), { source_session_id: 'old-session', filename: 'راهنما.pdf' });
+});
+
 test('reads and saves model configuration without exposing API credentials', async () => {
   const requests = [];
   global.fetch = async (url, init = {}) => {
