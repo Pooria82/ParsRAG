@@ -9,6 +9,9 @@ llama-index-core==0.14.25
 nltk==3.10.3
 llama-index-llms-ollama==0.10.1
 llama-index-embeddings-huggingface==0.7.0
+# Transitive pins: transformers 5.19 cannot import with PyTorch 2.6 (AMD image).
+sentence-transformers==6.1.0
+transformers==5.18.0
 qdrant-client==1.19.1
 pymupdf==1.28.2
 pydantic==2.13.5
