@@ -5,12 +5,73 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
-from backend.api.middleware import ContentLengthLimitMiddleware
+from backend.api.middleware import (
+    ContentLengthLimitMiddleware,
+    TrustedHostMiddleware,
+    configured_hosts,
+    request_hostname,
+)
 from backend.infrastructure.llm.endpoint_policy import (
     model_api_is_external,
     validate_model_api_url,
 )
 from backend.main import app
+
+
+@pytest.mark.parametrize(
+    ("header", "hostname"),
+    [
+        ("localhost:8000", "localhost"),
+        ("127.0.0.1", "127.0.0.1"),
+        ("[::1]:8013", "::1"),
+        ("LocalHost.:3000", "localhost"),
+        ("[broken", ""),
+    ],
+)
+def test_request_hostname_strips_ports_and_brackets(header: str, hostname: str) -> None:
+    """IPv6 literals, ports, case, and trailing dots do not affect matching."""
+    assert request_hostname(header) == hostname
+
+
+def test_rebound_host_cannot_read_or_change_model_configuration() -> None:
+    """A page that rebinds its domain to 127.0.0.1 is same-origin but untrusted."""
+    client = TestClient(app, base_url="http://attacker.example:8000")
+    headers = {"Origin": "http://attacker.example:8000"}
+
+    read = client.get("/models/configuration", headers=headers)
+    write = client.put(
+        "/models/configuration",
+        headers=headers,
+        json={"provider": "api", "model_name": "x", "base_url": "https://evil/v1"},
+    )
+    files = client.get("/sessions/session-1/files")
+
+    assert [read.status_code, write.status_code, files.status_code] == [400] * 3
+    assert read.json()["code"] == "untrusted_host"
+
+
+@pytest.mark.parametrize("host", ["localhost:8000", "127.0.0.1:8013", "[::1]:8000"])
+def test_loopback_hosts_are_served_by_default(
+    host: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default deployments answer only to loopback names."""
+    monkeypatch.delenv("PARSRAG_ALLOWED_HOSTS")
+    guarded = TrustedHostMiddleware(app, configured_hosts())
+
+    response = TestClient(guarded).get("/health", headers={"Host": host})
+
+    assert response.status_code == 200
+    assert TestClient(guarded).get("/health").status_code == 400
+
+
+def test_wildcard_host_setting_disables_the_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LAN deployments can opt out explicitly."""
+    monkeypatch.setenv("PARSRAG_ALLOWED_HOSTS", "*")
+    guarded = TrustedHostMiddleware(app, configured_hosts())
+
+    assert TestClient(guarded).get("/health").status_code == 200
 
 
 def test_untrusted_browser_origin_cannot_change_model_configuration() -> None:
