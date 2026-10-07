@@ -42,9 +42,9 @@ export function App() {
   const [tourStage, setTourStage] = useState<TourStage>({});
   const [guideEligible] = useState(() => { try { return localStorage.getItem('parsrag_tour_v1') !== 'done'; } catch { return true; } });
   const queryRef = useRef<{ controller: AbortController; sessionId: string } | null>(null);
-  const progressRef = useRef<AbortController>();
+  const progressRef = useRef<AbortController | undefined>(undefined);
   const uploadRef = useRef(false);
-  const healthRef = useRef<AbortController>();
+  const healthRef = useRef<AbortController | undefined>(undefined);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const active = sessions.find(s => s.id === activeId) ?? sessions[0];
