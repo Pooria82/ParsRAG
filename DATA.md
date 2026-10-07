@@ -227,4 +227,4 @@ and chunk text.
 | `RERANK_CACHE_DIR` | `~/.cache/flashrank` | Persistent reranker cache (Compose: the `model_cache` volume) |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
-| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds |
+| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_ORIENTATION` (1), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds and page orientation/skew correction |
