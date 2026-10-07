@@ -170,7 +170,8 @@ export function App() {
       title: s.messages.length ? s.title : fallbackTitle,
       updatedAt: Date.now(),
     }));
-    const timeout = setTimeout(() => controller.abort('timeout'), 180000);
+    // Longer than the server's worst case (rewrite + answer with one retry).
+    const timeout = setTimeout(() => controller.abort('timeout'), 330000);
     const pollProgress = async () => {
       if (progressController.signal.aborted) return;
       try {

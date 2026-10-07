@@ -32,6 +32,34 @@ def test_condense_question(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
+def test_condenser_falls_back_to_the_question_when_the_model_fails() -> None:
+    """A slow or failing rewrite never blocks the answer."""
+    llm = MagicMock()
+    llm.complete.side_effect = TimeoutError("slow model")
+    history = [ChatMessage(role=MessageRole.USER, content="درباره ایران بگو")]
+
+    assert CondenseQuestionPipeline(llm).condense("پایتخت آن؟", history) == (
+        "پایتخت آن؟"
+    )
+
+
+def test_condenser_sends_only_recent_bounded_history() -> None:
+    """Long conversations do not crowd the question out of the prompt."""
+    llm = MagicMock()
+    llm.complete.return_value = "standalone"
+    history = [
+        ChatMessage(role=MessageRole.USER, content=f"turn {index} " + "x" * 5000)
+        for index in range(10)
+    ]
+
+    assert CondenseQuestionPipeline(llm).condense("and then?", history) == (
+        "standalone"
+    )
+    prompt = llm.complete.call_args.args[0]
+    assert "turn 3 " not in prompt and "turn 4 " in prompt
+    assert len(prompt) < 6 * 1300 + 2000
+
+
 @patch("backend.core.strategies.strict_rag.Settings")
 def test_strict_rag_below_threshold(mock_settings: MagicMock) -> None:
     mock_repo = MagicMock()

@@ -132,7 +132,16 @@ flowchart TB
 **Conversational memory.** When history exists, `CondenseQuestionPipeline` asks
 the active model to rewrite the follow-up as a standalone question in the same
 language, preserving code and identifiers. Retrieval then uses the rewritten
-question.
+question. Only the last six messages (1,200 characters each) are sent, with a
+short timeout (`CONDENSE_TIMEOUT_SECONDS`); if the rewrite fails, the question
+is used as asked.
+
+**Context budget.** Before generation, retrieved chunks are fitted to the
+model's context window (`OLLAMA_CONTEXT_LENGTH`, passed to Ollama as `num_ctx`,
+or `MODEL_CONTEXT_WINDOW` for APIs) after reserving room for the answer. The
+lowest-scoring chunks are dropped first, so an over-long prompt never pushes
+the grounding rules out of the window. Only the chunks the model received are
+returned as sources.
 
 **Targeting.** Explicit `@{file}` mentions split the question into per-file
 segments, each retrieved from its own document. Otherwise an explicit file

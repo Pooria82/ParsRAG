@@ -303,7 +303,10 @@ removes local vector data, persisted model settings, caches, and Ollama weights.
 | `OLLAMA_MAX_LOADED_MODELS` | `1` | Limits concurrently resident models |
 | `OLLAMA_NUM_PARALLEL` | `1` | Limits parallel Ollama generations |
 | `OLLAMA_KEEP_ALIVE` | `5m` | Duration model weights remain loaded |
-| `OLLAMA_CONTEXT_LENGTH` | `4096` | Ollama context; low-VRAM overlay uses `2048` |
+| `OLLAMA_CONTEXT_LENGTH` | `8192` | Context requested from Ollama (`num_ctx`); retrieved chunks are trimmed to fit. Low-VRAM overlay uses `2048` |
+| `MODEL_CONTEXT_WINDOW` | `32768` | Context assumed for API models when fitting retrieved chunks |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120` | One answer request; API requests are retried once |
+| `CONDENSE_TIMEOUT_SECONDS` | `30` | Follow-up rewrite; on timeout the question is used as asked |
 
 Lower batch sizes and concurrency for small-memory machines. Container limits
 are ceilings, not reservations; a local model still needs enough RAM or VRAM to

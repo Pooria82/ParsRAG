@@ -40,6 +40,7 @@ from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
+from backend.infrastructure.llm.factory import condensing_llm
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
 from backend.infrastructure.parsers.chunker import SentenceWindowChunker
 from backend.infrastructure.parsers.document_parser import LocalDocumentParser
@@ -117,7 +118,7 @@ def get_answer_query(
     """Build the query use case; model-bound collaborators are created lazily."""
     return AnswerQuery(
         repository=repo,
-        condenser_factory=lambda: CondenseQuestionPipeline(),
+        condenser_factory=lambda: CondenseQuestionPipeline(condensing_llm()),
         strategy_resolver=lambda mode: get_query_strategy(mode, repo=repo),
         progress=query_progress,
         limiter=query_limiter,

@@ -303,7 +303,10 @@ docker compose down
 | `OLLAMA_MAX_LOADED_MODELS` | `1` | تعداد مدل‌های هم‌زمان در حافظه |
 | `OLLAMA_NUM_PARALLEL` | `1` | تعداد generationهای هم‌زمان Ollama |
 | `OLLAMA_KEEP_ALIVE` | `5m` | مدت نگه‌داشتن وزن مدل در حافظه |
-| `OLLAMA_CONTEXT_LENGTH` | `4096` | context مدل؛ overlay کم‌حافظه مقدار `2048` دارد |
+| `OLLAMA_CONTEXT_LENGTH` | `8192` | context درخواستی از Ollama (`num_ctx`)؛ بخش‌های بازیابی‌شده برای جاشدن کوتاه می‌شوند. overlay کم‌حافظه مقدار `2048` دارد |
+| `MODEL_CONTEXT_WINDOW` | `32768` | context فرضی مدل‌های API برای جادادن بخش‌های بازیابی‌شده |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `120` | زمان یک درخواست پاسخ؛ درخواست API یک بار تکرار می‌شود |
+| `CONDENSE_TIMEOUT_SECONDS` | `30` | بازنویسی پرسش پیگیری؛ پس از این زمان همان پرسش اصلی استفاده می‌شود |
 
 برای سیستم‌های کم‌حافظه batch و concurrency را کاهش دهید. محدودیت حافظه
 کانتینر سقف مصرف است؛ مدل محلی همچنان باید در RAM یا VRAM موجود جا شود.

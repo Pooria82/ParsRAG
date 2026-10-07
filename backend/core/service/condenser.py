@@ -1,6 +1,15 @@
+import logging
+from typing import Any
+
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
+
+# Only recent turns matter for resolving references, and long answers would
+# crowd the question out of small local context windows.
+MAX_HISTORY_MESSAGES = 6
+MAX_HISTORY_MESSAGE_CHARS = 1200
+logger = logging.getLogger("parsrag.operations")
 
 CONDENSE_PROMPT_TEMPLATE = """\
 Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
@@ -23,9 +32,9 @@ class CondenseQuestionPipeline:
     entities from the prior conversation to ensure accurate vector DB retrieval.
     """
 
-    def __init__(self) -> None:
-        """Bind the active language model and condensation prompt."""
-        self.llm = Settings.llm
+    def __init__(self, llm: Any | None = None) -> None:
+        """Bind a (short-timeout) language model and the condensation prompt."""
+        self.llm = llm if llm is not None else Settings.llm
         self.prompt_template = PromptTemplate(CONDENSE_PROMPT_TEMPLATE)
 
     def condense(self, query: str, chat_history: list[ChatMessage]) -> str:
@@ -41,13 +50,20 @@ class CondenseQuestionPipeline:
         if not chat_history:
             return query
 
+        recent = chat_history[-MAX_HISTORY_MESSAGES:]
         chat_history_str = "\n".join(
-            [f"{msg.role.value.capitalize()}: {msg.content}" for msg in chat_history]
+            f"{msg.role.value.capitalize()}: "
+            f"{(msg.content or '')[:MAX_HISTORY_MESSAGE_CHARS]}"
+            for msg in recent
         )
 
         prompt = self.prompt_template.format(
             chat_history_str=chat_history_str, query=query
         )
 
-        response = self.llm.complete(prompt)
-        return str(response).strip()
+        try:
+            condensed = str(self.llm.complete(prompt)).strip()
+        except Exception:  # noqa: BLE001 - the original question still works.
+            logger.warning("condense_failed; using the question as asked")
+            return query
+        return condensed or query
