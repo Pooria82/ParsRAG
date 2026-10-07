@@ -123,7 +123,7 @@ flowchart TB
     S -->|Strict| T{Evidence gate<br>score at least threshold,<br>lexical match, or<br>whole-document question}
     T -->|fails| N[Refuse: not in documents]
     T -->|passes| X[Relevance cutoff<br>max 0.55, 0.7 x best]
-    S -->|Hybrid| R[FlashRank rerank<br>keep dense anchors]
+    S -->|Hybrid| R[Cross-encoder rerank<br>keep dense anchors]
     X --> G
     R --> G
     G --> A[Answer + cited source chunks]
@@ -157,7 +157,7 @@ adaptive depth.
 | Mode | Retrieval | Gate | Context sent to the model |
 | --- | --- | --- | --- |
 | Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.75), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present (Persian and Latin digits match), or a whole-document question (topic, type, summary); every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
-| Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with FlashRank | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
+| Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with an Arabic-script FlashRank cross-encoder | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
 | LLM-only | None | None | Question and history only |
 
 The gate only filters clearly unrelated material: on the private evaluation
@@ -212,6 +212,8 @@ and chunk text.
 | `STRICT_RAG_TOP_K` (alias `RAG_TOP_K`) | empty | Fixed Strict retrieval depth (1–50); empty uses adaptive depth |
 | `HYBRID_RERANK_TOP_K` | empty | Fixed Hybrid reranked chunk count (1–50); empty uses adaptive depth |
 | `HYBRID_RETRIEVE_TOP_K` | `25` | Minimum Hybrid candidate pool |
+| `RERANK_MODEL` | `miniReranker_arabic_v1` | Hybrid FlashRank cross-encoder; `none` keeps vector order. Downloaded once into the model cache; without network on first start, Hybrid uses vector order |
+| `RERANK_CACHE_DIR` | `~/.cache/flashrank` | Persistent reranker cache (Compose: the `model_cache` volume) |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
 | `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds |

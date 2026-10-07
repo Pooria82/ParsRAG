@@ -108,11 +108,9 @@ def test_strict_depth_precedence(
     ("environment", "expected_rerank"),
     [({}, 17), ({"HYBRID_RERANK_TOP_K": "5"}, 5)],
 )
-@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
 def test_hybrid_rerank_depth_uses_configuration_or_adaptive(
     mock_settings: MagicMock,
-    mock_reranker: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
     environment: dict[str, str],
     expected_rerank: int,
@@ -122,17 +120,18 @@ def test_hybrid_rerank_depth_uses_configuration_or_adaptive(
     repo = MagicMock()
     repo.get_session_files.return_value = ["invoice.pdf"]
     repo.similarity_search.return_value = [_node(0.9)]
-    mock_reranker.return_value.postprocess_nodes.return_value = []
+    reranker = MagicMock()
+    reranker.rerank.return_value = []
     mock_settings.llm.complete.return_value = "answer"
 
     with patch(
         "backend.core.strategies.hybrid_rag.RetrievalOptimizer.calculate_optimal_depth",
         return_value=17,
     ):
-        HybridRAGStrategy(repo).execute(
+        HybridRAGStrategy(repo, reranker=reranker).execute(
             "What is the invoice total?", [], session_id="s"
         )
 
-    mock_reranker.assert_called_with(top_n=expected_rerank)
+    assert reranker.rerank.call_args.args[2] == expected_rerank
     retrieve_k = repo.similarity_search.call_args.kwargs["top_k"]
     assert retrieve_k == max(expected_rerank * 2, 25)

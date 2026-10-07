@@ -42,6 +42,7 @@ from backend.core.use_case.system.describe_capabilities import DescribeCapabilit
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
 from backend.infrastructure.llm.factory import condensing_llm
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
+from backend.infrastructure.llm.reranker import FlashRankReranker
 from backend.infrastructure.parsers.chunker import SentenceWindowChunker
 from backend.infrastructure.parsers.document_parser import LocalDocumentParser
 
@@ -51,6 +52,7 @@ ingest_limiter = WorkLimiter(
 query_limiter = WorkLimiter(int(os.getenv("PARSRAG_QUERY_CONCURRENCY", "2")), "query")
 session_locks = SessionLocks()
 model_gateway = LlamaIndexModelGateway()
+reranker = FlashRankReranker.from_environment()
 
 
 @lru_cache(maxsize=1)
@@ -87,7 +89,7 @@ def get_query_strategy(
     active_repo = repo if repo is not None else _shared_document_repository()
     if mode is QueryMode.STRICT:
         return StrictRAGStrategy(active_repo)
-    return HybridRAGStrategy(active_repo)
+    return HybridRAGStrategy(active_repo, reranker=reranker)
 
 
 def require_runtime_ready() -> None:

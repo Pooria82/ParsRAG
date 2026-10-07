@@ -1,8 +1,6 @@
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
-from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
-from llama_index.postprocessor.flashrank_rerank import FlashRankRerank  # type: ignore
 
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.exceptions import VectorDBConnectionError
@@ -10,6 +8,7 @@ from backend.core.dto.output.query import QueryResponse
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
+from backend.core.port.reranker import Reranker
 from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
@@ -117,7 +116,7 @@ class HybridRAGStrategy(QueryStrategy):
 
     This strategy retrieves a broad candidate pool across the document collection
     (ensuring balanced representation when multiple files exist), reranks them
-    using FlashRank, and synthesizes the answer.
+    with a cross-encoder, and synthesizes the answer.
     """
 
     def __init__(
@@ -125,6 +124,7 @@ class HybridRAGStrategy(QueryStrategy):
         repo: DocumentRepository,
         top_k_retrieve: int | None = None,
         top_n_rerank: int | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         """Configure retrieval depth, reranking, and the active model adapter.
 
@@ -134,8 +134,11 @@ class HybridRAGStrategy(QueryStrategy):
                 ``HYBRID_RETRIEVE_TOP_K`` or 25.
             top_n_rerank: Fixed reranked chunk count; defaults to
                 ``HYBRID_RERANK_TOP_K`` when set, otherwise adaptive depth.
+            reranker: Cross-encoder for the candidate pool; without one the
+                dense similarity order is kept.
         """
         self.repo = repo
+        self.reranker = reranker
         self.prompt_template = PromptTemplate(HYBRID_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
         self.default_retrieve_k = (
@@ -218,32 +221,17 @@ class HybridRAGStrategy(QueryStrategy):
                 source_nodes=[],
             )
 
-        # 3. Map to LlamaIndex Node structures for reranking
-        nodes_with_score = [
-            NodeWithScore(
-                node=TextNode(text=n.text, metadata=n.metadata),
-                score=n.score or 0.0,
+        # 4. Rerank the candidate pool (dense order when no reranker is set)
+        if self.reranker is not None:
+            reranked_source_nodes = self.reranker.rerank(
+                query, extracted_nodes, rerank_n
             )
-            for n in extracted_nodes
-        ]
-
-        # 4. Rerank
-        reranker = FlashRankRerank(top_n=rerank_n)
-        query_bundle = QueryBundle(query_str=query)
-        reranked_nodes = reranker.postprocess_nodes(
-            nodes_with_score, query_bundle=query_bundle
-        )
+        else:
+            reranked_source_nodes = sorted(
+                extracted_nodes, key=lambda node: node.score or 0.0, reverse=True
+            )[:rerank_n]
 
         # 5. Build Grouped Multi-Document Context
-        reranked_source_nodes: list[ExtractedNode] = []
-        for n in reranked_nodes:
-            text = n.get_content()
-            metadata = n.node.metadata if hasattr(n.node, "metadata") else {}
-            score = n.score
-            reranked_source_nodes.append(
-                ExtractedNode(text=text, metadata=metadata, score=score)
-            )
-
         final_source_nodes = _merge_evidence(
             extracted_nodes,
             reranked_source_nodes,

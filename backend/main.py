@@ -37,9 +37,10 @@ logger = logging.getLogger(__name__)
 def _initialize_runtime() -> None:
     """Initialize heavyweight model and storage adapters in a background thread."""
     try:
-        from backend.api.dependencies import _shared_document_repository
+        from backend.api.dependencies import _shared_document_repository, reranker
 
         setup_llm_and_embeddings()
+        reranker.warm_up()
         repository = _shared_document_repository()
         if not repository.is_ready():
             raise RuntimeError("Qdrant is unavailable")

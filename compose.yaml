@@ -58,6 +58,8 @@ services:
       MODEL_CONTEXT_WINDOW: "${MODEL_CONTEXT_WINDOW:-32768}"
       LLM_REQUEST_TIMEOUT_SECONDS: "${LLM_REQUEST_TIMEOUT_SECONDS:-120}"
       CONDENSE_TIMEOUT_SECONDS: "${CONDENSE_TIMEOUT_SECONDS:-30}"
+      RERANK_MODEL: "${RERANK_MODEL:-miniReranker_arabic_v1}"
+      RERANK_CACHE_DIR: /home/parsrag/.cache/flashrank
     volumes:
       - model_cache:/home/parsrag/.cache
       - app_config:/var/lib/parsrag
