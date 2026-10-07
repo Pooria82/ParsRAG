@@ -111,7 +111,7 @@ flowchart TB
     M -->|Strict / Hybrid| F[Resolve target files<br>@mentions, filters, names]
     F --> D[Adaptive depth<br>8 to 30 chunks]
     D --> S[(Session-filtered<br>similarity search)]
-    S -->|Strict| T{Evidence gate<br>score at least threshold<br>or lexical match}
+    S -->|Strict| T{Evidence gate<br>score at least threshold,<br>lexical match, or<br>whole-document question}
     T -->|fails| N[Refuse: not in documents]
     T -->|passes| X[Relevance cutoff<br>max 0.55, 0.7 x best]
     S -->|Hybrid| R[FlashRank rerank<br>keep dense anchors]
@@ -138,13 +138,18 @@ adaptive depth.
 
 | Mode | Retrieval | Gate | Context sent to the model |
 | --- | --- | --- | --- |
-| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.80), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present; every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
+| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.75), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present (Persian and Latin digits match), or a whole-document question (topic, type, summary); every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
 | Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with FlashRank | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
 | LLM-only | None | None | Question and history only |
 
-Strict mode's prompt forbids outside knowledge and requires a refusal when the
-context is insufficient. These safeguards reduce, but cannot eliminate,
-unsupported answers; the UI therefore always shows the cited chunks.
+The gate only filters clearly unrelated material: on the private evaluation
+set, top similarity scores of relevant and off-topic questions overlap
+(medians 0.806 and 0.807 for whole-document and off-topic questions), so the
+decision is left to the model, which sees the excerpts. Strict mode's prompt
+forbids outside knowledge but allows answering by meaning rather than exact
+wording, combining excerpts, conclusions that follow directly from them, and
+partial answers that name what the documents do not cover. It refuses only
+when nothing in the context is relevant.
 
 ## 5. Why Qdrant
 
@@ -185,7 +190,7 @@ and chunk text.
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector store address |
 | `QDRANT_COLLECTION` | derived | Explicit collection override |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | Upsert batch, 1–512 |
-| `STRICT_RAG_THRESHOLD` | `0.80` | Strict mode evidence gate |
+| `STRICT_RAG_THRESHOLD` | `0.75` | Strict mode evidence gate |
 | `STRICT_RAG_TOP_K` (alias `RAG_TOP_K`) | empty | Fixed Strict retrieval depth (1–50); empty uses adaptive depth |
 | `HYBRID_RERANK_TOP_K` | empty | Fixed Hybrid reranked chunk count (1–50); empty uses adaptive depth |
 | `HYBRID_RETRIEVE_TOP_K` | `25` | Minimum Hybrid candidate pool |

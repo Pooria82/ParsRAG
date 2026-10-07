@@ -63,7 +63,7 @@ def _node(score: float) -> ExtractedNode:
 def test_strict_threshold_default_matches_compose(
     mock_settings: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert StrictRAGStrategy(MagicMock()).threshold == DEFAULT_STRICT_THRESHOLD == 0.80
+    assert StrictRAGStrategy(MagicMock()).threshold == DEFAULT_STRICT_THRESHOLD == 0.75
     monkeypatch.setenv("STRICT_RAG_THRESHOLD", "0.65")
     assert StrictRAGStrategy(MagicMock()).threshold == 0.65
 

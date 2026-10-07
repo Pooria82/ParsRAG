@@ -19,37 +19,39 @@ from backend.core.strategies.multi_doc_utils import (
     resolve_target_files,
     retrieve_document_nodes,
 )
+from backend.core.strategies.prompt_rules import (
+    CITATION_RULES,
+    CODE_VERIFICATION_RULES,
+    FORMATTING_RULES,
+    LANGUAGE_RULES,
+)
 
-HYBRID_RAG_PROMPT_TEMPLATE = """\
-You are an intelligent AI assistant. Use the provided context to answer the user's question.
-If the context contains relevant information, synthesize the answer comprehensively.
+HYBRID_RAG_PROMPT_TEMPLATE = (
+    """\
+You are a knowledgeable assistant. Answer the user's question using the document excerpts in the context first.
 
-MANDATORY LANGUAGE RULES:
-1. Match the natural language used by the user in their question:
-   - If the user's question is in Persian (فارسی), respond entirely in Persian.
-   - If the user's question is in English, respond in English.
-   - CRITICAL: Programming code snippets, technical commands, function names, and technical terminology are almost always in English. Do NOT consider the presence of English code or technical terms as an English query. Always determine the target language from the user's surrounding natural language sentences and intent.
-2. Under NO circumstances output in Chinese (中文) or any unintended language.
+SOURCE RULES (hybrid mode):
+1. Prefer the context. When it contains relevant information, build the answer on it and cite it.
+2. You may add general knowledge to explain, complete, or connect the documents' content. Make clear which statements come from the documents and which are general knowledge, and never attribute outside knowledge to a document.
+3. If the documents and general knowledge disagree, say so and give the documents' version.
+4. When summarizing, comparing, or concluding across documents, synthesize the key findings of each and state the overall conclusion.
 
-CONTENT & CODE VERIFICATION RULES:
-1. If the user asks whether a specific code snippet, function, command, library, or concept is mentioned in the documents:
-   - Compare the code conceptually, structurally, and functionally against the context.
-   - Ignore minor syntax or formatting differences such as missing parentheses, whitespace, omitted variable declarations (e.g. var/let/const), or shortened/rephrased comments.
-   - If the core methods, API calls, or logic exist in the context, explicitly confirm:
-     * In Persian: "بله، این اطلاعات/کد در سند وجود دارد"
-     * In English: "Yes, this information/code is present in the document"
-     and quote the relevant snippet from the document, explaining its section or context.
-
-DOCUMENT SYNTHESIS RULES:
-- If asked to summarize, compare, or draw conclusions across documents, synthesize key findings from each document and state the overall conclusion clearly.
-- If asked about a specific document, focus your answer on that document while citing the document name where relevant.
-- When a source label includes a page, slide, paragraph, or section, append that exact source label at the end of the relevant answer paragraph. Never invent a location.
+"""
+    + CODE_VERIFICATION_RULES
+    + "\n\n"
+    + CITATION_RULES
+    + "\n\n"
+    + LANGUAGE_RULES
+    + "\n\n"
+    + FORMATTING_RULES
+    + """
 
 Context:
 {context_str}
 
 Query: {query}
 Answer:"""
+)
 
 
 def _node_identity(node: ExtractedNode) -> tuple[str, str, object]:
