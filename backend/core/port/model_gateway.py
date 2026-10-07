@@ -30,3 +30,9 @@ class ModelGateway(Protocol):
     def generate_title(self, prompt: str, language: Literal["fa", "en"]) -> str:
         """Generate a short conversation title with the active model."""
         ...
+
+    def suggest_questions(
+        self, excerpts: list[str], language: Literal["fa", "en"]
+    ) -> list[str]:
+        """Write short questions that the given document excerpts answer."""
+        ...

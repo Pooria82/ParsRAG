@@ -31,6 +31,7 @@ from backend.core.use_case.model.list_ollama_models import ListOllamaModels
 from backend.core.use_case.model.read_model_configuration import (
     ReadModelConfiguration,
 )
+from backend.core.use_case.model.suggest_questions import SuggestQuestions
 from backend.core.use_case.query.answer_query import AnswerQuery
 from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
@@ -173,6 +174,13 @@ def get_configure_model() -> ConfigureModel:
 def get_list_ollama_models() -> ListOllamaModels:
     """Build the Ollama model listing use case."""
     return ListOllamaModels(model_gateway)
+
+
+def get_suggest_questions(
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> SuggestQuestions:
+    """Build the document question suggestion use case."""
+    return SuggestQuestions(repo, model_gateway, query_limiter)
 
 
 def get_generate_conversation_title() -> GenerateConversationTitle:

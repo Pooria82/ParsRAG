@@ -15,6 +15,12 @@ class ModelConfigurationResponse(BaseModel):
     disclosure_acknowledged: bool = False
 
 
+class QuestionSuggestionResponse(BaseModel):
+    """Short questions the session's documents can answer."""
+
+    questions: list[str] = Field(default_factory=list, max_length=3)
+
+
 class ConversationTitleResponse(BaseModel):
     """A bounded title suitable for conversation navigation."""
 
