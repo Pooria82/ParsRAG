@@ -163,8 +163,9 @@ Detailed sequence diagrams for every flow are in the
 ## 7. Frontend
 
 The React and TypeScript workspace in `frontend/` is built by Vite and served
-by FastAPI from `frontend/dist`. It keeps conversations, branches, and
-preferences in `localStorage`, discovers upload limits from `/capabilities`,
+by FastAPI from `frontend/dist`. It keeps conversations, branches, and answer
+sources in IndexedDB (preferences in `localStorage`), discovers upload limits
+from `/capabilities`,
 reads answers from `/query/stream` as they are generated (stages, numbered
 sources, text, then the final result with cited source numbers), and registers a service
 worker that caches only the application shell — API traffic always goes to the

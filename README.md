@@ -385,7 +385,9 @@ families to `http://127.0.0.1:8000` when the frontend backend URL is blank. Set
 - `/health/ready` returns `200` after model initialization and Qdrant access;
   `503 {"status":"preparing"}` is expected during first model/cache startup.
 - `/capabilities` reports effective upload types and limits to the UI.
-- Browser preferences and conversation branches live in `localStorage`.
+- Conversations, their branches, and answer sources live in the browser's
+  IndexedDB (older `localStorage` data moves there on first start);
+  interface preferences stay in `localStorage`.
 - Parsed chunks and vectors live in Qdrant under a session identifier.
 - Embedding caches, Qdrant data, Ollama models, and non-secret model settings use
   separate named volumes.
