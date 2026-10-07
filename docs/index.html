@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ParsRAG — Offline Persian (Farsi) RAG for chatting with documents</title>
-  <meta name="description" content="ParsRAG is a bilingual, offline-first RAG workspace for chatting with Persian (Farsi) and English PDF, Word, PowerPoint and scanned documents using local LLMs, with cited sources.">
-  <meta name="keywords" content="Persian RAG, Farsi RAG, chat with PDF, document question answering, local LLM, Ollama, LlamaIndex, Qdrant, OCR, offline AI">
+  <title>ParsRAG — Offline Persian (Farsi) RAG with cited answers</title>
+  <meta name="description" content="ParsRAG is a bilingual, offline-first RAG workspace for chatting with Persian (Farsi) and English PDF, Word, PowerPoint and scanned documents using local LLMs. Every answer cites its file and page.">
+  <meta name="keywords" content="Persian RAG, Farsi RAG, RAG فارسی, chat with PDF, document question answering, local LLM, Ollama, LlamaIndex, Qdrant, OCR, offline AI">
   <meta name="author" content="Pooria Madani">
   <link rel="canonical" href="https://pooria82.github.io/ParsRAG/">
   <link rel="alternate" hreflang="en" href="https://pooria82.github.io/ParsRAG/">
@@ -13,20 +13,26 @@
   <link rel="alternate" hreflang="x-default" href="https://pooria82.github.io/ParsRAG/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="ParsRAG">
-  <meta property="og:title" content="ParsRAG — Offline Persian (Farsi) RAG for chatting with documents">
-  <meta property="og:description" content="Ask cited, traceable questions across Persian and English documents. Parsing, OCR, embeddings and vector search run locally.">
+  <meta property="og:title" content="ParsRAG — Offline Persian (Farsi) RAG with cited answers">
+  <meta property="og:description" content="Ask Persian and English documents on your own machine and see the page behind every answer. Parsing, OCR, embeddings and vector search stay local.">
   <meta property="og:url" content="https://pooria82.github.io/ParsRAG/">
-  <meta property="og:image" content="https://pooria82.github.io/ParsRAG/social-preview.png">
+  <meta property="og:image" content="https://pooria82.github.io/ParsRAG/assets/img/og-card.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="fa_IR">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#146a57">
-  <link rel="icon" href="assets/parsrag-mark.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="theme-color" content="#0F2E27">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="assets/img/parsrag-mark.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
   <link rel="preload" href="assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/site.css">
+  <link rel="preload" href="assets/fonts/MarkaziText-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script>
+    document.documentElement.classList.add('js');
+    window.__revealFailsafe = setTimeout(function () { document.documentElement.classList.add('is-ready', 'is-static'); }, 5000);
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -41,107 +47,336 @@
     "license": "https://github.com/Pooria82/ParsRAG/blob/main/LICENSE",
     "keywords": "Persian, Farsi, RAG, retrieval-augmented generation, document question answering, OCR, local LLM, Ollama, LlamaIndex, Qdrant",
     "inLanguage": ["en", "fa"],
+    "softwareVersion": "0.2.0",
     "author": { "@type": "Person", "name": "Pooria Madani" },
-    "image": "https://pooria82.github.io/ParsRAG/social-preview.png"
+    "image": "https://pooria82.github.io/ParsRAG/assets/img/og-card.png"
   }
   </script>
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="./"><img src="assets/parsrag-mark.svg" alt="" width="36" height="36">ParsRAG</a>
-      <nav class="site" aria-label="Primary">
-        <a href="#features">Features</a>
-        <a href="#modes">Answer modes</a>
-        <a href="#start">Quick start</a>
-        <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">Architecture</a>
-        <a href="fa/" hreflang="fa" lang="fa">فارسی</a>
-      </nav>
-    </header>
-  </div>
+  <a class="skip" href="#main">Skip to content</a>
 
-  <main>
-    <div class="wrap">
-      <div class="hero">
-        <img class="mark" src="assets/parsrag-mark.svg" alt="ParsRAG logo" width="88" height="88">
-        <h1>Offline Persian (Farsi) RAG for chatting with your documents</h1>
-        <p class="lead">ParsRAG answers questions about Persian and English PDFs, Word and PowerPoint files, scans, and text, with a citation for every answer. Parsing, OCR, embeddings, and vector search stay on your workstation; answers come from a local LLM through Ollama or a model API you choose.</p>
-        <div class="actions">
-          <a class="button primary" href="https://github.com/Pooria82/ParsRAG">View on GitHub</a>
-          <a class="button secondary" href="#start">Quick start</a>
-        </div>
-        <figure class="shot">
-          <img src="screenshots/workspace-en-dark.png" width="1440" height="900" alt="ParsRAG workspace answering a question with cited document sources in dark mode">
-          <figcaption>A conversation with its own documents, cited sources, and answer branches.</figcaption>
-        </figure>
+  <header class="topbar" data-topbar>
+    <div class="topbar__inner">
+      <a class="brand" href="./" aria-label="ParsRAG home">
+        <svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg>
+        <span class="brand__name">ParsRAG</span>
+      </a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="#demo">Citations</a>
+        <a href="#journey">How it works</a>
+        <a href="#modes">Answer modes</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#install">Install</a>
+      </nav>
+      <div class="topbar__end">
+        <a class="lang-link" href="fa/" hreflang="fa" lang="fa">فارسی</a>
+        <a class="btn btn--line btn--sm" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
       </div>
     </div>
+  </header>
 
-    <section id="features">
+  <main id="main">
+    <!-- Hero: Persian letters drift like ink dust, then gather into the mark. -->
+    <section class="hero" aria-labelledby="hero-title">
+      <canvas class="hero__field" aria-hidden="true"></canvas>
+      <div class="hero__content">
+        <div class="hero__slot" aria-hidden="true"><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg></div>
+        <a class="pill" data-hero="pill" href="https://github.com/Pooria82/ParsRAG/blob/main/CHANGELOG.md"><span class="pill__dot" aria-hidden="true"></span>Version 0.2.0 cites page ranges when a fact crosses a PDF page turn</a>
+        <h1 class="hero__title" id="hero-title" data-words>Every answer, traced to its page.</h1>
+        <p class="hero__lead" data-hero="lead">ParsRAG reads your Persian and English documents on your own machine and ties each answer to the file and page it came from.</p>
+        <div class="hero__actions" data-hero="actions">
+          <a class="btn btn--gold" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>View on GitHub</span></a>
+          <a class="btn btn--line" href="#install">Install with Docker</a>
+        </div>
+      </div>
+      <a class="hero__cue" href="#demo" data-hero="cue"><span class="hero__cue-thread" aria-hidden="true"></span><span class="visually-hidden">Scroll to see a cited answer</span></a>
+    </section>
+
+    <!-- Marginalia: a pinned, scroll-driven answer whose citations are tied to their sources by gold threads. -->
+    <section class="demo" id="demo" aria-labelledby="demo-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="demo-title">Answers with their sources in the margin.</h2>
+        <p class="lead">Like a manuscript with notes in its margins, every claim in a ParsRAG answer points back to the passage it came from. Mention a file with @ to bind part of a question to it.</p>
+      </div>
+      <div class="demo__pin">
+        <div class="demo__stage" data-demo>
+          <svg class="threads" aria-hidden="true"></svg>
+          <article class="folio paper" aria-label="Sample conversation">
+            <div class="folio__main">
+              <div class="composer" data-composer>
+                <p class="composer__text" data-question><span class="chip" data-seg="chip">@budget.pdf</span><span data-seg> What is the total cost? And </span><span class="chip" data-seg="chip">@timeline.docx</span><span data-seg> When is delivery?</span><span class="caret" aria-hidden="true"></span></p>
+                <div class="composer__bar">
+                  <span class="composer__mode"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 6.5C10 4.8 6.6 4.4 3.5 5.6v13c3.1-1.2 6.5-.8 8.5.9 2-1.7 5.4-2.1 8.5-.9v-13c-3.1-1.2-6.5-.8-8.5.9Zm0 0v13"/></svg>Documents only</span>
+                  <span class="composer__send" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m-6 6 6-6 6 6"/></svg></span>
+                </div>
+              </div>
+              <ol class="stages">
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>Understanding the question and conversation</li>
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>Finding relevant evidence in documents</li>
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>Writing the final answer</li>
+              </ol>
+              <div class="answer">
+                <p><span data-stream="1">The total cost is 4.2 billion rials, covering licenses and three months of support.</span><sup class="cite" data-cite="1"><a href="#note-1">1</a></sup> <span data-stream="2">Delivery is planned for the end of Azar 1405, after the acceptance test.</span><sup class="cite" data-cite="2"><a href="#note-2">2</a></sup></p>
+              </div>
+            </div>
+            <aside class="folio__margin" aria-label="Sources for this answer">
+              <p class="note" id="note-1" data-note="1"><span class="note__n">1</span><span class="note__file">budget.pdf</span><span class="note__loc">page 3</span></p>
+              <p class="note" id="note-2" data-note="2"><span class="note__n">2</span><span class="note__file">timeline.docx</span><span class="note__loc">paragraph 7</span></p>
+            </aside>
+          </article>
+          <div class="sources">
+            <figure class="doc" data-doc="1">
+              <figcaption class="doc__cap"><span class="doc__type doc__type--pdf">PDF</span><span class="doc__name">budget.pdf</span><span class="doc__loc">page 3</span></figcaption>
+              <div class="doc__page">
+                <p class="doc__title">Project budget</p>
+                <p>2. Costs and payment terms</p>
+                <p class="doc__muted">Hardware and hosting are provided by the client.</p>
+                <p class="doc__hl" data-hl="1"><mark>Total cost: 4.2 billion rials, including licenses and three months of support.</mark></p>
+                <p class="doc__muted">Payment in three installments, per the schedule.</p>
+                <span class="doc__bar" style="--w:86%"></span><span class="doc__bar" style="--w:64%"></span>
+              </div>
+            </figure>
+            <figure class="doc" data-doc="2">
+              <figcaption class="doc__cap"><span class="doc__type doc__type--docx">DOCX</span><span class="doc__name">timeline.docx</span><span class="doc__loc">paragraph 7</span></figcaption>
+              <div class="doc__page">
+                <p class="doc__title">Delivery timeline</p>
+                <p>Phase 3: integration and acceptance test</p>
+                <p class="doc__muted">The acceptance test runs on the client's own data.</p>
+                <p class="doc__hl" data-hl="2"><mark>Delivery is planned for the end of Azar 1405, once the acceptance test passes.</mark></p>
+                <p class="doc__muted">Training sessions follow delivery.</p>
+                <span class="doc__bar" style="--w:72%"></span>
+              </div>
+            </figure>
+          </div>
+        </div>
+      </div>
+      <p class="wrap caption">Sample documents. Scroll to watch the answer form; in a real conversation the sources panel opens each cited passage.</p>
+    </section>
+
+    <!-- A page's journey: one object morphs through the real ingestion sequence while the steps advance. -->
+    <section class="journey" id="journey" aria-labelledby="journey-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="journey-title">What happens to a page.</h2>
+        <p class="lead">From upload to answer, every step that touches your document runs on your machine.</p>
+      </div>
+      <div class="journey__pin" data-journey data-file="report.pdf" data-lang-tag="fas+eng" data-collection="This conversation" data-answer="Answer with 3 sources" data-cite="report.pdf, pages 3–4">
+        <ol class="steps">
+          <li class="step" data-step><span class="step__n">1</span><div><h3>Upload</h3><p>Add PDF, Word, PowerPoint, images, or text. The file type and size are checked before anything is read.</p></div></li>
+          <li class="step" data-step><span class="step__n">2</span><div><h3>Read and OCR</h3><p>Text layers are extracted directly. Scanned pages and images go through Tesseract OCR with Persian and English data.</p></div></li>
+          <li class="step" data-step><span class="step__n">3</span><div><h3>Passages</h3><p>Text is split into passages that remember their file and page, slide, paragraph, or section. A short bridge joins consecutive PDF pages.</p></div></li>
+          <li class="step" data-step><span class="step__n">4</span><div><h3>Vectors</h3><p>A multilingual-e5 model turns each passage into a vector, locally, on CPU or GPU.</p></div></li>
+          <li class="step" data-step><span class="step__n">5</span><div><h3>Qdrant</h3><p>Vectors are stored in Qdrant under the conversation they belong to. Delete the conversation and they go with it.</p></div></li>
+          <li class="step" data-step><span class="step__n">6</span><div><h3>Cited answer</h3><p>The closest passages go to the model with your question, and the answer returns with its sources.</p></div></li>
+        </ol>
+        <div class="jstage" aria-hidden="true"><div class="jstage__box" data-jstage></div></div>
+      </div>
+    </section>
+
+    <!-- Answer modes: one question, three answers. -->
+    <section class="modes" id="modes" aria-labelledby="modes-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="modes-title">You choose how much the model may add.</h2>
+        <p class="lead">Three explicit answer modes, the same ones you pick in the composer. Here is one question, answered three ways.</p>
+      </div>
+      <div class="wrap modes__body" data-modes>
+        <div class="seg" role="tablist" aria-label="Answer mode">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button class="seg__btn" role="tab" id="tab-strict" aria-controls="panel-strict" aria-selected="true">Only from documents</button>
+          <button class="seg__btn" role="tab" id="tab-hybrid" aria-controls="panel-hybrid" aria-selected="false" tabindex="-1">Documents & model knowledge</button>
+          <button class="seg__btn" role="tab" id="tab-free" aria-controls="panel-free" aria-selected="false" tabindex="-1">Open conversation</button>
+        </div>
+        <div class="sheet paper">
+          <p class="sheet__q">When is delivery, and why was the date moved?</p>
+          <div class="sheet__panels">
+            <div class="sheet__panel" role="tabpanel" id="panel-strict" aria-labelledby="tab-strict">
+              <p class="sheet__answer"><span class="seg-doc" data-stream>Delivery is planned for the end of Azar 1405, after the acceptance test.</span><span class="cite-chip">timeline.docx, paragraph 7</span> <span class="seg-gap" data-stream>The selected documents don't say why the date was moved, so that part is left unanswered.</span></p>
+              <dl class="facts"><div><dt>Retrieval</dt><dd>Required, with an evidence gate</dd></div><div><dt>Model knowledge</dt><dd>Excluded</dd></div></dl>
+            </div>
+            <div class="sheet__panel" role="tabpanel" id="panel-hybrid" aria-labelledby="tab-hybrid" hidden>
+              <p class="sheet__answer"><span class="seg-doc" data-stream>Delivery is planned for the end of Azar 1405, after the acceptance test.</span><span class="cite-chip">timeline.docx, paragraph 7</span> <span class="seg-model" data-stream>The documents give no reason. Dates like this usually move when an acceptance test is added or extended; confirm with the project owner.</span></p>
+              <dl class="facts"><div><dt>Retrieval</dt><dd>Required and reranked</dd></div><div><dt>Model knowledge</dt><dd>May supplement evidence</dd></div></dl>
+            </div>
+            <div class="sheet__panel" role="tabpanel" id="panel-free" aria-labelledby="tab-free" hidden>
+              <p class="sheet__answer"><span class="seg-model" data-stream>Documents aren't searched in this mode. Delivery dates are usually set in a project timeline or contract; switch modes to answer from yours.</span></p>
+              <dl class="facts"><div><dt>Retrieval</dt><dd>Bypassed</dd></div><div><dt>Model knowledge</dt><dd>Used directly</dd></div></dl>
+            </div>
+          </div>
+        </div>
+        <ul class="legend">
+          <li><span class="legend__key legend__key--doc" aria-hidden="true"></span>From your documents, cited</li>
+          <li><span class="legend__key legend__key--model" aria-hidden="true"></span>From the model's own knowledge</li>
+          <li><span class="legend__key legend__key--gap" aria-hidden="true"></span>Declined for lack of evidence</li>
+        </ul>
+        <p class="caption modes__note">Strict mode refuses when retrieved evidence doesn't meet its threshold. It's a safeguard, not a guarantee: check important answers against their sources.</p>
+      </div>
+    </section>
+
+    <!-- Trust boundary: an illuminated frame around the workstation; the gate opens only for API providers. -->
+    <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="privacy-title">You decide what leaves your machine.</h2>
+        <p class="lead">Parsing, OCR, embeddings, and vector search always run locally. Only the model you choose decides where the answer is written.</p>
+      </div>
+      <div class="wrap boundary" data-boundary
+        data-frame="Your workstation" data-docs="Your documents" data-parse="Parsing and OCR" data-embed="Embeddings"
+        data-qdrant="Qdrant" data-adapter="Model adapter" data-ollama="Ollama"
+        data-private="A server you control" data-external="Third-party service" data-packet="prompt + excerpts">
+        <div class="seg seg--provider" role="radiogroup" aria-label="Model provider">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button class="seg__btn" role="radio" aria-checked="true" data-provider="local">Local Ollama</button>
+          <button class="seg__btn" role="radio" aria-checked="false" data-provider="private" tabindex="-1">Private API</button>
+          <button class="seg__btn" role="radio" aria-checked="false" data-provider="external" tabindex="-1">External API</button>
+        </div>
+        <div class="boundary__art"><svg class="boundary__svg" role="img" aria-label="Parsing, OCR, embeddings, and vector search always run locally. Only the model you choose decides where the answer is written."></svg></div>
+        <p class="boundary__note" aria-live="polite" data-note-local="Generation runs on this workstation. No prompt or excerpt leaves through the model adapter." data-note-private="Your prompt and the retrieved excerpts go to a server you control. Private OpenAI-compatible services can run without a key." data-note-external="Your prompt and retrieved excerpts go to a third-party service. ParsRAG asks you to acknowledge this before the first request.">Generation runs on this workstation. No prompt or excerpt leaves through the model adapter.</p>
+        <p class="caption">In every mode, embeddings and Qdrant stay local, and API keys stay in memory or environment variables, never in browser storage or logs.</p>
+      </div>
+    </section>
+
+    <!-- Formats: a shelf of book spines; pulling one out shows what it covers. -->
+    <section class="shelf" id="formats" aria-labelledby="shelf-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="shelf-title">One shelf for what you read.</h2>
+        <p class="lead">Office files, scans, data, and code are read with their structure, so a citation can name a slide or a section, not just a file.</p>
+      </div>
+      <div class="wrap shelf__body" data-shelf>
+        <div class="books" role="tablist" aria-label="File families">
+          <span class="book book--deco" style="--h:74%;--c:#123B32" aria-hidden="true"></span>
+          <button class="book" role="tab" id="book-1" aria-controls="card-1" aria-selected="true" style="--h:96%;--c:#146A57"><span class="book__title">Documents</span><span class="book__count">.pdf .docx .pptx</span></button>
+          <button class="book" role="tab" id="book-2" aria-controls="card-2" aria-selected="false" tabindex="-1" style="--h:84%;--c:#2B4E86"><span class="book__title">Images</span><span class="book__count">.png .jpg .tif</span></button>
+          <span class="book book--deco book--lean" style="--h:66%;--c:#0D2A23" aria-hidden="true"></span>
+          <button class="book" role="tab" id="book-3" aria-controls="card-3" aria-selected="false" tabindex="-1" style="--h:100%;--c:#8A6A2C"><span class="book__title">Text and data</span><span class="book__count">.txt .md .csv</span></button>
+          <button class="book" role="tab" id="book-4" aria-controls="card-4" aria-selected="false" tabindex="-1" style="--h:88%;--c:#5B3B4F"><span class="book__title">Markup and config</span><span class="book__count">.html .yaml</span></button>
+          <button class="book" role="tab" id="book-5" aria-controls="card-5" aria-selected="false" tabindex="-1" style="--h:92%;--c:#1E5C6B"><span class="book__title">Source code</span><span class="book__count">.py .ts .sql</span></button>
+          <span class="book book--deco" style="--h:80%;--c:#173F35" aria-hidden="true"></span>
+        </div>
+        <div class="shelf__plank" aria-hidden="true"></div>
+        <div class="cards">
+          <div class="card" role="tabpanel" id="card-1" aria-labelledby="book-1"><h3>Documents</h3><p class="exts" dir="ltr">.pdf .docx .pptx</p><p>Native structured extraction, with OCR for scanned or image-heavy PDF pages and images inside Word and PowerPoint files.</p></div>
+          <div class="card" role="tabpanel" id="card-2" aria-labelledby="book-2" hidden><h3>Images</h3><p class="exts" dir="ltr">.png .jpg .jpeg .webp .bmp .tif .tiff</p><p>Validated, normalized, and read with Persian and English OCR.</p></div>
+          <div class="card" role="tabpanel" id="card-3" aria-labelledby="book-3" hidden><h3>Text and data</h3><p class="exts" dir="ltr">.txt .md .markdown .json .csv .tsv .log</p><p>UTF-8 extraction. JSON is validated and normalized before indexing.</p></div>
+          <div class="card" role="tabpanel" id="card-4" aria-labelledby="book-4" hidden><h3>Markup and config</h3><p class="exts" dir="ltr">.html .htm .xml .yaml .yml .toml .ini .cfg</p><p>Visible text from markup, and UTF-8 text from configuration files.</p></div>
+          <div class="card" role="tabpanel" id="card-5" aria-labelledby="book-5" hidden><h3>Source code</h3><p class="exts" dir="ltr">.py .js .jsx .ts .tsx .css .sql</p><p>UTF-8 extraction with section metadata, so answers can point into a file.</p></div>
+        </div>
+        <p class="caption shelf__limits">By default a conversation holds up to 10 files, each up to 100 MiB, with up to 500 MiB per upload. Office archives are checked for suspicious compression, and unsupported binary formats are rejected rather than misread.</p>
+      </div>
+    </section>
+
+    <!-- Two directions: drag between the Persian and English workspaces. -->
+    <section class="dirs" id="directions" aria-labelledby="dirs-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="dirs-title">Right to left, left to right.</h2>
+        <p class="lead">The workspace is laid out for Persian and for English, not mirrored as an afterthought. Drag the divider to compare.</p>
+      </div>
       <div class="wrap">
-        <h2>Built for Persian documents</h2>
-        <p class="intro">Right-to-left text, Persian OCR, and multilingual embeddings are first-class, not afterthoughts.</p>
-        <div class="grid">
-          <div class="card"><h3>Cited, traceable answers</h3><p>Every answer lists the file plus page range, slide, paragraph, or section it came from.</p></div>
-          <div class="card"><h3>Broad document support</h3><p>PDF, DOCX, PPTX, images, Markdown, JSON, CSV, HTML, YAML, logs, and source code.</p></div>
-          <div class="card"><h3>OCR where it matters</h3><p>Persian and English Tesseract OCR for scanned pages, images, and pictures inside Office files.</p></div>
-          <div class="card"><h3>Local-first by design</h3><p>Embeddings and Qdrant vectors never leave the host. Remote model APIs require an explicit, disclosed opt-in.</p></div>
-          <div class="card"><h3>Precise prompts</h3><p>Mention files with <code>@</code> to bind parts of a question to specific sources; use <code>/</code> for quick actions.</p></div>
-          <div class="card"><h3>Runs on your hardware</h3><p>CPU by default, with Docker Compose overlays for NVIDIA and supported AMD GPUs.</p></div>
+        <div class="compare" data-compare dir="ltr" style="--pos:50%">
+          <img class="compare__img" src="assets/img/workspace-en-dark.png" width="1440" height="900" loading="lazy" decoding="async" alt="English workspace in the dark theme, laid out left to right">
+          <div class="compare__top"><img class="compare__img" src="assets/img/workspace-fa-dark.png" width="1440" height="900" loading="lazy" decoding="async" alt="Persian workspace in the dark theme, laid out right to left"></div>
+          <span class="compare__tag compare__tag--fa" lang="fa">فارسی</span>
+          <span class="compare__tag compare__tag--en" lang="en">English</span>
+          <span class="compare__handle" aria-hidden="true"><span></span></span>
+          <input class="compare__range" type="range" min="0" max="100" value="50" aria-label="Compare the Persian and English workspace">
         </div>
       </div>
     </section>
 
-    <section id="modes">
+    <!-- Quick start: a terminal with the real commands for each setup. -->
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="install-title">Run it on your machine.</h2>
+        <p class="lead">You need Docker Engine with Compose and 8–16 GB of RAM, depending on the model. After the first download, a local model works offline.</p>
+      </div>
       <div class="wrap">
-        <h2>Three explicit answer modes</h2>
-        <p class="intro">Choose how much the model may rely on its own knowledge.</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th scope="col">Mode</th><th scope="col">Retrieval</th><th scope="col">Model knowledge</th><th scope="col">Use it for</th></tr></thead>
-            <tbody>
-              <tr><td><strong>Strict</strong></td><td>Required, with an evidence gate</td><td>Excluded by the prompt contract</td><td>Answers that must stay grounded in your documents</td></tr>
-              <tr><td><strong>Hybrid</strong></td><td>Required and reranked</td><td>May supplement evidence</td><td>Explanations and synthesis with document priority</td></tr>
-              <tr><td><strong>LLM-only</strong></td><td>Bypassed</td><td>Used directly</td><td>General chat unrelated to uploads</td></tr>
-            </tbody>
-          </table>
+        <div class="term" data-term data-copy="Copy commands" data-copied="Copied">
+          <div class="term__bar">
+            <span class="term__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="term__tabs" role="tablist" aria-label="Setup">
+              <button role="tab" id="t-cpu" aria-controls="cmd-cpu" aria-selected="true">Local model on CPU</button>
+              <button role="tab" id="t-gpu" aria-controls="cmd-gpu" aria-selected="false" tabindex="-1">NVIDIA GPU</button>
+              <button role="tab" id="t-api" aria-controls="cmd-api" aria-selected="false" tabindex="-1">API model</button>
+            </div>
+            <button class="term__copy" type="button" data-copy-btn><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M9 9h10v11H9zM5 15V4h10"/></svg><span data-copy-label>Copy commands</span></button>
+          </div>
+          <div class="term__body" dir="ltr">
+<pre id="cmd-cpu" role="tabpanel" aria-labelledby="t-cpu"><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="l">docker compose --profile local-model up -d qdrant ollama</span>
+<span class="l">docker compose --profile local-model run --rm ollama-init</span>
+<span class="l">docker compose --profile local-model up -d --build app</span></code></pre>
+<pre id="cmd-gpu" role="tabpanel" aria-labelledby="t-gpu" hidden><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model up -d qdrant ollama</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model run --rm ollama-init</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model up -d --build app</span></code></pre>
+<pre id="cmd-api" role="tabpanel" aria-labelledby="t-api" hidden><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="c"># Set LLM_PROVIDER=api, the model, base URL, key and disclosure flag in .env</span>
+<span class="l">docker compose up -d --build</span></code></pre>
+          </div>
         </div>
+        <p class="install__then">Then open <code>http://127.0.0.1:8000</code>. The <a href="https://github.com/Pooria82/ParsRAG#docker-quick-start">installation guide</a> covers AMD, low-VRAM cards, and native development.</p>
+        <nav class="install__links" aria-label="Read more">
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">Architecture</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/DATA.md">Data and RAG guide</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/CHANGELOG.md">Changelog</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/SECURITY.md">Security policy</a>
+        </nav>
       </div>
     </section>
 
-    <section id="screens">
-      <div class="wrap">
-        <h2>Bilingual interface</h2>
-        <p class="intro">The same workspace in English and Persian, light and dark.</p>
-        <div class="gallery">
-          <img src="screenshots/home-en-light.png" width="1440" height="900" loading="lazy" alt="ParsRAG home screen in English, light theme">
-          <img src="screenshots/sources-en-light.png" width="1440" height="900" loading="lazy" alt="Answer sources panel showing cited PDF pages">
-          <img src="screenshots/model-en-light.png" width="1440" height="900" loading="lazy" alt="Model settings for local Ollama or an OpenAI-compatible API">
-          <img src="screenshots/workspace-fa-dark.png" width="1440" height="900" loading="lazy" alt="Persian right-to-left workspace in dark theme">
+    <!-- Coda: the mark is drawn by a single gold thread. -->
+    <section class="coda" aria-labelledby="coda-title">
+      <div class="wrap coda__inner">
+        <div class="coda__mark" data-coda-mark><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg></div>
+        <h2 class="coda__title" id="coda-title">Your documents stay on your desk.</h2>
+        <p class="lead">ParsRAG is built for people who can't send their files to a cloud chatbot, and still want answers they can check.</p>
+        <div class="hero__actions">
+          <a class="btn btn--gold" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>View on GitHub</span></a>
+          <a class="btn btn--line" href="fa/" hreflang="fa">Read the Persian page</a>
         </div>
-      </div>
-    </section>
-
-    <section id="start">
-      <div class="wrap">
-        <h2>Quick start with Docker</h2>
-        <p class="intro">Requires Docker Engine with Compose and 8–16 GB RAM, depending on the model. The full guide covers API models, CPU, NVIDIA, and AMD.</p>
-<pre><code>git clone https://github.com/Pooria82/ParsRAG.git
-cd ParsRAG
-cp .env.example .env
-docker compose --profile local-model up -d qdrant ollama
-docker compose --profile local-model run --rm ollama-init
-docker compose --profile local-model up -d --build app</code></pre>
-        <p>Then open <code>http://127.0.0.1:8000</code>. Read the <a href="https://github.com/Pooria82/ParsRAG#docker-quick-start">installation guide</a>, the <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">architecture</a>, and the <a href="https://github.com/Pooria82/ParsRAG/blob/main/DATA.md">data and RAG guide</a>.</p>
       </div>
     </section>
   </main>
 
-  <footer class="site">
-    <div class="wrap">
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <a class="brand" href="./" aria-label="ParsRAG home"><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg><span class="brand__name">ParsRAG</span></a>
       <p>ParsRAG is source-available, not open source. See the <a href="https://github.com/Pooria82/ParsRAG/blob/main/LICENSE">license</a> and <a href="https://github.com/Pooria82/ParsRAG/blob/main/CITATION.cff">how to cite it</a>.</p>
-      <p>© Pooria Madani · <a href="fa/" hreflang="fa" lang="fa">نسخه فارسی</a></p>
+      <p class="footer__end"><span>© 2026 Pooria Madani</span><a href="fa/" hreflang="fa" lang="fa">فارسی</a></p>
     </div>
   </footer>
+
+  <script src="assets/vendor/gsap.min.js" defer></script>
+  <script src="assets/vendor/ScrollTrigger.min.js" defer></script>
+  <script src="assets/vendor/lenis.min.js" defer></script>
+  <script type="module" src="assets/js/main.js"></script>
 </body>
 </html>

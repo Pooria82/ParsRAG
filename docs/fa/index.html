@@ -3,144 +3,380 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>پارس‌رگ (ParsRAG) — چت آفلاین با اسناد فارسی با هوش مصنوعی محلی</title>
-  <meta name="description" content="پارس‌رگ یک فضای کاری RAG دوزبانه و آفلاین‌محور برای گفت‌وگو با اسناد فارسی و انگلیسی است: PDF، Word، PowerPoint و تصاویر اسکن‌شده، با پاسخ‌های مستند و مدل زبانی محلی.">
-  <meta name="keywords" content="RAG فارسی, چت با PDF فارسی, پرسش و پاسخ اسناد, هوش مصنوعی آفلاین, مدل زبانی محلی, Ollama, OCR فارسی, Qdrant, LlamaIndex">
+  <title>پارس‌رگ — RAG فارسی و آفلاین، با پاسخ‌های مستند</title>
+  <meta name="description" content="پارس‌رگ فضای کاری دوزبانه و آفلاین‌محور برای گفت‌وگو با اسناد فارسی و انگلیسی (PDF، Word، PowerPoint و اسکن) با مدل زبانی محلی است. هر پاسخ، فایل و صفحهٔ منبعش را نشان می‌دهد.">
+  <meta name="keywords" content="Persian RAG, Farsi RAG, RAG فارسی, chat with PDF, document question answering, local LLM, Ollama, LlamaIndex, Qdrant, OCR, offline AI">
   <meta name="author" content="Pooria Madani">
   <link rel="canonical" href="https://pooria82.github.io/ParsRAG/fa/">
   <link rel="alternate" hreflang="en" href="https://pooria82.github.io/ParsRAG/">
   <link rel="alternate" hreflang="fa" href="https://pooria82.github.io/ParsRAG/fa/">
   <link rel="alternate" hreflang="x-default" href="https://pooria82.github.io/ParsRAG/">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="پارس‌رگ">
-  <meta property="og:title" content="پارس‌رگ — چت آفلاین با اسناد فارسی">
-  <meta property="og:description" content="پرسش‌های مستند و قابل‌ردیابی روی اسناد فارسی و انگلیسی؛ استخراج متن، OCR، embedding و جست‌وجوی برداری روی سیستم خودتان.">
+  <meta property="og:site_name" content="ParsRAG">
+  <meta property="og:title" content="پارس‌رگ — RAG فارسی و آفلاین، با پاسخ‌های مستند">
+  <meta property="og:description" content="از اسناد فارسی و انگلیسی روی رایانهٔ خودتان بپرسید و صفحهٔ پشت هر پاسخ را ببینید. استخراج متن، OCR، embedding و جست‌وجوی برداری محلی می‌مانند.">
   <meta property="og:url" content="https://pooria82.github.io/ParsRAG/fa/">
-  <meta property="og:image" content="https://pooria82.github.io/ParsRAG/social-preview.png">
+  <meta property="og:image" content="https://pooria82.github.io/ParsRAG/assets/img/og-card.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta property="og:locale" content="fa_IR">
   <meta property="og:locale:alternate" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#146a57">
-  <link rel="icon" href="../assets/parsrag-mark.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../assets/icon-192.png">
+  <meta name="theme-color" content="#0F2E27">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="../assets/img/parsrag-mark.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
   <link rel="preload" href="../assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="preload" href="../assets/fonts/MarkaziText-arabic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/site.css">
+  <script>
+    document.documentElement.classList.add('js');
+    window.__revealFailsafe = setTimeout(function () { document.documentElement.classList.add('is-ready', 'is-static'); }, 5000);
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareSourceCode",
-    "name": "پارس‌رگ",
-    "alternateName": "ParsRAG",
-    "description": "فضای کاری دوزبانه و آفلاین‌محور تولید پاسخ مبتنی بر بازیابی (RAG) برای گفت‌وگو با اسناد فارسی و انگلیسی با مدل زبانی محلی و ارجاع به منبع.",
-    "url": "https://pooria82.github.io/ParsRAG/fa/",
+    "name": "ParsRAG",
+    "alternateName": "پارس‌رگ",
+    "description": "Bilingual, offline-first retrieval-augmented generation (RAG) workspace for chatting with Persian (Farsi) and English documents using local LLMs, with cited sources.",
+    "url": "https://pooria82.github.io/ParsRAG/",
     "codeRepository": "https://github.com/Pooria82/ParsRAG",
     "programmingLanguage": ["Python", "TypeScript"],
+    "runtimePlatform": ["Docker", "Python 3.12"],
     "license": "https://github.com/Pooria82/ParsRAG/blob/main/LICENSE",
-    "keywords": "RAG فارسی, چت با PDF, پرسش و پاسخ اسناد, OCR فارسی, مدل زبانی محلی, Ollama",
-    "inLanguage": ["fa", "en"],
+    "keywords": "Persian, Farsi, RAG, retrieval-augmented generation, document question answering, OCR, local LLM, Ollama, LlamaIndex, Qdrant",
+    "inLanguage": ["en", "fa"],
+    "softwareVersion": "0.2.0",
     "author": { "@type": "Person", "name": "Pooria Madani" },
-    "image": "https://pooria82.github.io/ParsRAG/social-preview.png"
+    "image": "https://pooria82.github.io/ParsRAG/assets/img/og-card.png"
   }
   </script>
 </head>
 <body>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="./"><img src="../assets/parsrag-mark.svg" alt="" width="36" height="36">پارس‌رگ</a>
-      <nav class="site" aria-label="پیمایش اصلی">
-        <a href="#features">قابلیت‌ها</a>
-        <a href="#modes">حالت‌های پاسخ</a>
-        <a href="#start">شروع سریع</a>
-        <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">معماری</a>
-        <a href="../" hreflang="en" lang="en">English</a>
-      </nav>
-    </header>
-  </div>
+  <a class="skip" href="#main">رفتن به محتوا</a>
 
-  <main>
-    <div class="wrap">
-      <div class="hero">
-        <img class="mark" src="../assets/parsrag-mark.svg" alt="نشان پارس‌رگ" width="88" height="88">
-        <h1>چت آفلاین با اسناد فارسی؛ RAG فارسی با مدل زبانی محلی</h1>
-        <p class="lead">پارس‌رگ به پرسش‌های شما درباره فایل‌های PDF، Word و PowerPoint، صفحه‌های اسکن‌شده و متن‌های فارسی و انگلیسی پاسخ می‌دهد و منبع هر پاسخ را نشان می‌دهد. استخراج متن، OCR، embedding و جست‌وجوی برداری روی سیستم شما انجام می‌شوند و پاسخ را مدل زبانی محلی با Ollama یا API انتخابی شما تولید می‌کند.</p>
-        <div class="actions">
-          <a class="button primary" href="https://github.com/Pooria82/ParsRAG/blob/main/README.fa.md">مشاهده در GitHub</a>
-          <a class="button secondary" href="#start">شروع سریع</a>
-        </div>
-        <figure class="shot">
-          <img src="../screenshots/workspace-fa-dark.png" width="1440" height="900" alt="فضای کاری راست‌به‌چپ پارس‌رگ با پاسخ و منابع مستند در حالت تیره">
-          <figcaption>هر گفت‌وگو اسناد، منابع و شاخه‌های پاسخ مستقل خود را دارد.</figcaption>
-        </figure>
+  <header class="topbar" data-topbar>
+    <div class="topbar__inner">
+      <a class="brand" href="./" aria-label="صفحهٔ اصلی پارس‌رگ">
+        <svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg>
+        <span class="brand__name">پارس‌رگ</span>
+      </a>
+      <nav class="topnav" aria-label="پیمایش اصلی">
+        <a href="#demo">ارجاع‌ها</a>
+        <a href="#journey">چطور کار می‌کند</a>
+        <a href="#modes">شیوه‌های پاسخ</a>
+        <a href="#privacy">حریم داده</a>
+        <a href="#install">نصب</a>
+      </nav>
+      <div class="topbar__end">
+        <a class="lang-link" href="../" hreflang="en" lang="en">English</a>
+        <a class="btn btn--line btn--sm" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>گیت‌هاب</span></a>
       </div>
     </div>
+  </header>
 
-    <section id="features">
+  <main id="main">
+    <!-- Hero: Persian letters drift like ink dust, then gather into the mark. -->
+    <section class="hero" aria-labelledby="hero-title">
+      <canvas class="hero__field" aria-hidden="true"></canvas>
+      <div class="hero__content">
+        <div class="hero__slot" aria-hidden="true"><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg></div>
+        <a class="pill" data-hero="pill" href="https://github.com/Pooria82/ParsRAG/blob/main/CHANGELOG.md"><span class="pill__dot" aria-hidden="true"></span>نسخهٔ ۰٫۲٫۰: ارجاع به بازهٔ صفحه، وقتی یک نکته از مرز دو صفحهٔ PDF می‌گذرد</a>
+        <h1 class="hero__title" id="hero-title" data-words>هر پاسخ، با نشانی صفحه‌اش.</h1>
+        <p class="hero__lead" data-hero="lead">پارس‌رگ اسناد فارسی و انگلیسی شما را روی رایانهٔ خودتان می‌خواند و هر پاسخ را به فایل و صفحه‌ای که از آن آمده پیوند می‌دهد.</p>
+        <div class="hero__actions" data-hero="actions">
+          <a class="btn btn--gold" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>مشاهده در گیت‌هاب</span></a>
+          <a class="btn btn--line" href="#install">نصب با داکر</a>
+        </div>
+      </div>
+      <a class="hero__cue" href="#demo" data-hero="cue"><span class="hero__cue-thread" aria-hidden="true"></span><span class="visually-hidden">برای دیدن یک پاسخ مستند، پایین بروید</span></a>
+    </section>
+
+    <!-- Marginalia: a pinned, scroll-driven answer whose citations are tied to their sources by gold threads. -->
+    <section class="demo" id="demo" aria-labelledby="demo-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="demo-title">پاسخ‌هایی که منبعشان در حاشیه است.</h2>
+        <p class="lead">مثل نسخهٔ خطی‌ای که حاشیه‌نویسی دارد، هر ادعا در پاسخ پارس‌رگ به همان بخشی از سند اشاره می‌کند که از آن آمده است. با @ به یک فایل ارجاع دهید تا بخشی از پرسش فقط در همان فایل جست‌وجو شود.</p>
+      </div>
+      <div class="demo__pin">
+        <div class="demo__stage" data-demo>
+          <svg class="threads" aria-hidden="true"></svg>
+          <article class="folio paper" aria-label="یک گفت‌وگوی نمونه">
+            <div class="folio__main">
+              <div class="composer" data-composer>
+                <p class="composer__text" data-question><span class="chip" data-seg="chip">@budget.pdf</span><span data-seg> هزینهٔ کل چقدر است؟ و </span><span class="chip" data-seg="chip">@timeline.docx</span><span data-seg> تحویل چه زمانی است؟</span><span class="caret" aria-hidden="true"></span></p>
+                <div class="composer__bar">
+                  <span class="composer__mode"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 6.5C10 4.8 6.6 4.4 3.5 5.6v13c3.1-1.2 6.5-.8 8.5.9 2-1.7 5.4-2.1 8.5-.9v-13c-3.1-1.2-6.5-.8-8.5.9Zm0 0v13"/></svg>فقط اسناد</span>
+                  <span class="composer__send" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m-6 6 6-6 6 6"/></svg></span>
+                </div>
+              </div>
+              <ol class="stages">
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>درک پرسش و زمینهٔ گفت‌وگو</li>
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>یافتن شواهد مرتبط در اسناد</li>
+                <li data-stage><span class="stages__tick" aria-hidden="true"></span>نگارش پاسخ نهایی</li>
+              </ol>
+              <div class="answer">
+                <p><span data-stream="1">هزینهٔ کل ۴٫۲ میلیارد ریال است و مجوزها و سه ماه پشتیبانی را هم شامل می‌شود.</span><sup class="cite" data-cite="1"><a href="#note-1">1</a></sup> <span data-stream="2">تحویل برای پایان آذر ۱۴۰۵ و پس از آزمون پذیرش برنامه‌ریزی شده است.</span><sup class="cite" data-cite="2"><a href="#note-2">2</a></sup></p>
+              </div>
+            </div>
+            <aside class="folio__margin" aria-label="منابع این پاسخ">
+              <p class="note" id="note-1" data-note="1"><span class="note__n">1</span><span class="note__file">budget.pdf</span><span class="note__loc">صفحهٔ ۳</span></p>
+              <p class="note" id="note-2" data-note="2"><span class="note__n">2</span><span class="note__file">timeline.docx</span><span class="note__loc">بند ۷</span></p>
+            </aside>
+          </article>
+          <div class="sources">
+            <figure class="doc" data-doc="1">
+              <figcaption class="doc__cap"><span class="doc__type doc__type--pdf">PDF</span><span class="doc__name">budget.pdf</span><span class="doc__loc">صفحهٔ ۳</span></figcaption>
+              <div class="doc__page">
+                <p class="doc__title">بودجهٔ پروژه</p>
+                <p>۲. هزینه‌ها و شرایط پرداخت</p>
+                <p class="doc__muted">سخت‌افزار و میزبانی را کارفرما تأمین می‌کند.</p>
+                <p class="doc__hl" data-hl="1"><mark>هزینهٔ کل: ۴٫۲ میلیارد ریال، شامل مجوزها و سه ماه پشتیبانی.</mark></p>
+                <p class="doc__muted">پرداخت در سه قسط و طبق جدول زمانی.</p>
+                <span class="doc__bar" style="--w:86%"></span><span class="doc__bar" style="--w:64%"></span>
+              </div>
+            </figure>
+            <figure class="doc" data-doc="2">
+              <figcaption class="doc__cap"><span class="doc__type doc__type--docx">DOCX</span><span class="doc__name">timeline.docx</span><span class="doc__loc">بند ۷</span></figcaption>
+              <div class="doc__page">
+                <p class="doc__title">زمان‌بندی تحویل</p>
+                <p>فاز ۳: یکپارچه‌سازی و آزمون پذیرش</p>
+                <p class="doc__muted">آزمون پذیرش روی داده‌های خود کارفرما انجام می‌شود.</p>
+                <p class="doc__hl" data-hl="2"><mark>تحویل برای پایان آذر ۱۴۰۵ و پس از قبولی در آزمون پذیرش برنامه‌ریزی شده است.</mark></p>
+                <p class="doc__muted">جلسه‌های آموزش پس از تحویل برگزار می‌شوند.</p>
+                <span class="doc__bar" style="--w:72%"></span>
+              </div>
+            </figure>
+          </div>
+        </div>
+      </div>
+      <p class="wrap caption">اسناد نمونه‌اند. با پایین رفتن، شکل‌گرفتن پاسخ را ببینید؛ در گفت‌وگوی واقعی، پنل منابع هر بخش ارجاع‌شده را باز می‌کند.</p>
+    </section>
+
+    <!-- A page's journey: one object morphs through the real ingestion sequence while the steps advance. -->
+    <section class="journey" id="journey" aria-labelledby="journey-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="journey-title">بر سر یک صفحه چه می‌آید.</h2>
+        <p class="lead">از بارگذاری تا پاسخ، هر مرحله‌ای که به سند شما دست می‌زند روی رایانهٔ خودتان اجرا می‌شود.</p>
+      </div>
+      <div class="journey__pin" data-journey data-file="report.pdf" data-lang-tag="fas+eng" data-collection="همین گفت‌وگو" data-answer="پاسخ با ۳ منبع" data-cite="report.pdf، صفحه‌های ۳ تا ۴">
+        <ol class="steps">
+          <li class="step" data-step><span class="step__n">۱</span><div><h3>بارگذاری</h3><p>PDF، Word، PowerPoint، تصویر یا متن اضافه کنید. نوع و حجم فایل پیش از خواندن بررسی می‌شود.</p></div></li>
+          <li class="step" data-step><span class="step__n">۲</span><div><h3>خواندن و OCR</h3><p>لایهٔ متنی مستقیم استخراج می‌شود. صفحه‌های اسکن‌شده و تصاویر با OCR تسرکت و دادهٔ فارسی و انگلیسی خوانده می‌شوند.</p></div></li>
+          <li class="step" data-step><span class="step__n">۳</span><div><h3>بخش‌ها</h3><p>متن به بخش‌هایی تقسیم می‌شود که فایل و صفحه، اسلاید، بند یا قسمت خود را به خاطر دارند. یک پل کوتاه، صفحه‌های پشت‌سرهم PDF را به هم وصل می‌کند.</p></div></li>
+          <li class="step" data-step><span class="step__n">۴</span><div><h3>بردارها</h3><p>مدل چندزبانهٔ multilingual-e5 هر بخش را به یک بردار تبدیل می‌کند؛ به‌صورت محلی، روی CPU یا GPU.</p></div></li>
+          <li class="step" data-step><span class="step__n">۵</span><div><h3>Qdrant</h3><p>بردارها در Qdrant و زیر نام همان گفت‌وگو ذخیره می‌شوند. گفت‌وگو را حذف کنید، بردارهایش هم حذف می‌شوند.</p></div></li>
+          <li class="step" data-step><span class="step__n">۶</span><div><h3>پاسخ مستند</h3><p>نزدیک‌ترین بخش‌ها همراه پرسش شما به مدل می‌رسند و پاسخ با منابعش برمی‌گردد.</p></div></li>
+        </ol>
+        <div class="jstage" aria-hidden="true"><div class="jstage__box" data-jstage></div></div>
+      </div>
+    </section>
+
+    <!-- Answer modes: one question, three answers. -->
+    <section class="modes" id="modes" aria-labelledby="modes-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="modes-title">شما تعیین می‌کنید مدل چقدر از خودش بگوید.</h2>
+        <p class="lead">سه شیوهٔ پاسخ صریح؛ همان‌هایی که در کادر پیام انتخاب می‌کنید. یک پرسش را ببینید که به سه شکل پاسخ داده می‌شود.</p>
+      </div>
+      <div class="wrap modes__body" data-modes>
+        <div class="seg" role="tablist" aria-label="شیوهٔ پاسخ‌گویی">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button class="seg__btn" role="tab" id="tab-strict" aria-controls="panel-strict" aria-selected="true">فقط بر اساس اسناد</button>
+          <button class="seg__btn" role="tab" id="tab-hybrid" aria-controls="panel-hybrid" aria-selected="false" tabindex="-1">اسناد و دانش مدل</button>
+          <button class="seg__btn" role="tab" id="tab-free" aria-controls="panel-free" aria-selected="false" tabindex="-1">گفت‌وگوی آزاد</button>
+        </div>
+        <div class="sheet paper">
+          <p class="sheet__q">تحویل چه زمانی است و چرا تاریخش عقب افتاد؟</p>
+          <div class="sheet__panels">
+            <div class="sheet__panel" role="tabpanel" id="panel-strict" aria-labelledby="tab-strict">
+              <p class="sheet__answer"><span class="seg-doc" data-stream>تحویل برای پایان آذر ۱۴۰۵ و پس از آزمون پذیرش برنامه‌ریزی شده است.</span><span class="cite-chip">timeline.docx، بند ۷</span> <span class="seg-gap" data-stream>اسناد انتخاب‌شده دلیل جابه‌جایی تاریخ را نگفته‌اند؛ برای همین این بخش بی‌پاسخ می‌ماند.</span></p>
+              <dl class="facts"><div><dt>بازیابی</dt><dd>الزامی، با دروازهٔ شواهد</dd></div><div><dt>دانش مدل</dt><dd>کنار گذاشته می‌شود</dd></div></dl>
+            </div>
+            <div class="sheet__panel" role="tabpanel" id="panel-hybrid" aria-labelledby="tab-hybrid" hidden>
+              <p class="sheet__answer"><span class="seg-doc" data-stream>تحویل برای پایان آذر ۱۴۰۵ و پس از آزمون پذیرش برنامه‌ریزی شده است.</span><span class="cite-chip">timeline.docx، بند ۷</span> <span class="seg-model" data-stream>اسناد دلیلی ذکر نکرده‌اند. چنین تاریخ‌هایی معمولاً وقتی آزمون پذیرش اضافه یا طولانی‌تر می‌شود جابه‌جا می‌شوند؛ با مسئول پروژه هم بررسی کنید.</span></p>
+              <dl class="facts"><div><dt>بازیابی</dt><dd>الزامی، با رتبه‌بندی دوباره</dd></div><div><dt>دانش مدل</dt><dd>می‌تواند شواهد را تکمیل کند</dd></div></dl>
+            </div>
+            <div class="sheet__panel" role="tabpanel" id="panel-free" aria-labelledby="tab-free" hidden>
+              <p class="sheet__answer"><span class="seg-model" data-stream>در این شیوه اسناد جست‌وجو نمی‌شوند. تاریخ تحویل معمولاً در زمان‌بندی یا قرارداد پروژه آمده است؛ برای پاسخ از اسناد خودتان، شیوه را عوض کنید.</span></p>
+              <dl class="facts"><div><dt>بازیابی</dt><dd>انجام نمی‌شود</dd></div><div><dt>دانش مدل</dt><dd>مستقیم به کار می‌رود</dd></div></dl>
+            </div>
+          </div>
+        </div>
+        <ul class="legend">
+          <li><span class="legend__key legend__key--doc" aria-hidden="true"></span>از اسناد شما، با ارجاع</li>
+          <li><span class="legend__key legend__key--model" aria-hidden="true"></span>از دانش خود مدل</li>
+          <li><span class="legend__key legend__key--gap" aria-hidden="true"></span>به دلیل نبود شواهد، پاسخ داده نشد</li>
+        </ul>
+        <p class="caption modes__note">شیوهٔ «فقط اسناد» وقتی شواهد بازیابی‌شده به آستانه نرسد، پاسخ نمی‌دهد. این یک محافظ است، نه تضمین؛ پاسخ‌های مهم را با منابعشان تطبیق دهید.</p>
+      </div>
+    </section>
+
+    <!-- Trust boundary: an illuminated frame around the workstation; the gate opens only for API providers. -->
+    <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="privacy-title">شما تعیین می‌کنید چه چیزی از رایانه‌تان خارج شود.</h2>
+        <p class="lead">استخراج متن، OCR، embedding و جست‌وجوی برداری همیشه محلی‌اند. فقط مدلی که انتخاب می‌کنید تعیین می‌کند پاسخ کجا نوشته شود.</p>
+      </div>
+      <div class="wrap boundary" data-boundary
+        data-frame="رایانهٔ شما" data-docs="اسناد شما" data-parse="استخراج و OCR" data-embed="Embedding"
+        data-qdrant="Qdrant" data-adapter="رابط مدل" data-ollama="Ollama"
+        data-private="سروری در اختیار شما" data-external="سرویس شخص ثالث" data-packet="پرسش + بخش‌های سند">
+        <div class="seg seg--provider" role="radiogroup" aria-label="ارائه‌دهندهٔ مدل">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button class="seg__btn" role="radio" aria-checked="true" data-provider="local">Ollama محلی</button>
+          <button class="seg__btn" role="radio" aria-checked="false" data-provider="private" tabindex="-1">API خصوصی</button>
+          <button class="seg__btn" role="radio" aria-checked="false" data-provider="external" tabindex="-1">API خارجی</button>
+        </div>
+        <div class="boundary__art"><svg class="boundary__svg" role="img" aria-label="استخراج متن، OCR، embedding و جست‌وجوی برداری همیشه محلی‌اند. فقط مدلی که انتخاب می‌کنید تعیین می‌کند پاسخ کجا نوشته شود."></svg></div>
+        <p class="boundary__note" aria-live="polite" data-note-local="پاسخ روی همین رایانه تولید می‌شود. هیچ پرسش یا بخشی از سند از راه رابط مدل خارج نمی‌شود." data-note-private="پرسش شما و بخش‌های بازیابی‌شده به سروری می‌روند که در اختیار خودتان است. سرویس‌های خصوصی سازگار با OpenAI می‌توانند بدون کلید کار کنند." data-note-external="پرسش شما و بخش‌های بازیابی‌شده به یک سرویس شخص ثالث می‌روند. پارس‌رگ پیش از نخستین درخواست، تأیید شما را می‌گیرد.">پاسخ روی همین رایانه تولید می‌شود. هیچ پرسش یا بخشی از سند از راه رابط مدل خارج نمی‌شود.</p>
+        <p class="caption">در همهٔ حالت‌ها embedding و Qdrant محلی می‌مانند و کلیدهای API فقط در حافظه یا متغیرهای محیطی نگه داشته می‌شوند، نه در حافظهٔ مرورگر یا لاگ‌ها.</p>
+      </div>
+    </section>
+
+    <!-- Formats: a shelf of book spines; pulling one out shows what it covers. -->
+    <section class="shelf" id="formats" aria-labelledby="shelf-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="shelf-title">یک قفسه برای هرچه می‌خوانید.</h2>
+        <p class="lead">فایل‌های آفیس، اسکن‌ها، داده و کد با ساختارشان خوانده می‌شوند تا ارجاع بتواند به اسلاید یا بخش اشاره کند، نه فقط به نام فایل.</p>
+      </div>
+      <div class="wrap shelf__body" data-shelf>
+        <div class="books" role="tablist" aria-label="خانواده‌های فایل">
+          <span class="book book--deco" style="--h:74%;--c:#123B32" aria-hidden="true"></span>
+          <button class="book" role="tab" id="book-1" aria-controls="card-1" aria-selected="true" style="--h:96%;--c:#146A57"><span class="book__title">اسناد</span><span class="book__count">.pdf .docx .pptx</span></button>
+          <button class="book" role="tab" id="book-2" aria-controls="card-2" aria-selected="false" tabindex="-1" style="--h:84%;--c:#2B4E86"><span class="book__title">تصاویر</span><span class="book__count">.png .jpg .tif</span></button>
+          <span class="book book--deco book--lean" style="--h:66%;--c:#0D2A23" aria-hidden="true"></span>
+          <button class="book" role="tab" id="book-3" aria-controls="card-3" aria-selected="false" tabindex="-1" style="--h:100%;--c:#8A6A2C"><span class="book__title">متن و داده</span><span class="book__count">.txt .md .csv</span></button>
+          <button class="book" role="tab" id="book-4" aria-controls="card-4" aria-selected="false" tabindex="-1" style="--h:88%;--c:#5B3B4F"><span class="book__title">نشانه‌گذاری و پیکربندی</span><span class="book__count">.html .yaml</span></button>
+          <button class="book" role="tab" id="book-5" aria-controls="card-5" aria-selected="false" tabindex="-1" style="--h:92%;--c:#1E5C6B"><span class="book__title">کد منبع</span><span class="book__count">.py .ts .sql</span></button>
+          <span class="book book--deco" style="--h:80%;--c:#173F35" aria-hidden="true"></span>
+        </div>
+        <div class="shelf__plank" aria-hidden="true"></div>
+        <div class="cards">
+          <div class="card" role="tabpanel" id="card-1" aria-labelledby="book-1"><h3>اسناد</h3><p class="exts" dir="ltr">.pdf .docx .pptx</p><p>استخراج ساختاریافته، همراه با OCR برای صفحه‌های اسکن‌شده یا پرتصویر PDF و تصاویر درون فایل‌های Word و PowerPoint.</p></div>
+          <div class="card" role="tabpanel" id="card-2" aria-labelledby="book-2" hidden><h3>تصاویر</h3><p class="exts" dir="ltr">.png .jpg .jpeg .webp .bmp .tif .tiff</p><p>اعتبارسنجی، نرمال‌سازی و خواندن با OCR فارسی و انگلیسی.</p></div>
+          <div class="card" role="tabpanel" id="card-3" aria-labelledby="book-3" hidden><h3>متن و داده</h3><p class="exts" dir="ltr">.txt .md .markdown .json .csv .tsv .log</p><p>استخراج UTF-8؛ JSON پیش از ایندکس اعتبارسنجی و نرمال می‌شود.</p></div>
+          <div class="card" role="tabpanel" id="card-4" aria-labelledby="book-4" hidden><h3>نشانه‌گذاری و پیکربندی</h3><p class="exts" dir="ltr">.html .htm .xml .yaml .yml .toml .ini .cfg</p><p>متن قابل‌مشاهده از نشانه‌گذاری و متن UTF-8 از فایل‌های پیکربندی.</p></div>
+          <div class="card" role="tabpanel" id="card-5" aria-labelledby="book-5" hidden><h3>کد منبع</h3><p class="exts" dir="ltr">.py .js .jsx .ts .tsx .css .sql</p><p>استخراج UTF-8 همراه با اطلاعات بخش‌ها تا پاسخ بتواند به جای دقیقی از فایل اشاره کند.</p></div>
+        </div>
+        <p class="caption shelf__limits">به‌طور پیش‌فرض هر گفت‌وگو تا ۱۰ فایل، هر فایل تا ۱۰۰ مبی‌بایت و هر بارگذاری تا ۵۰۰ مبی‌بایت را می‌پذیرد. فایل‌های آفیس از نظر فشرده‌سازی مشکوک بررسی می‌شوند و قالب‌های دودویی پشتیبانی‌نشده به‌جای اشتباه خوانده‌شدن، رد می‌شوند.</p>
+      </div>
+    </section>
+
+    <!-- Two directions: drag between the Persian and English workspaces. -->
+    <section class="dirs" id="directions" aria-labelledby="dirs-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="dirs-title">از راست به چپ، از چپ به راست.</h2>
+        <p class="lead">فضای کاری برای فارسی و برای انگلیسی چیده شده است، نه اینکه بعداً قرینه شده باشد. جداکننده را بکشید و مقایسه کنید.</p>
+      </div>
       <div class="wrap">
-        <h2>طراحی‌شده برای اسناد فارسی</h2>
-        <p class="intro">متن راست‌به‌چپ، OCR فارسی و embedding چندزبانه از ابتدا در طراحی دیده شده‌اند.</p>
-        <div class="grid">
-          <div class="card"><h3>پاسخ مستند و قابل‌ردیابی</h3><p>هر پاسخ نام فایل و صفحه، اسلاید، پاراگراف یا بخش منبع را نشان می‌دهد.</p></div>
-          <div class="card"><h3>پشتیبانی گسترده از فایل‌ها</h3><p>PDF، DOCX، PPTX، تصاویر، Markdown، JSON، CSV، HTML، YAML، لاگ و کد منبع.</p></div>
-          <div class="card"><h3>OCR در جای لازم</h3><p>OCR فارسی و انگلیسی با Tesseract برای صفحه‌های اسکن‌شده، تصاویر و عکس‌های داخل فایل‌های Office.</p></div>
-          <div class="card"><h3>محلی به‌صورت پیش‌فرض</h3><p>embeddingها و بردارهای Qdrant از سیستم خارج نمی‌شوند. استفاده از API بیرونی فقط با انتخاب و تأیید صریح شما ممکن است.</p></div>
-          <div class="card"><h3>پرسش دقیق</h3><p>با <code>@</code> بخشی از پرسش را به فایل مشخصی محدود کنید و با <code>/</code> به دستورهای سریع دسترسی داشته باشید.</p></div>
-          <div class="card"><h3>روی سخت‌افزار شما</h3><p>اجرای پیش‌فرض روی CPU و پشتیبانی از GPUهای NVIDIA و AMD با Docker Compose.</p></div>
+        <div class="compare" data-compare dir="ltr" style="--pos:50%">
+          <img class="compare__img" src="../assets/img/workspace-en-dark.png" width="1440" height="900" loading="lazy" decoding="async" alt="فضای کاری انگلیسی در پوستهٔ تیره، با چیدمان چپ به راست">
+          <div class="compare__top"><img class="compare__img" src="../assets/img/workspace-fa-dark.png" width="1440" height="900" loading="lazy" decoding="async" alt="فضای کاری فارسی در پوستهٔ تیره، با چیدمان راست به چپ"></div>
+          <span class="compare__tag compare__tag--fa" lang="fa">فارسی</span>
+          <span class="compare__tag compare__tag--en" lang="en">English</span>
+          <span class="compare__handle" aria-hidden="true"><span></span></span>
+          <input class="compare__range" type="range" min="0" max="100" value="50" aria-label="مقایسهٔ فضای کاری فارسی و انگلیسی">
         </div>
       </div>
     </section>
 
-    <section id="modes">
+    <!-- Quick start: a terminal with the real commands for each setup. -->
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="wrap section-head">
+        <h2 class="h2" id="install-title">روی رایانهٔ خودتان اجرا کنید.</h2>
+        <p class="lead">به Docker Engine همراه با Compose و بسته به مدل، ۸ تا ۱۶ گیگابایت RAM نیاز دارید. پس از نخستین دانلود، مدل محلی بدون اینترنت کار می‌کند.</p>
+      </div>
       <div class="wrap">
-        <h2>سه حالت پاسخ‌دهی</h2>
-        <p class="intro">تعیین کنید مدل تا چه اندازه از دانش خودش استفاده کند.</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th scope="col">حالت</th><th scope="col">بازیابی</th><th scope="col">دانش مدل</th><th scope="col">کاربرد</th></tr></thead>
-            <tbody>
-              <tr><td><strong>سخت‌گیرانه (Strict)</strong></td><td>الزامی، با آستانه شواهد</td><td>طبق قرارداد پرامپت کنار گذاشته می‌شود</td><td>پاسخ‌هایی که باید فقط به اسناد متکی باشند</td></tr>
-              <tr><td><strong>ترکیبی (Hybrid)</strong></td><td>الزامی و رتبه‌بندی‌شده</td><td>می‌تواند شواهد را تکمیل کند</td><td>توضیح و جمع‌بندی با اولویت اسناد</td></tr>
-              <tr><td><strong>فقط مدل (LLM-only)</strong></td><td>انجام نمی‌شود</td><td>مستقیم استفاده می‌شود</td><td>گفت‌وگوی عمومی بدون اسناد</td></tr>
-            </tbody>
-          </table>
+        <div class="term" data-term data-copy="کپی دستورها" data-copied="کپی شد">
+          <div class="term__bar">
+            <span class="term__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="term__tabs" role="tablist" aria-label="نوع نصب">
+              <button role="tab" id="t-cpu" aria-controls="cmd-cpu" aria-selected="true">مدل محلی روی CPU</button>
+              <button role="tab" id="t-gpu" aria-controls="cmd-gpu" aria-selected="false" tabindex="-1">پردازندهٔ گرافیکی NVIDIA</button>
+              <button role="tab" id="t-api" aria-controls="cmd-api" aria-selected="false" tabindex="-1">مدل از راه API</button>
+            </div>
+            <button class="term__copy" type="button" data-copy-btn><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M9 9h10v11H9zM5 15V4h10"/></svg><span data-copy-label>کپی دستورها</span></button>
+          </div>
+          <div class="term__body" dir="ltr">
+<pre id="cmd-cpu" role="tabpanel" aria-labelledby="t-cpu"><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="l">docker compose --profile local-model up -d qdrant ollama</span>
+<span class="l">docker compose --profile local-model run --rm ollama-init</span>
+<span class="l">docker compose --profile local-model up -d --build app</span></code></pre>
+<pre id="cmd-gpu" role="tabpanel" aria-labelledby="t-gpu" hidden><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model up -d qdrant ollama</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model run --rm ollama-init</span>
+<span class="l">docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model up -d --build app</span></code></pre>
+<pre id="cmd-api" role="tabpanel" aria-labelledby="t-api" hidden><code><span class="l">git clone https://github.com/Pooria82/ParsRAG.git</span>
+<span class="l">cd ParsRAG</span>
+<span class="l">cp .env.example .env</span>
+<span class="c"># Set LLM_PROVIDER=api, the model, base URL, key and disclosure flag in .env</span>
+<span class="l">docker compose up -d --build</span></code></pre>
+          </div>
         </div>
+        <p class="install__then">سپس <code dir="ltr">http://127.0.0.1:8000</code> را باز کنید. <a href="https://github.com/Pooria82/ParsRAG/blob/main/README.fa.md">راهنمای نصب</a> AMD، کارت‌های کم‌حافظه و اجرای بومی را هم پوشش می‌دهد.</p>
+        <nav class="install__links" aria-label="بیشتر بخوانید">
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">معماری</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/DATA.md">راهنمای داده و RAG</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/CHANGELOG.md">تغییرات نسخه‌ها</a>
+          <a href="https://github.com/Pooria82/ParsRAG/blob/main/SECURITY.md">سیاست امنیتی</a>
+        </nav>
       </div>
     </section>
 
-    <section id="screens">
-      <div class="wrap">
-        <h2>رابط کاربری دوزبانه</h2>
-        <p class="intro">یک فضای کاری به فارسی و انگلیسی، در حالت روشن و تیره.</p>
-        <div class="gallery">
-          <img src="../screenshots/home-fa-light.png" width="1440" height="900" loading="lazy" alt="صفحه اصلی پارس‌رگ به فارسی در حالت روشن">
-          <img src="../screenshots/sources-fa-light.png" width="1440" height="900" loading="lazy" alt="پنل منابع پاسخ با صفحه‌های مستند PDF">
-          <img src="../screenshots/model-fa-light.png" width="1440" height="900" loading="lazy" alt="تنظیمات مدل برای Ollama محلی یا API سازگار با OpenAI">
-          <img src="../screenshots/workspace-en-dark.png" width="1440" height="900" loading="lazy" alt="فضای کاری انگلیسی در حالت تیره">
+    <!-- Coda: the mark is drawn by a single gold thread. -->
+    <section class="coda" aria-labelledby="coda-title">
+      <div class="wrap coda__inner">
+        <div class="coda__mark" data-coda-mark><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg></div>
+        <h2 class="coda__title" id="coda-title">اسناد شما، روی میز خودتان می‌مانند.</h2>
+        <p class="lead">پارس‌رگ برای کسانی ساخته شده که نمی‌توانند فایل‌هایشان را به یک چت‌بات ابری بسپارند و باز هم پاسخی می‌خواهند که بشود بررسی‌اش کرد.</p>
+        <div class="hero__actions">
+          <a class="btn btn--gold" href="https://github.com/Pooria82/ParsRAG"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>مشاهده در گیت‌هاب</span></a>
+          <a class="btn btn--line" href="../" hreflang="en">خواندن نسخهٔ انگلیسی</a>
         </div>
-      </div>
-    </section>
-
-    <section id="start">
-      <div class="wrap">
-        <h2>شروع سریع با Docker</h2>
-        <p class="intro">به Docker همراه Compose و بسته به مدل ۸ تا ۱۶ گیگابایت RAM نیاز دارید. راهنمای کامل، اجرای API، CPU، NVIDIA و AMD را پوشش می‌دهد.</p>
-<pre><code>git clone https://github.com/Pooria82/ParsRAG.git
-cd ParsRAG
-cp .env.example .env
-docker compose --profile local-model up -d qdrant ollama
-docker compose --profile local-model run --rm ollama-init
-docker compose --profile local-model up -d --build app</code></pre>
-        <p>سپس <code>http://127.0.0.1:8000</code> را باز کنید. <a href="https://github.com/Pooria82/ParsRAG/blob/main/README.fa.md">راهنمای نصب</a>، <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">معماری</a> و <a href="https://github.com/Pooria82/ParsRAG/blob/main/DATA.md">راهنمای داده و RAG</a> را ببینید.</p>
       </div>
     </section>
   </main>
 
-  <footer class="site">
-    <div class="wrap">
-      <p>پارس‌رگ نرم‌افزاری source-available است و متن‌باز محسوب نمی‌شود. <a href="https://github.com/Pooria82/ParsRAG/blob/main/LICENSE">مجوز</a> و <a href="https://github.com/Pooria82/ParsRAG/blob/main/CITATION.cff">روش استناد</a> را ببینید.</p>
-      <p>© Pooria Madani · <a href="../" hreflang="en" lang="en">English version</a></p>
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <a class="brand" href="./" aria-label="صفحهٔ اصلی پارس‌رگ"><svg class="mark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+  <path class="mark__left" d="M23.9 12.2C18.2 6.8 10.7 7.5 7.4 10.6v23.8c5.2-2.8 10.7-1.5 16.5 4.1V12.2Z"/>
+  <path class="mark__right" d="M24.1 12.2c5.7-5.4 13.2-4.7 16.5-1.6v23.8c-5.2-2.8-10.7-1.5-16.5 4.1V12.2Z"/>
+  <path class="mark__lines" d="M24 37.8V14.2M11.8 16c3-.8 5.7-.1 8 1.7m-8 5c3-.8 5.7-.1 8 1.7m8.4-6.7c2.3-1.8 5-2.5 8-1.7m-8 8.4c2.3-1.8 5-2.5 8-1.7"/>
+  <path class="mark__spark" d="M24 2.2c.35 2.2 1.7 3.55 3.9 3.9C25.7 6.45 24.35 7.8 24 10c-.35-2.2-1.7-3.55-3.9-3.9 2.2-.35 3.55-1.7 3.9-3.9Z"/>
+  <path class="mark__spark mark__spark--small" d="M39.7 6.8c.2 1.2.95 1.95 2.15 2.15-1.2.2-1.95.95-2.15 2.15-.2-1.2-.95-1.95-2.15-2.15 1.2-.2 1.95-.95 2.15-2.15Z"/>
+</svg><span class="brand__name">پارس‌رگ</span></a>
+      <p>پارس‌رگ «منبع‌دسترس» است، نه متن‌باز. <a href="https://github.com/Pooria82/ParsRAG/blob/main/LICENSE">مجوز</a> و <a href="https://github.com/Pooria82/ParsRAG/blob/main/CITATION.cff">شیوهٔ ارجاع</a> را ببینید.</p>
+      <p class="footer__end"><span>© ۲۰۲۶ پوریا معدنی</span><a href="../" hreflang="en" lang="en">English</a></p>
     </div>
   </footer>
+
+  <script src="../assets/vendor/gsap.min.js" defer></script>
+  <script src="../assets/vendor/ScrollTrigger.min.js" defer></script>
+  <script src="../assets/vendor/lenis.min.js" defer></script>
+  <script type="module" src="../assets/js/main.js"></script>
 </body>
 </html>

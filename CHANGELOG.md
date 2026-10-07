@@ -5,6 +5,13 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Redesigned the bilingual project website around cited answers: a scroll-driven
+  demo ties each citation to its source page, followed by the ingestion
+  sequence, answer modes, the local trust boundary, supported formats and quick
+  start. Fonts and scripts are self-hosted, and reduced motion is respected.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
