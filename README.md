@@ -422,6 +422,12 @@ npm run test:e2e
 npm run test:pwa
 Set-Location ..
 
+# End-to-end pipeline (real parsing, embeddings, and Qdrant; stand-in model)
+docker run -d --rm -p 6333:6333 --name qdrant-e2e qdrant/qdrant:v1.19.1
+$env:PARSRAG_E2E = "1"
+.\.venv\Scripts\python.exe -m pytest backend/tests/e2e --no-cov
+docker stop qdrant-e2e
+
 docker compose config --quiet
 docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model config --quiet
 docker compose -f compose.yaml -f compose.gpu.yaml -f compose.gpu-low-vram.yaml --profile local-model config --quiet
