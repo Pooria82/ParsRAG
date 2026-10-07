@@ -40,7 +40,9 @@ with `gh repo edit`.
   `farsi`, `persian-nlp`, `document-qa`, `chat-with-pdf`, `local-llm`,
   `ollama`, `llamaindex`, `qdrant`, `ocr`, `tesseract`, `offline-first`,
   `self-hosted`, `fastapi`, `react`, `bilingual`, `rtl`, `source-available`.
-- **Website:** set it once a project page exists (for example GitHub Pages).
+- **Website:** `https://pooria82.github.io/ParsRAG-Landing/`. The site is maintained in its own
+  repository, [Pooria82/ParsRAG-Landing](https://github.com/Pooria82/ParsRAG-Landing); `docs/index.html`
+  and `docs/fa/index.html` here only redirect the old `pooria82.github.io/ParsRAG/` address.
 - **Social preview:** already uploaded; replace it only if the image changes.
 - **Releases:** publish each version as a GitHub Release with keyword-rich
   English and Persian notes. `CITATION.cff` and `pyproject.toml` declare the

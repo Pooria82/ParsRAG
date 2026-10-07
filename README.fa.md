@@ -11,6 +11,8 @@
   چت با اسناد فارسی و انگلیسی با پاسخ‌های مستند و قابل‌ردیابی؛ RAG فارسی با مدل زبانی محلی
 </p>
 
+<p align="center"><a href="https://pooria82.github.io/ParsRAG-Landing/fa/">وب‌سایت پروژه</a></p>
+
 <p align="center">
   <a href="LICENSE"><img alt="مجوز دسترسی به کد منبع" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
