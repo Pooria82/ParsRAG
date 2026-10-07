@@ -242,10 +242,14 @@ export function buildQuery(session: Session, settings: AppSettings, prompt: stri
 }
 
 /** Read an answer: numbered sources (cited ones flagged) and a per-file summary. */
-export function parseAnswer(value: unknown): { answer: string; citations: Citation[]; sources: SourcePassage[] } {
+export type AnswerOutcome = 'answered' | 'no_documents' | 'no_evidence' | 'partial_evidence';
+
+export function parseAnswer(value: unknown): { answer: string; citations: Citation[]; sources: SourcePassage[]; outcome: AnswerOutcome } {
   if (!isRecord(value) || typeof value.answer !== 'string' || !value.answer.trim()) {
     throw new Error('invalid_response');
   }
+  const outcome: AnswerOutcome = ['no_documents', 'no_evidence', 'partial_evidence'].includes(String(value.outcome))
+    ? value.outcome as AnswerOutcome : 'answered';
   const nodes = Array.isArray(value.source_nodes) ? value.source_nodes : [];
   const cited = new Set(Array.isArray(value.cited) ? value.cited.filter(number => Number.isInteger(number)) : []);
   const sources: SourcePassage[] = [];
@@ -262,7 +266,7 @@ export function parseAnswer(value: unknown): { answer: string; citations: Citati
     });
   });
   const used = sources.filter(source => source.cited);
-  return { answer: value.answer, citations: summarizeSources(used.length ? used : sources), sources };
+  return { answer: value.answer, citations: summarizeSources(used.length ? used : sources), sources, outcome };
 }
 
 export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown): SessionDocument[] {

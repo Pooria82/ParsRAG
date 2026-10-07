@@ -20,6 +20,18 @@ export function linkCitations(markdown: string, sourceCount: number): string {
   })).join('');
 }
 
+/** Source numbers an answer cites, in first-use order (like the server). */
+export function citedNumbers(markdown: string, sourceCount: number): number[] {
+  const cited: number[] = [];
+  for (const match of markdown.matchAll(CITATION)) {
+    for (const value of match[1].split(/\s*[,،]\s*/)) {
+      const number = Number(asciiDigits(value));
+      if (number >= 1 && number <= sourceCount && !cited.includes(number)) cited.push(number);
+    }
+  }
+  return cited;
+}
+
 /** Read the source number from a citation link, or undefined for other links. */
 export function citationNumber(href: string | undefined): number | undefined {
   const match = /^#cite-(\d{1,3})$/.exec(href ?? '');

@@ -11,6 +11,8 @@ interface ProgressiveMarkdownProps {
   active: boolean;
   externalImageLabel: string;
   onComplete?: () => void;
+  /** Text is still arriving from the model: show the caret, no reveal effect. */
+  streaming?: boolean;
   /** Number of sources; [n] markers within range become citation chips. */
   sourceCount?: number;
   onCite?: (source: number) => void;
@@ -18,7 +20,7 @@ interface ProgressiveMarkdownProps {
   formatNumber?: (source: number) => string;
 }
 
-export function ProgressiveMarkdown({ content, active, externalImageLabel, onComplete, sourceCount = 0, onCite, citeLabel, formatNumber }: ProgressiveMarkdownProps) {
+export function ProgressiveMarkdown({ content, active, externalImageLabel, onComplete, streaming = false, sourceCount = 0, onCite, citeLabel, formatNumber }: ProgressiveMarkdownProps) {
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [visibleLength, setVisibleLength] = useState(active && !reduceMotion ? 0 : content.length);
   const completeRef = useRef(onComplete);
@@ -53,7 +55,8 @@ export function ProgressiveMarkdown({ content, active, externalImageLabel, onCom
   }, [active, content, reduceMotion]);
 
   const visibleContent = linkCitations(normalizeMathMarkdown(content.slice(0, visibleLength)), sourceCount);
-  return <div className={'progressive-markdown' + (active && visibleLength < content.length ? ' is-revealing' : '')}>
+  const revealing = streaming || (active && visibleLength < content.length);
+  return <div className={'progressive-markdown' + (revealing ? ' is-revealing' : '')}>
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]} components={{
       a: ({ children, href }) => {
         const source = citationNumber(href);
@@ -66,6 +69,6 @@ export function ProgressiveMarkdown({ content, active, externalImageLabel, onCom
       table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
       pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
     }}>{visibleContent}</ReactMarkdown>
-    {active && visibleLength < content.length ? <span className="response-caret" aria-hidden="true" /> : null}
+    {revealing ? <span className="response-caret" aria-hidden="true" /> : null}
   </div>;
 }

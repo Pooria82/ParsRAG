@@ -4,17 +4,16 @@ from llama_index.core.prompts import PromptTemplate
 
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.exceptions import VectorDBConnectionError
-from backend.core.dto.output.query import QueryResponse
+from backend.core.dto.output.query import PreparedAnswer
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
-from backend.core.port.query_strategy import QueryStrategy
 from backend.core.port.reranker import Reranker
-from backend.core.service.citations import extract_citations
 from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
     configured_depth,
 )
+from backend.core.strategies.generation import GeneratingStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     order_by_document,
@@ -113,7 +112,7 @@ def _merge_evidence(
     return merged
 
 
-class HybridRAGStrategy(QueryStrategy):
+class HybridRAGStrategy(GeneratingStrategy):
     """Executes a hybrid RAG strategy with fallback, reranking, and multi-file support.
 
     This strategy retrieves a broad candidate pool across the document collection
@@ -154,7 +153,7 @@ class HybridRAGStrategy(QueryStrategy):
             else configured_depth("HYBRID_RERANK_TOP_K")
         )
 
-    def execute(
+    def prepare(
         self,
         query: str,
         chat_history: list[ChatMessage],
@@ -163,8 +162,8 @@ class HybridRAGStrategy(QueryStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
-    ) -> QueryResponse:
-        """Executes the hybrid RAG pipeline.
+    ) -> PreparedAnswer:
+        """Retrieve a broad pool, rerank it, and build the prompt.
 
         Args:
             query (str): The user's input query.
@@ -176,7 +175,7 @@ class HybridRAGStrategy(QueryStrategy):
             document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
-            QueryResponse: The generated answer and source citations.
+            PreparedAnswer: The prompt with numbered sources.
         """
         if progress:
             progress("retrieving")
@@ -218,9 +217,9 @@ class HybridRAGStrategy(QueryStrategy):
         )
 
         if not extracted_nodes:
-            return QueryResponse(
-                answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
-                source_nodes=[],
+            return PreparedAnswer(
+                immediate="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
+                outcome="no_documents",
             )
 
         # 4. Rerank the candidate pool (dense order when no reranker is set)
@@ -252,12 +251,4 @@ class HybridRAGStrategy(QueryStrategy):
         )
         context_str = format_multi_doc_context(final_source_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
-
-        if progress:
-            progress("generating")
-        answer = str(self.llm.complete(prompt)).strip()
-        return QueryResponse(
-            answer=answer,
-            source_nodes=final_source_nodes,
-            cited=extract_citations(answer, len(final_source_nodes)),
-        )
+        return PreparedAnswer(prompt=prompt, sources=final_source_nodes)

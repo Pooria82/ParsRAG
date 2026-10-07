@@ -33,6 +33,7 @@ const QUERY: Messages = {
   model_unavailable: { fa: 'سرویس مدل در دسترس نیست. اتصال یا اجرای Ollama را بررسی کنید.', en: 'The model service is unreachable. Check the connection or that Ollama is running.' },
   model_rejected: { fa: 'سرویس مدل درخواست را نپذیرفت.', en: 'The model service rejected the request.' },
   invalid_request: { fa: 'درخواست معتبر نیست؛ اشاره به سندها را بررسی کنید.', en: 'The request is invalid; check the document mentions.' },
+  stream_interrupted: { fa: 'ارتباط در میانهٔ پاسخ قطع شد. دوباره تلاش کنید.', en: 'The connection dropped in the middle of the answer. Try again.' },
 };
 
 const COMMON: Messages = {

@@ -27,6 +27,35 @@ export function errorFromBody(status: number, body: string): ApiError {
   return new ApiError(code, status, detail);
 }
 
+/** One event of a streamed answer (see POST /query/stream). */
+export type StreamEvent =
+  | { type: 'stage'; stage: QueryStage }
+  | { type: 'sources'; sourceNodes: unknown[] }
+  | { type: 'token'; text: string }
+  | { type: 'done'; data: unknown };
+
+const STAGES: readonly QueryStage[] = ['understanding', 'retrieving', 'generating', 'complete', 'failed'];
+
+/** Parse one Server-Sent Events block; errors become ApiError, unknown events undefined. */
+export function parseSseBlock(block: string): StreamEvent | undefined {
+  let kind = 'message';
+  const data: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) kind = line.slice(6).trim();
+    else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+  }
+  if (!data.length) return undefined;
+  let value: unknown;
+  try { value = JSON.parse(data.join('\n')); } catch { return undefined; }
+  const record = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+  if (kind === 'error') throw errorFromBody(0, JSON.stringify(record));
+  if (kind === 'stage' && STAGES.includes(record.stage as QueryStage)) return { type: 'stage', stage: record.stage as QueryStage };
+  if (kind === 'sources' && Array.isArray(record.source_nodes)) return { type: 'sources', sourceNodes: record.source_nodes };
+  if (kind === 'token' && typeof record.text === 'string') return { type: 'token', text: record.text };
+  if (kind === 'done') return { type: 'done', data: value };
+  return undefined;
+}
+
 async function failure(response: Response): Promise<ApiError> {
   return errorFromBody(response.status, await response.text().catch(() => ''));
 }
@@ -102,6 +131,54 @@ export class ParsRagApiClient {
     }
     if (!response.ok) throw await failure(response);
     return response.json() as Promise<unknown>;
+  }
+
+  /** Stream an answer; resolves with the final `done` body (same shape as /query). */
+  async queryStream(payload: unknown, signal: AbortSignal | undefined, onEvent: (event: StreamEvent) => void): Promise<unknown> {
+    let response: Response;
+    try {
+      response = await fetch(this.url('/query/stream'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify(payload),
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new ApiError('network');
+    }
+    if (!response.ok) throw await failure(response);
+    if (!response.body) throw new ApiError('request_failed');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: unknown;
+    let finished = false;
+    try {
+      while (!finished) {
+        const chunk = await reader.read();
+        if (chunk.done) { buffer += decoder.decode(); finished = true; }
+        else buffer += decoder.decode(chunk.value, { stream: true });
+        buffer = buffer.replace(/\r\n/g, '\n');
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary >= 0 || (finished && buffer.trim())) {
+          const block = boundary >= 0 ? buffer.slice(0, boundary) : buffer;
+          buffer = boundary >= 0 ? buffer.slice(boundary + 2) : '';
+          const event = parseSseBlock(block);
+          if (event?.type === 'done') result = event.data;
+          if (event) onEvent(event);
+          boundary = buffer.indexOf('\n\n');
+        }
+      }
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (error instanceof ApiError) throw error;
+      throw new ApiError('stream_interrupted');
+    } finally {
+      reader.releaseLock();
+    }
+    if (result === undefined) throw new ApiError('stream_interrupted');
+    return result;
   }
 
   async conversationTitle(prompt: string, language: 'fa' | 'en', signal?: AbortSignal): Promise<string> {

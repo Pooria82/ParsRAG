@@ -45,7 +45,7 @@ flowchart LR
 | Use case | Route | Input | Output | Ports | Runtime controls |
 | --- | --- | --- | --- | --- | --- |
 | `IngestDocuments` | `POST /ingest` | `IngestDocumentsCommand` | `IngestResponse` (message + per-file chunks and notices) | `DocumentRepository`, `DocumentParser`, `TextChunker` | ingestion limiter, session lock |
-| `AnswerQuery` | `POST /query` | `QueryRequest` | `QueryResponse` | `DocumentRepository`, `QuestionCondenser`, `QueryStrategy`, `ProgressTracker` | query limiter |
+| `AnswerQuery` | `POST /query`, `POST /query/stream` (SSE events: `stage`, `sources`, `token`, `done`, `error`) | `QueryRequest` | `QueryResponse` (answer, numbered `source_nodes`, `cited`, `outcome`) | `DocumentRepository`, `QuestionCondenser`, `QueryStrategy`, `ProgressTracker` | query limiter |
 | `ReadQueryProgress` | `GET /queries/{id}/progress` | `UUID` | `QueryProgressResponse` | `ProgressTracker` | — |
 | `ListSessionFiles` | `GET /sessions/{id}/files` | session ID | `list[str]` | `DocumentRepository` | — |
 | `ReuseDocument` | `POST /sessions/{id}/files/reuse` | session ID, `ReuseDocumentRequest` | `ReusedDocumentResponse` | `DocumentRepository` | ingestion limiter, two session locks |

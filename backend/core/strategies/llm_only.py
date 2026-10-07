@@ -2,9 +2,9 @@ from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
-from backend.core.dto.output.query import QueryResponse
+from backend.core.dto.output.query import PreparedAnswer
 from backend.core.port.progress_tracker import ProgressCallback
-from backend.core.port.query_strategy import QueryStrategy
+from backend.core.strategies.generation import GeneratingStrategy
 from backend.core.strategies.prompt_rules import FORMATTING_RULES, LANGUAGE_RULES
 
 LLM_ONLY_PROMPT_TEMPLATE = (
@@ -22,7 +22,7 @@ Answer:"""
 )
 
 
-class LLMOnlyStrategy(QueryStrategy):
+class LLMOnlyStrategy(GeneratingStrategy):
     """Executes a pure LLM strategy without any retrieval.
 
     This strategy answers the user's question relying solely on the LLM's
@@ -34,7 +34,7 @@ class LLMOnlyStrategy(QueryStrategy):
         self.prompt_template = PromptTemplate(LLM_ONLY_PROMPT_TEMPLATE)
         self.llm = Settings.llm
 
-    def execute(
+    def prepare(
         self,
         query: str,
         chat_history: list[ChatMessage],
@@ -43,8 +43,8 @@ class LLMOnlyStrategy(QueryStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
-    ) -> QueryResponse:
-        """Executes the LLM-only pipeline.
+    ) -> PreparedAnswer:
+        """Build the model-only prompt; nothing is retrieved.
 
         Args:
             query (str): The user's input query.
@@ -56,12 +56,6 @@ class LLMOnlyStrategy(QueryStrategy):
             document_segments: Ignored in this strategy.
 
         Returns:
-            QueryResponse: The LLM's raw answer.
+            PreparedAnswer: The prompt; the question is already condensed.
         """
-        # Note: In a chat scenario, you could pass the full chat history directly to self.llm.chat()
-        # but since the query is already condensed, we just pass the query.
-        if progress:
-            progress("generating")
-        prompt = self.prompt_template.format(query=query)
-        response = self.llm.complete(prompt)
-        return QueryResponse(answer=str(response).strip())
+        return PreparedAnswer(prompt=self.prompt_template.format(query=query))
