@@ -27,7 +27,7 @@ jobs:
       - run: python -m ruff check backend backend/tests
       - run: python -m mypy backend --strict
       - run: python -m pytest --cov=backend --cov-report=term-missing --cov-report=xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-${{ matrix.os }}
           path: coverage.xml
