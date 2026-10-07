@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.documents import ExtractedNode, ParsedDocument
 from backend.core.dto.output.query import QueryResponse
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
@@ -46,18 +46,19 @@ def test_tagged_prompt_keeps_each_question_with_its_document() -> None:
 def test_multi_file_ingest_success() -> None:
     """Verifies that uploading multiple files in a single batch succeeds."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
         patch(
-            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+            "backend.infrastructure.parsers.document_parser.parse_document_file"
         ) as mock_parse_document,
         patch("backend.infrastructure.parsers.chunker.chunk_text") as mock_chunk_text,
     ):
-        mock_parse_document.return_value = [
-            MagicMock(text="Extracted text content", metadata={"section": 1})
-        ]
+        mock_parse_document.return_value = ParsedDocument(
+            [MagicMock(text="Extracted text content", metadata={"section": 1})]
+        )
         mock_chunk_text.return_value = [
             ExtractedNode(text="Chunk 1", metadata={"filename": "doc.docx"})
         ]
@@ -111,6 +112,7 @@ def test_multi_file_ingest_success() -> None:
 
 def test_reuse_document_copies_indexed_file_without_upload() -> None:
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     repo.get_session_files.side_effect = [["guide.pdf"], []]
     repo.copy_document.return_value = 4
     app.dependency_overrides[get_document_repository] = lambda: repo
@@ -131,6 +133,7 @@ def test_reuse_document_copies_indexed_file_without_upload() -> None:
 
 def test_reuse_rejects_missing_or_duplicate_file() -> None:
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: repo
     repo.get_session_files.return_value = []
     missing = client.post(
@@ -157,6 +160,7 @@ def test_reuse_rejects_missing_or_duplicate_file() -> None:
 def test_multi_file_ingest_exceeds_limit() -> None:
     """Verifies that uploading more than 10 files returns HTTP 400."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     files_payload = [
@@ -188,6 +192,7 @@ def test_multi_file_ingest_exceeds_limit() -> None:
 def test_ingest_enforces_capacity_across_separate_requests() -> None:
     """Existing session files count toward the ten-file capacity."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     mock_repo.get_session_files.return_value = [
         f"existing-{index}.pdf" for index in range(10)
     ]
@@ -257,13 +262,33 @@ def test_context_exposes_reliable_location_to_the_model() -> None:
             )
         ]
     )
-    assert "[source: guide.pdf, page: 7]" in formatted
+    assert "[1] guide.pdf, page: 7\nLocated text" in formatted
+
+
+def test_excerpts_are_numbered_in_document_order_for_citation() -> None:
+    from backend.core.strategies.multi_doc_utils import order_by_document
+
+    nodes = order_by_document(
+        [
+            ExtractedNode(text="a1", metadata={"filename": "a.pdf", "page": 1}),
+            ExtractedNode(text="b1", metadata={"filename": "b.pdf", "page": 2}),
+            ExtractedNode(text="a2", metadata={"filename": "a.pdf", "page": 3}),
+        ]
+    )
+    formatted = format_multi_doc_context(nodes)
+
+    assert [node.text for node in nodes] == ["a1", "a2", "b1"]
+    assert formatted.index("[1] a.pdf, page: 1\na1") < formatted.index(
+        "[2] a.pdf, page: 3\na2"
+    )
+    assert "=== سند 2: b.pdf ===\n\n[3] b.pdf, page: 2\nb1" in formatted
 
 
 @patch("backend.core.strategies.strict_rag.Settings")
 def test_strict_rag_balanced_multi_file_retrieval(mock_settings: MagicMock) -> None:
     """Verifies that Strict RAG performs balanced per-file retrieval across 3 session files."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     mock_repo.get_session_files.return_value = [
         "fileA.docx",
         "fileB.docx",

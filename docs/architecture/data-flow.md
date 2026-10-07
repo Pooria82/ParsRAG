@@ -64,7 +64,7 @@ sequenceDiagram
         UC->>UC: read_bounded (413 over file/batch budget)
         UC->>V: validate_upload(name, bytes)
         V-->>UC: ok or ValueError (400)
-        UC->>DP: parse_sections(bytes, name)
+        UC->>DP: parse(bytes, name)
         DP-->>UC: ParsedSection[] (OCR inside adapter)
         loop each section
             UC->>TC: chunk(text, metadata)
@@ -77,7 +77,15 @@ sequenceDiagram
     R-->>B: 200 {"message": "... (N chunks)."}
 ```
 
-## Question answering: `POST /query`
+## Question answering: `POST /query` and `POST /query/stream`
+
+`POST /query/stream` runs the same steps but returns Server-Sent Events:
+`stage` (understanding, retrieving, generating), `sources` (the numbered
+excerpts, before generation), `token` (text deltas), and `done` (the
+`QueryResponse` below). An error after the stream started arrives as an
+`error` event with `{detail, code}`. Closing the stream releases the query
+slot and stops generation. Strategies split into `prepare` (retrieval,
+evidence gate, numbered prompt) and a shared generation step.
 
 ```mermaid
 sequenceDiagram
@@ -106,8 +114,8 @@ sequenceDiagram
         ST->>ST: evidence gate (Strict) or rerank (Hybrid)
     end
     ST->>PG: stage = generating
-    ST->>M: complete(prompt with grouped context)
-    ST-->>UC: QueryResponse(answer, source_nodes)
+    ST->>M: complete(prompt with numbered excerpts [1]..[n])
+    ST-->>UC: QueryResponse(answer, source_nodes, cited)
     UC->>PG: stage = complete (failed on any error)
     UC-->>R: QueryResponse
     R-->>B: 200 answer + citations

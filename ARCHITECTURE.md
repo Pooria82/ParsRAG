@@ -139,6 +139,7 @@ Detailed sequence diagrams for every flow are in the
 | Flow | Entry | Use case | Ports used |
 | --- | --- | --- | --- |
 | Upload documents | `POST /ingest` | `IngestDocuments` | `DocumentParser`, `TextChunker`, `DocumentRepository` |
+| Ask a question (streamed) | `POST /query/stream` (SSE) | `AnswerQuery.stream` | `QuestionCondenser`, `QueryStrategy`, `DocumentRepository`, `ProgressTracker` |
 | Ask a question | `POST /query` | `AnswerQuery` | `QuestionCondenser`, `QueryStrategy`, `DocumentRepository`, `ProgressTracker` |
 | Follow progress | `GET /queries/{id}/progress` | `ReadQueryProgress` | `ProgressTracker` |
 | Reuse a document | `POST /sessions/{id}/files/reuse` | `ReuseDocument` | `DocumentRepository` |
@@ -162,9 +163,11 @@ Detailed sequence diagrams for every flow are in the
 ## 7. Frontend
 
 The React and TypeScript workspace in `frontend/` is built by Vite and served
-by FastAPI from `frontend/dist`. It keeps conversations, branches, and
-preferences in `localStorage`, discovers upload limits from `/capabilities`,
-polls `/queries/{id}/progress` during generation, and registers a service
+by FastAPI from `frontend/dist`. It keeps conversations, branches, and answer
+sources in IndexedDB (preferences in `localStorage`), discovers upload limits
+from `/capabilities`,
+reads answers from `/query/stream` as they are generated (stages, numbered
+sources, text, then the final result with cited source numbers), and registers a service
 worker that caches only the application shell — API traffic always goes to the
 network. See [ADR 06](.context/06_Conversation_Workspace.md),
 [ADR 07 (PWA)](.context/07_PWA_Offline_Shell.md), and

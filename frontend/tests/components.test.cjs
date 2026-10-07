@@ -53,6 +53,39 @@ test('assistant markdown repairs model-produced parenthesized and escaped formul
   assert.equal(normalizeMathMarkdown('`(F = ma)`'), '`(F = ma)`');
 });
 
+test('assistant markdown never typesets Persian prose as mathematics', () => {
+  assert.equal(normalizeMathMarkdown(String.raw`توابع مثلثاتی مانند \sin و \cos$$ و مفاهیم`),
+    String.raw`توابع مثلثاتی مانند $\sin$ و $\cos$ و مفاهیم`);
+  assert.equal(normalizeMathMarkdown(String.raw`(مانند \sin و \cos) در صفحه ۲`),
+    String.raw`(مانند $\sin$ و $\cos$) در صفحه ۲`);
+  assert.equal(normalizeMathMarkdown(String.raw`$مانند \sin$ و $\cos$`), String.raw`مانند $\sin$ و $\cos$`);
+  assert.equal(normalizeMathMarkdown(String.raw`$x \text{ برابر } y$`), String.raw`$x \text{ برابر } y$`);
+});
+
+test('assistant markdown wraps bare LaTeX and drops unmatched delimiters', () => {
+  assert.equal(normalizeMathMarkdown(String.raw`انرژی \frac{1}{2}mv^2 است`), String.raw`انرژی $\frac{1}{2}mv^2$ است`);
+  assert.equal(normalizeMathMarkdown(String.raw`زاویه \theta و \alpha + \beta = \pi`),
+    String.raw`زاویه $\theta$ و $\alpha + \beta = \pi$`);
+  assert.equal(normalizeMathMarkdown(String.raw`the function \sin x is periodic`), String.raw`the function $\sin x$ is periodic`);
+  assert.equal(normalizeMathMarkdown('Unclosed $x^2 math'), 'Unclosed x^2 math');
+});
+
+test('assistant markdown leaves paths, escaped prices, and display blocks alone', () => {
+  assert.equal(normalizeMathMarkdown(String.raw`path C:\Users\me and price \$5`), String.raw`path C:\Users\me and price \$5`);
+  assert.equal(normalizeMathMarkdown('$$\nx^2\n$$'), '$$\nx^2\n$$');
+  assert.equal(normalizeMathMarkdown(String.raw`رابطه $L_i = R_{i-1}$ است.`), String.raw`رابطه $L_i = R_{i-1}$ است.`);
+});
+
+test('repaired Persian math renders through KaTeX without Persian in math mode', () => {
+  const html = render(ChatFeed, { messages: [{ id: 'math-fa', role: 'assistant', timestamp: 1,
+    content: String.raw`توابع مثلثاتی مانند \sin و \cos$$ و مفاهیم` }],
+    language: 'fa', isGenerating: false, activeMode: 'strict', onRetry: noop, onEditPrompt: noop,
+    onSelectVariant: noop, onRevealComplete: noop, isBusy: false });
+  assert.equal((html.match(/class="katex"/g) || []).length, 2);
+  assert.doesNotMatch(html, /<annotation[^>]*>[^<]*[\u0600-\u06FF]/);
+  assert.doesNotMatch(html, /\$\$/);
+});
+
 test('query progress identifies the real active pipeline stage', () => {
   const html = render(ChatFeed, { messages: [], language: 'fa', isGenerating: true,
     activeMode: 'hybrid', queryStage: 'retrieving', onRetry: noop, onEditPrompt: noop,

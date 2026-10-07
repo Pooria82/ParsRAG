@@ -19,6 +19,7 @@ services:
       PARSRAG_INGEST_CONCURRENCY: "${PARSRAG_INGEST_CONCURRENCY:-1}"
       PARSRAG_QUERY_CONCURRENCY: "${PARSRAG_QUERY_CONCURRENCY:-2}"
       PARSRAG_ALLOWED_ORIGINS: "${PARSRAG_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+      PARSRAG_ALLOWED_HOSTS: "${PARSRAG_ALLOWED_HOSTS:-}"
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
       QDRANT_COLLECTION: "${QDRANT_COLLECTION:-}"
@@ -33,6 +34,7 @@ services:
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       PARSRAG_CONFIG_PATH: /var/lib/parsrag/model-configuration.json
       EMBED_MODEL_NAME: "${EMBED_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      EMBED_E5_PREFIXES: "${EMBED_E5_PREFIXES:-0}"
       EMBED_DEVICE: "${EMBED_DEVICE:-auto}"
       EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
       EMBED_CACHE_DIR: /home/parsrag/.cache/huggingface
@@ -42,17 +44,25 @@ services:
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"
       OCR_ENABLED: "${OCR_ENABLED:-1}"
       OCR_LANGUAGES: "${OCR_LANGUAGES:-fas+eng}"
-      OCR_DPI: "${OCR_DPI:-300}"
+      OCR_DPI: "${OCR_DPI:-200}"
+      OCR_ORIENTATION: "${OCR_ORIENTATION:-1}"
       OCR_TIMEOUT_SECONDS: "${OCR_TIMEOUT_SECONDS:-45}"
       OCR_MAX_PAGES: "${OCR_MAX_PAGES:-30}"
       OCR_MAX_IMAGES: "${OCR_MAX_IMAGES:-30}"
       OCR_MAX_IMAGE_PIXELS: "${OCR_MAX_IMAGE_PIXELS:-40000000}"
       OCR_MIN_IMAGE_PIXELS: "${OCR_MIN_IMAGE_PIXELS:-10000}"
-      STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.80}"
+      STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.75}"
       RAG_TOP_K: "${RAG_TOP_K:-}"
       STRICT_RAG_TOP_K: "${STRICT_RAG_TOP_K:-}"
       HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
       HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-}"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-8192}"
+      MODEL_CONTEXT_WINDOW: "${MODEL_CONTEXT_WINDOW:-32768}"
+      LLM_REQUEST_TIMEOUT_SECONDS: "${LLM_REQUEST_TIMEOUT_SECONDS:-120}"
+      CONDENSE_TIMEOUT_SECONDS: "${CONDENSE_TIMEOUT_SECONDS:-30}"
+      RERANK_MODEL: "${RERANK_MODEL:-miniReranker_arabic_v1}"
+      KEYWORD_SEARCH: "${KEYWORD_SEARCH:-1}"
+      RERANK_CACHE_DIR: /home/parsrag/.cache/flashrank
     volumes:
       - model_cache:/home/parsrag/.cache
       - app_config:/var/lib/parsrag
@@ -62,7 +72,9 @@ services:
         condition: service_healthy
     read_only: true
     tmpfs:
-      - /tmp:size=256m,mode=1777
+      # Multipart uploads larger than 1 MiB are spooled here. RAM-backed, so
+      # raw files never reach disk; sized to hold the largest allowed request.
+      - /tmp:size=${PARSRAG_TMPFS_SIZE:-576m},mode=1777
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -102,7 +114,7 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-1}"
       OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-1}"
       OLLAMA_FLASH_ATTENTION: "${OLLAMA_FLASH_ATTENTION:-1}"
-      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-4096}"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-8192}"
     volumes:
       - ollama_models:/root/.ollama
     mem_limit: "${OLLAMA_MEMORY_LIMIT:-12g}"

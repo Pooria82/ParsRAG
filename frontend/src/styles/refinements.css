@@ -109,3 +109,51 @@
   .response-caret, .thinking-dots i, .connection-status .status-dot, .query-loader, .query-loader i, .query-progress-label { animation: none; }
   .query-progress-label { color: var(--secondary); background: none; }
 }
+.document-meta p.document-notice{display:flex;align-items:center;gap:5px;color:var(--warning);margin-top:4px}
+
+/* Numbered citations: chips in the answer, expandable source cards below it. */
+.cite-chip{display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;height:1.5em;padding:0 .35em;margin-inline:.12em;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:.72em;font-weight:700;vertical-align:.2em;line-height:1;cursor:pointer;border:1px solid color-mix(in srgb,var(--accent) 22%,transparent)}
+.cite-chip:hover,.cite-chip:focus-visible{background:var(--accent);color:var(--on-accent)}
+.source-list{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 12px}
+.source-list>header{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--secondary);margin-bottom:8px}
+.source-list ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.source-card details{border-radius:10px;background:var(--surface-soft)}
+.source-card.is-active details{box-shadow:0 0 0 2px var(--accent);animation:source-flash 1.4s var(--ease-out)}
+.source-card summary{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;list-style:none}
+.source-card summary::-webkit-details-marker{display:none}
+.source-number{flex-shrink:0;display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:7px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:700}
+.source-title{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.source-title bdi{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-title small{font-size:10.5px;color:var(--muted)}
+.source-chevron{color:var(--muted);transition:transform var(--ease)}
+.source-card details[open] .source-chevron{transform:rotate(180deg)}
+.source-card blockquote{margin:0 10px 10px;padding:4px 12px 6px;font-size:12.5px;line-height:1.95;color:var(--secondary);white-space:pre-wrap;max-height:260px;overflow:auto;border-inline-start:3px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+.source-more{margin-top:8px}
+.source-more>summary{cursor:pointer;font-size:11.5px;color:var(--muted);padding:4px 2px}
+.source-more>ol{margin-top:6px}
+@keyframes source-flash{0%{background:var(--accent-soft)}100%{background:var(--surface-soft)}}
+@media (prefers-reduced-motion:reduce){.source-card.is-active details{animation:none}.source-chevron{transition:none}}
+
+/* Questions written from the conversation's own documents. */
+.document-questions{margin-top:20px}
+.document-questions .starters-label{display:flex;align-items:center;gap:6px;color:var(--accent)}
+.document-question-list{display:grid;gap:8px}
+.document-question{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:start;padding:12px 15px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent-soft) 55%,var(--surface));font-size:13px;line-height:1.7;color:var(--ink)}
+.document-question:hover,.document-question:focus-visible{background:var(--accent-soft);border-color:var(--accent);box-shadow:var(--shadow)}
+.document-question:hover .starter-arrow{opacity:1}
+.document-question.is-loading{height:46px;border-style:dashed;background:linear-gradient(90deg,var(--surface-soft) 25%,var(--surface-hover) 50%,var(--surface-soft) 75%);background-size:200% 100%;animation:question-shimmer 1.4s linear infinite}
+@keyframes question-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* Where an answer came from. */
+.grounding-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:500;border:1px solid var(--line);color:var(--secondary);background:var(--surface-soft)}
+.grounding-badge small{color:var(--muted);font-size:10px}
+.grounding-documents{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:var(--accent-soft)}
+.grounding-hybrid{color:var(--accent);border-color:var(--line-strong)}
+.grounding-not_found{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
+
+/* Source cards preview their excerpt and mark the question's words. */
+.source-list>header .source-file{margin-inline-start:auto;font-weight:400;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%}
+.source-title .source-preview{font-weight:400;color:var(--ink)}
+.source-card mark{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--ink);border-radius:3px;padding:0 1px}
+@media (prefers-reduced-motion:reduce){.document-question.is-loading{animation:none}}
+.crash-screen{min-height:100dvh;display:grid;place-content:center;gap:14px;text-align:center;padding:24px;background:var(--canvas);color:var(--ink)}.crash-screen h1{font-size:20px}.crash-screen p{color:var(--secondary)}.crash-screen .button{justify-self:center}

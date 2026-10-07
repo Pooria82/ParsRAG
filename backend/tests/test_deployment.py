@@ -50,12 +50,35 @@ def test_compose_keeps_infrastructure_private_and_persistent() -> None:
     )
     assert 'OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-1}"' in compose
     assert 'mem_limit: "${PARSRAG_APP_MEMORY_LIMIT:-6g}"' in compose
+    assert "/tmp:size=${PARSRAG_TMPFS_SIZE:-576m},mode=1777" in compose
 
     ollama_service = compose.split("\n  ollama:\n", maxsplit=1)[1].split(
         "\n  ollama-init:\n", maxsplit=1
     )[0]
     assert "- parsrag_backend" in ollama_service
     assert "- parsrag_egress" in ollama_service
+
+
+def test_upload_spool_holds_the_largest_allowed_request() -> None:
+    """The default RAM-backed /tmp can hold a full upload request."""
+    example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    values = dict(line.split("=", 1) for line in example.splitlines() if "=" in line)
+    tmpfs_bytes = int(values["PARSRAG_TMPFS_SIZE"].removesuffix("m")) * 1024 * 1024
+
+    assert tmpfs_bytes >= int(values["PARSRAG_MAX_REQUEST_BYTES"])
+
+
+def test_small_upload_spool_is_reported(caplog: pytest.LogCaptureFixture) -> None:
+    """Operators learn at startup when large uploads cannot be spooled."""
+    from backend.main import warn_if_upload_spool_is_small
+
+    usage = MagicMock(total=256 * 1024 * 1024)
+    with patch("backend.main.shutil.disk_usage", return_value=usage):
+        assert warn_if_upload_spool_is_small(534773760)
+        assert not warn_if_upload_spool_is_small(100 * 1024 * 1024)
+    assert "PARSRAG_TMPFS_SIZE" in caplog.text
+    with patch("backend.main.shutil.disk_usage", side_effect=OSError):
+        assert not warn_if_upload_spool_is_small(534773760)
 
 
 def test_docker_context_excludes_secrets_and_local_test_data() -> None:

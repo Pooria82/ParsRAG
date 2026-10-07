@@ -1,26 +1,29 @@
 """Use case: validate, parse, chunk, and index a bounded batch of documents."""
 
+import hashlib
 import io
 import logging
 from collections.abc import Callable
 from typing import BinaryIO
 
-from backend.core.domain.documents import ExtractedNode, ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
 from backend.core.domain.exceptions import (
     ConflictError,
+    DocumentError,
     InvalidInputError,
     PayloadTooLargeError,
 )
 from backend.core.domain.session import INVALID_SESSION_ID_MESSAGE, is_valid_session_id
 from backend.core.domain.upload_policy import UploadPolicy
 from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
-from backend.core.dto.output.common import MessageResponse
+from backend.core.dto.output.ingestion import IngestedFile, IngestResponse
 from backend.core.port.document_parser import DocumentParser
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.text_chunker import TextChunker
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.correlation import current_correlation_id
 from backend.core.runtime.session_locks import SessionLocks
+from backend.core.service.text_normalization import normalize_persian
 from backend.core.use_case.ingestion.file_validation import validate_upload
 
 READ_CHUNK_BYTES = 1024 * 1024
@@ -42,12 +45,14 @@ def read_bounded(
         if size > policy.max_file_bytes:
             limit_mb = policy.max_file_bytes // 1024 // 1024
             raise PayloadTooLargeError(
-                f"File '{filename}' exceeds the {limit_mb}MB limit."
+                f"File '{filename}' exceeds the {limit_mb}MB limit.",
+                code="file_too_large",
             )
         if size > remaining_batch_bytes:
             raise PayloadTooLargeError(
                 "The upload batch exceeds the configured "
-                f"{policy.max_batch_bytes // 1024 // 1024}MB limit."
+                f"{policy.max_batch_bytes // 1024 // 1024}MB limit.",
+                code="batch_too_large",
             )
         buffer.write(chunk)
     return buffer.getvalue()
@@ -79,7 +84,7 @@ class IngestDocuments:
         self._session_locks = session_locks
         self._policy_provider = policy_provider
 
-    def execute(self, command: IngestDocumentsCommand) -> MessageResponse:
+    def execute(self, command: IngestDocumentsCommand) -> IngestResponse:
         """Ingest the batch and summarize how many chunks were indexed.
 
         Raises:
@@ -90,29 +95,34 @@ class IngestDocuments:
             EmptyDocumentError: A document has no extractable text.
         """
         if not is_valid_session_id(command.session_id):
-            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE)
+            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE, code="invalid_session")
         if not command.files:
-            raise InvalidInputError("No file provided.")
+            raise InvalidInputError("No file provided.", code="no_file")
         policy = self._policy_provider()
         if len(command.files) > policy.max_files_per_session:
             raise InvalidInputError(
                 f"A maximum of {policy.max_files_per_session} files can be uploaded "
-                "per request."
+                "per request.",
+                code="too_many_files",
             )
         incoming_names = [item.filename or "" for item in command.files]
         if len(set(incoming_names)) != len(incoming_names):
-            raise InvalidInputError("Duplicate filenames are not allowed.")
+            raise InvalidInputError(
+                "Duplicate filenames are not allowed.", code="duplicate_file"
+            )
 
         with self._limiter.slot(), self._session_locks.hold(command.session_id):
             existing_names = set(self._repository.get_session_files(command.session_id))
             duplicates = existing_names.intersection(incoming_names)
             if duplicates:
                 raise ConflictError(
-                    f"The session already contains: {', '.join(sorted(duplicates))}."
+                    f"The session already contains: {', '.join(sorted(duplicates))}.",
+                    code="duplicate_file",
                 )
             if len(existing_names) + len(incoming_names) > policy.max_files_per_session:
                 raise InvalidInputError(
-                    f"A session can contain at most {policy.max_files_per_session} files."
+                    f"A session can contain at most {policy.max_files_per_session} files.",
+                    code="too_many_files",
                 )
             logger.info(
                 "ingest_started correlation_id=%s file_count=%d",
@@ -123,47 +133,129 @@ class IngestDocuments:
 
     def _ingest(
         self, files: list[IncomingFile], session_id: str, policy: UploadPolicy
-    ) -> MessageResponse:
-        """Perform bounded parsing, chunking, and persistence for one batch."""
+    ) -> IngestResponse:
+        """Perform bounded parsing, chunking, and persistence for one batch.
+
+        The batch is all-or-nothing: when any file fails, every chunk this
+        request stored is deleted, so a failed upload never leaves a partial
+        document that looks indexed and blocks a retry with a name conflict.
+        """
         total_chunks = 0
         total_bytes = 0
-        ingested_names: list[str] = []
-        for item in files:
-            if not item.filename:
-                raise InvalidInputError("Missing filename.")
-            file_bytes = read_bounded(
-                item.stream, item.filename, policy.max_batch_bytes - total_bytes, policy
-            )
-            total_bytes += len(file_bytes)
-            try:
-                validate_upload(item.filename, file_bytes)
-                sections = self._parser.parse_sections(file_bytes, item.filename)
-            except ValueError as exc:
-                raise InvalidInputError(str(exc)) from exc
-            total_chunks += self._index_sections(sections, item.filename, session_id)
-            ingested_names.append(item.filename)
+        ingested: list[IngestedFile] = []
+        written_names: list[str] = []
+        digests: dict[str, str] = {}
+        try:
+            for item in files:
+                if not item.filename:
+                    raise InvalidInputError("Missing filename.", code="no_file")
+                file_bytes = read_bounded(
+                    item.stream,
+                    item.filename,
+                    policy.max_batch_bytes - total_bytes,
+                    policy,
+                )
+                total_bytes += len(file_bytes)
+                digest = hashlib.sha256(file_bytes).hexdigest()
+                self._reject_duplicate_content(
+                    session_id, item.filename, digest, digests
+                )
+                digests[digest] = item.filename
+                document = self._parse(item.filename, file_bytes)
+                written_names.append(item.filename)
+                chunks = self._index_sections(
+                    document.sections, item.filename, session_id, digest
+                )
+                total_chunks += chunks
+                ingested.append(
+                    IngestedFile(
+                        filename=item.filename,
+                        chunks=chunks,
+                        sections=len(document.sections),
+                        notices=list(document.notices),
+                    )
+                )
+        except BaseException:
+            self._roll_back(session_id, written_names)
+            raise
 
-        if len(ingested_names) == 1:
-            return MessageResponse(
-                message=f"Successfully ingested {ingested_names[0]} ({total_chunks} chunks)."
+        names = [item.filename for item in ingested]
+        if len(names) == 1:
+            message = f"Successfully ingested {names[0]} ({total_chunks} chunks)."
+        else:
+            message = (
+                f"Successfully ingested {len(names)} file(s): "
+                f"{', '.join(names)} ({total_chunks} chunks total)."
             )
-        return MessageResponse(
-            message=(
-                f"Successfully ingested {len(ingested_names)} file(s): "
-                f"{', '.join(ingested_names)} ({total_chunks} chunks total)."
+        return IngestResponse(message=message, files=ingested)
+
+    def _roll_back(self, session_id: str, filenames: list[str]) -> None:
+        """Delete chunks stored by a failed batch, keeping the original error."""
+        for filename in filenames:
+            try:
+                self._repository.delete_document(session_id, filename)
+            except Exception:  # the ingestion error must surface, not this one
+                logger.exception(
+                    "ingest_rollback_failed correlation_id=%s",
+                    current_correlation_id(),
+                )
+        if filenames:
+            logger.warning(
+                "ingest_rolled_back correlation_id=%s file_count=%d",
+                current_correlation_id(),
+                len(filenames),
             )
+
+    def _parse(self, filename: str, file_bytes: bytes) -> ParsedDocument:
+        """Validate the signature and parse; document problems become input errors."""
+        try:
+            validate_upload(filename, file_bytes)
+            return self._parser.parse(file_bytes, filename)
+        except DocumentError as exc:
+            raise InvalidInputError(str(exc), code=exc.code) from exc
+        except ValueError as exc:
+            raise InvalidInputError(str(exc), code="invalid_document") from exc
+
+    def _reject_duplicate_content(
+        self, session_id: str, filename: str, digest: str, batch: dict[str, str]
+    ) -> None:
+        """Refuse a file whose bytes are already indexed under another name.
+
+        Indexing the same document twice doubles its chunks, so the copies
+        crowd other documents out of every answer's context.
+        """
+        same = batch.get(digest) or self._repository.find_document_by_content(
+            session_id, digest
         )
+        if same is None:
+            return
+        detail = (
+            f"'{filename}' has the same content as '{same}', which is already "
+            "in this conversation."
+        )
+        if digest in batch:
+            raise InvalidInputError(detail, code="duplicate_content")
+        raise ConflictError(detail, code="duplicate_content")
 
     def _index_sections(
-        self, sections: list[ParsedSection], filename: str, session_id: str
+        self,
+        sections: list[ParsedSection],
+        filename: str,
+        session_id: str,
+        digest: str | None = None,
     ) -> int:
         """Chunk and save each section; return the number of stored chunks."""
+        identity: dict[str, str] = {"filename": filename}
+        if digest:
+            identity["content_sha256"] = digest
         stored = 0
         previous: ParsedSection | None = None
+        sections = [
+            ParsedSection(normalize_persian(section.text), section.metadata)
+            for section in sections
+        ]
         for section in sections:
-            nodes = self._chunker.chunk(
-                section.text, {"filename": filename, **section.metadata}
-            )
+            nodes = self._chunker.chunk(section.text, {**identity, **section.metadata})
             bridge = self._page_bridge(previous, section, filename)
             if bridge is not None:
                 nodes.append(bridge)

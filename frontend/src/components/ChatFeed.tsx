@@ -1,18 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RotateCcw, X } from 'lucide-react';
-import type { Message, Language, QueryStage, RAGMode } from '../types';
+import { Lightbulb, SearchX, ShieldCheck } from 'lucide-react';
+import type { Grounding, Message, Language, QueryStage, RAGMode, SourcePassage } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
+import { SourceList } from './SourceList';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
   onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
+  /** Text streamed so far; `messageId` when it replaces an answer being retried. */
+  streamingDraft?: { messageId?: string; content: string; sourceCount?: number };
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete }: ChatFeedProps) {
+function GroundingBadge({ language, grounding, sources }: { language: Language; grounding: Grounding; sources?: SourcePassage[] }) {
+  const t = translations[language];
+  const cited = sources?.filter(source => source.cited).length || sources?.length || 0;
+  const count = grounding === 'documents' || grounding === 'hybrid' ? cited : 0;
+  return <span className={'grounding-badge grounding-' + grounding}>
+    {grounding === 'not_found' ? <SearchX size={12} /> : grounding === 'general' ? <Lightbulb size={12} /> : <ShieldCheck size={12} />}
+    {t.groundingLabels[grounding]}
+    {count > 0 && <small>· {t.groundingSources.replace('{count}', count.toLocaleString(language))}</small>}
+  </span>;
+}
+
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft }: ChatFeedProps) {
+  const liveDraft = isGenerating && streamingDraft?.content ? streamingDraft : undefined;
   const t = translations[language];
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -21,6 +37,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const [focusedSource, setFocusedSource] = useState<{ messageId: string; n: number; token: number } | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
   const toBottom = () => {
@@ -35,7 +52,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       if (element) element.scrollTop = element.scrollHeight;
     } else setShowJump(true);
     previousCount.current = messages.length;
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, liveDraft?.content]);
   const copy = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.content);
@@ -52,7 +69,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       <div className="message-list" role="log" aria-label={t.conversations} aria-live="polite" aria-relevant="additions">
         {messages.map(message => message.role === 'system'
           ? <p key={message.id} className="system-message">{message.content}</p>
-          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '')} aria-label={message.role === 'user' ? t.you : t.appName}>
+          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '') + (liveDraft?.messageId === message.id ? ' is-streaming' : '')} aria-label={message.role === 'user' ? t.you : t.appName} aria-busy={liveDraft?.messageId === message.id || undefined}>
             {message.role === 'user' ? <>
               {editing?.id === message.id ? <form className="prompt-edit" onSubmit={event => { event.preventDefault(); const value = editing.value.trim(); if (value && value !== message.content) onEditPrompt(message.id, value); setEditing(null); }}>
                 <textarea autoFocus value={editing.value} onChange={event => setEditing({ id: message.id, value: event.target.value })} aria-label={t.editPrompt} />
@@ -63,13 +80,26 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                 <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
               </div>
             </> : <>
-              <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
-              {message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
+              <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong>
+                {!message.error && message.grounding && liveDraft?.messageId !== message.id && <GroundingBadge language={language} grounding={message.grounding} sources={message.sources} />}
+                <span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
+              {liveDraft?.messageId === message.id ? <div className="prose-content" dir="auto">
+                <ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage}
+                  sourceCount={liveDraft.sourceCount ?? 0} formatNumber={n => n.toLocaleString(language)} />
+              </div> : message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content" dir="auto">
                   <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
-                    externalImageLabel={t.externalImage} onComplete={onRevealComplete} />
+                    externalImageLabel={t.externalImage} onComplete={onRevealComplete}
+                    sourceCount={message.sources?.length ?? 0}
+                    onCite={n => setFocusedSource(current => ({ messageId: message.id, n, token: (current?.token ?? 0) + 1 }))}
+                    citeLabel={n => t.openSource.replace('{n}', n.toLocaleString(language))}
+                    formatNumber={n => n.toLocaleString(language)} />
                 </div>}
-              {Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
+              {liveDraft?.messageId !== message.id && !message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
+                question={promptFor(messages, message)}
+                focus={focusedSource?.messageId === message.id ? focusedSource.n : undefined}
+                focusToken={focusedSource?.messageId === message.id ? focusedSource.token : undefined} /> : null}
+              {!message.sources?.length && Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
                 <header><FileText size={15} /><span>{t.citationsTitle}</span></header>
                 <ul>{message.citations!.map(citation => <li key={citation.filename}><bdi>{citation.filename}</bdi>{citation.locations.length > 0 && <span className="source-locations">{citation.locations.map((location, locationIndex) => <span key={`${location.kind}-${location.start}-${location.end ?? ''}`}>{t.locationLabels[location.kind]} {location.start.toLocaleString(language)}{location.end && location.end !== location.start ? `–${location.end.toLocaleString(language)}` : ''}{locationIndex < citation.locations.length - 1 ? '، ' : ''}</span>)}</span>}</li>)}</ul>
               </section>}
@@ -84,12 +114,27 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </div>
             </>}
           </article>)}
-        {isGenerating && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
+        {liveDraft && !liveDraft.messageId && <article className="message message-assistant is-streaming" aria-label={t.appName} aria-busy="true">
+          <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong></div>
+          <div className="prose-content" dir="auto"><ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage}
+            sourceCount={liveDraft.sourceCount ?? 0} formatNumber={n => n.toLocaleString(language)} /></div>
+        </article>}
+        {isGenerating && !liveDraft && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
       </div>
       {copyError && <p role="status" className="copy-error">{t.copyFailed}</p>}
     </div>
     {showJump && <button className="jump-button" onClick={toBottom} aria-label={t.jumpToLatest} title={t.jumpToLatest}><ArrowDown size={18} /></button>}
   </div>;
+}
+
+/** The question an answer responds to, for highlighting its terms in sources. */
+function promptFor(messages: Message[], message: Message): string {
+  const active = message.variants?.[message.activeVariant ?? 0];
+  if (active?.prompt) return active.prompt;
+  const parent = message.parentUserId ? messages.find(item => item.id === message.parentUserId) : undefined;
+  if (parent) return parent.content;
+  const index = messages.indexOf(message);
+  return messages.slice(0, index).reverse().find(item => item.role === 'user')?.content ?? '';
 }
 
 function QueryProgress({ language, mode, stage }: { language: Language; mode: RAGMode; stage: QueryStage }) {

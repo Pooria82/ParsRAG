@@ -17,8 +17,11 @@ import { usePwa } from './hooks/usePwa';
 import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
-import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
+import { answerGrounding, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
+import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
+import { citedNumbers } from './core/citations';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -33,6 +36,8 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
   const [queryProgress, setQueryProgress] = useState<{ sessionId: string; stage: QueryStage }>();
+  const [streamDraft, setStreamDraft] = useState<{ sessionId: string; messageId?: string; content: string; sourceCount?: number }>();
+  const [suggesting, setSuggesting] = useState<string>();
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
@@ -125,6 +130,22 @@ export function App() {
   }, [active.id, api, connection, uploadingId, updateSession]);
   useEffect(() => () => { queryRef.current?.controller.abort(); progressRef.current?.abort(); }, []);
 
+  // Suggest questions from the documents of an empty conversation, once per document set.
+  const activeSuggestionKey = suggestionKey(active, settings.language);
+  useEffect(() => {
+    if (connection !== 'online' || active.messages.length || !activeSuggestionKey
+      || active.suggestions?.key === activeSuggestionKey || uploadingId === active.id) return;
+    const sessionId = active.id;
+    const files = active.documents.filter(doc => doc.status === 'indexed' && doc.enabled !== false).map(doc => doc.name);
+    const controller = new AbortController();
+    setSuggesting(sessionId);
+    void api.suggestions(sessionId, settings.language, files, controller.signal).then(questions => {
+      updateSession(sessionId, s => ({ ...s, suggestions: { key: activeSuggestionKey, questions } }));
+    }).catch(() => { /* Generic starters remain when suggestions are unavailable. */ })
+      .finally(() => setSuggesting(current => current === sessionId ? undefined : current));
+    return () => controller.abort();
+  }, [active.id, activeSuggestionKey, active.messages.length, connection, uploadingId, api, settings.language, updateSession]);
+
   const newChat = useCallback(() => {
     const blank = sessionsRef.current.find(s => !s.messages.length && !s.documents.length && !s.draft?.trim());
     const session = blank ?? createSession(settings.language, settings.defaultMode);
@@ -137,13 +158,22 @@ export function App() {
   const stop = () => {
     const current = queryRef.current;
     if (!current) return;
+    // send() keeps any streamed text and records the stop in order.
     current.controller.abort('user');
-    progressRef.current?.abort(); progressRef.current = undefined;
     queryRef.current = null; setGeneratingId(undefined);
     setQueryProgress(undefined);
-    updateSession(current.sessionId, s => ({ ...s, messages: [...s.messages, {
-      id: crypto.randomUUID(), role: 'system', content: t.stopped, timestamp: Date.now(),
-    }] }));
+  };
+
+  /** Store an answer as a new message or as another version of the retried one. */
+  const commitAnswer = (sessionId: string, variant: ResponseVariant, parentUserId: string, assistantId?: string) => {
+    const messageId = assistantId ?? crypto.randomUUID();
+    updateSession(sessionId, s => {
+      if (assistantId && s.messages.some(message => message.id === assistantId)) {
+        return { ...s, messages: s.messages.map(message => message.id === assistantId ? appendResponseVariant(message, variant) : message), updatedAt: Date.now() };
+      }
+      const assistant: Message = { id: messageId, role: 'assistant', parentUserId, content: variant.content, citations: variant.citations, sources: variant.sources, grounding: variant.grounding, error: variant.error, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+      return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
+    });
   };
 
   const send = async (session: Session, prompt: string, target?: { userId: string; assistantId?: string; edit?: boolean }) => {
@@ -157,10 +187,8 @@ export function App() {
     const historySession = prepared ? { ...session, messages: prepared.history } : session;
     const payload = buildQuery(historySession, settings, prompt);
     const controller = new AbortController();
-    const progressController = new AbortController();
     const requestId = crypto.randomUUID();
     queryRef.current = { controller, sessionId: session.id };
-    progressRef.current?.abort(); progressRef.current = progressController;
     setGeneratingId(session.id); setQueryProgress({ sessionId: session.id, stage: 'understanding' }); setNotice(null);
     const userMessage: Message = { id: target?.userId ?? crypto.randomUUID(), role: 'user', content: prompt.trim(), timestamp: Date.now() };
     updateSession(session.id, s => ({
@@ -169,34 +197,30 @@ export function App() {
       title: s.messages.length ? s.title : fallbackTitle,
       updatedAt: Date.now(),
     }));
-    const timeout = setTimeout(() => controller.abort('timeout'), 180000);
-    const pollProgress = async () => {
-      if (progressController.signal.aborted) return;
-      try {
-        const stage = await api.queryProgress(requestId, progressController.signal);
-        if (stage && stage !== 'complete' && stage !== 'failed' && !progressController.signal.aborted) {
-          setQueryProgress({ sessionId: session.id, stage });
-        }
-      } catch { /* The answer request remains authoritative if progress polling is interrupted. */ }
-      if (!progressController.signal.aborted) setTimeout(() => void pollProgress(), 350);
-    };
-    void pollProgress();
+    // The stream must stay alive: no event for longer than the server's worst
+    // case (rewrite + time to first token with one retry) aborts it.
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const touch = () => { clearTimeout(idle); idle = setTimeout(() => controller.abort('timeout'), 330000); };
+    touch();
+    let streamed = '';
+    let streamedSources: unknown[] = [];
+    let frame = 0;
+    const showDraft = () => { frame = 0; setStreamDraft({ sessionId: session.id, messageId: target?.assistantId, content: streamed, sourceCount: streamedSources.length }); };
     try {
-      const data = parseAnswer(await api.query({ ...payload, request_id: requestId }, controller.signal));
-      if (controller.signal.aborted) return;
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content: data.answer, citations: data.citations, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
-      const responseMessageId = target?.assistantId ?? crypto.randomUUID();
-      updateSession(session.id, s => {
-        if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
-          return { ...s, messages: s.messages.map(message => {
-            if (message.id !== target.assistantId) return message;
-            return appendResponseVariant(message, variant);
-          }), updatedAt: Date.now() };
+      const raw = await api.queryStream({ ...payload, request_id: requestId }, controller.signal, event => {
+        touch();
+        if (event.type === 'stage') setQueryProgress({ sessionId: session.id, stage: event.stage });
+        else if (event.type === 'sources') streamedSources = event.sourceNodes;
+        else if (event.type === 'token') {
+          streamed += event.text;
+          if (!frame) frame = requestAnimationFrame(showDraft);
         }
-        const assistant: Message = { id: responseMessageId, role: 'assistant', parentUserId: userMessage.id, content: variant.content, citations: variant.citations, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
-        return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
       });
-      setRevealingMessageId(responseMessageId);
+      if (controller.signal.aborted) return;
+      const data = parseAnswer(raw);
+      const content = data.outcome === 'answered' ? data.answer : t.answerOutcomes[data.outcome];
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content, citations: data.citations, sources: data.sources, grounding: answerGrounding(session.ragMode, data.outcome), timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
+      commitAnswer(session.id, variant, userMessage.id, target?.assistantId);
       setConnection('online');
       if (firstTurn) {
         void api.conversationTitle(prompt.trim(), settings.language, AbortSignal.timeout(120000)).then(title => {
@@ -205,25 +229,27 @@ export function App() {
         }).catch(() => { /* The local fallback remains valid when title generation is unavailable. */ });
       }
     } catch (error: unknown) {
-      if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
-      const content = controller.signal.reason === 'timeout' ? t.timeout
-        : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
-      updateSession(session.id, s => {
-        if (target?.assistantId && s.messages.some(message => message.id === target.assistantId)) {
-          return { ...s, messages: s.messages.map(message => {
-            if (message.id !== target.assistantId) return message;
-            return appendResponseVariant(message, variant);
-          }), updatedAt: Date.now() };
+      const reason = controller.signal.reason;
+      if (controller.signal.aborted && reason === 'user') {
+        // Keep what was already written; the reader asked to stop, not to discard.
+        const partial = streamed.trim();
+        if (partial) {
+          const data = parseAnswer({ answer: partial, source_nodes: streamedSources, cited: citedNumbers(partial, streamedSources.length) });
+          commitAnswer(session.id, { id: crypto.randomUUID(), content: partial, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
         }
-        const assistant: Message = { id: crypto.randomUUID(), role: 'assistant', parentUserId: userMessage.id, content, error: true, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
-        return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
-      });
+        updateSession(session.id, s => ({ ...s, messages: [...s.messages, { id: crypto.randomUUID(), role: 'system', content: t.stopped, timestamp: Date.now() }] }));
+        return;
+      }
+      if (controller.signal.aborted && reason !== 'timeout') return;
+      const content = reason === 'timeout' ? t.timeout
+        : error instanceof ApiError ? queryErrorMessage(error.code, settings.language) ?? t.queryFailed
+          : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
+      commitAnswer(session.id, { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
       void checkHealth();
     } finally {
-      clearTimeout(timeout);
-      progressController.abort();
-      if (progressRef.current === progressController) progressRef.current = undefined;
+      clearTimeout(idle);
+      if (frame) cancelAnimationFrame(frame);
+      setStreamDraft(current => current?.sessionId === session.id ? undefined : current);
       setQueryProgress(current => current?.sessionId === session.id ? undefined : current);
       if (queryRef.current?.controller === controller) { queryRef.current = null; setGeneratingId(undefined); }
     }
@@ -246,15 +272,17 @@ export function App() {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 600000);
         try {
-          await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
+          const [indexed] = await api.ingest(file, sessionId, controller.signal, uploadProgress => updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? uploadProgress >= 100
             ? { ...d, status: 'processing', uploadProgress: undefined }
             : { ...d, status: 'uploading', uploadProgress } : d) })));
-          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? { ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined } : d) }));
-        } catch (error: unknown) {
           updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
-            ...d, status: 'error', errorMessage: error instanceof ApiError && error.code === 'ocr_unavailable'
-              ? settings.language === 'fa' ? 'OCR این فایل تصویری در دسترس نیست یا غیرفعال شده است.' : 'OCR for this image-based file is unavailable or disabled.'
-              : t.uploadFailed,
+            ...d, status: 'indexed', uploadProgress: undefined, errorMessage: undefined,
+            chunks: indexed?.chunks, sections: indexed?.sections, notices: indexed?.notices.length ? indexed.notices : undefined,
+          } : d) }));
+        } catch (error: unknown) {
+          const reason = error instanceof ApiError ? uploadErrorMessage(error.code, settings.language) : undefined;
+          updateSession(sessionId, s => ({ ...s, documents: s.documents.map(d => d.name === file.name ? {
+            ...d, status: 'error', errorMessage: reason ?? t.uploadFailed,
           } : d) }));
         } finally { clearTimeout(timeout); }
       }
@@ -376,9 +404,13 @@ export function App() {
       {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
         updateSession(active.id, s => ({ ...s, draft, ragMode: index === 2 ? 'llm-only' : 'hybrid' }));
         setFocusToken(value => value + 1);
-      }} /> : <>
+      }}
+        documentQuestions={active.suggestions?.key === activeSuggestionKey ? active.suggestions.questions : undefined}
+        documentQuestionsLoading={suggesting === active.id}
+        onSelectQuestion={question => void send(active, question)} /> : <>
         <ChatFeed key={active.id} messages={active.messages} language={settings.language} isGenerating={generatingId === active.id} activeMode={active.ragMode}
           queryStage={queryProgress?.sessionId === active.id ? queryProgress.stage : undefined}
+          streamingDraft={streamDraft?.sessionId === active.id ? streamDraft : undefined}
           revealingMessageId={revealingMessageId} onRevealComplete={() => setRevealingMessageId(undefined)}
           isBusy={busy} onRetry={messageId => {
             const assistant = active.messages.find(message => message.id === messageId);
@@ -420,7 +452,14 @@ export function App() {
         else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);
         else updateSettings(updated);
       }} busy={busy}
-      onClearAllData={clearAllData} />
+      onClearAllData={clearAllData}
+      onExportBackup={() => downloadText(`parsrag-backup-${new Date().toISOString().slice(0, 10)}.json`, createBackup(sessionsRef.current, settings), 'application/json')}
+      onImportBackup={async file => {
+        const backup = parseBackup(await file.text(), window.location.origin);
+        const merged = mergeSessions(sessionsRef.current, backup.sessions);
+        setSessions(merged.sessions);
+        return { added: merged.added, updated: merged.updated };
+      }} />
     <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} onStageChange={changeTourStage} activeStage={tourStage} />
   </div>;
 }

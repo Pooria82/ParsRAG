@@ -7,11 +7,13 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.core.domain.documents import ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
 from backend.core.domain.exceptions import (
     ConflictError,
+    DocumentError,
     InvalidInputError,
     PayloadTooLargeError,
+    VectorDBConnectionError,
 )
 from backend.core.domain.upload_policy import UploadPolicy
 from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
@@ -26,6 +28,7 @@ from backend.tests.core.use_case.fakes import (
 )
 
 PDF = b"%PDF-1.4 body"
+SAME = PDF + b" identical"
 SMALL_POLICY = UploadPolicy(
     max_files_per_session=2, max_file_bytes=1024 * 1024, max_batch_bytes=1024 * 1024
 )
@@ -49,7 +52,13 @@ def _use_case(
 def _command(*names: str, data: bytes = PDF) -> IngestDocumentsCommand:
     return IngestDocumentsCommand(
         session_id="session-1",
-        files=[IncomingFile(name, io.BytesIO(data)) for name in names],
+        # Default payloads differ per name so batches are not content duplicates.
+        files=[
+            IncomingFile(
+                name, io.BytesIO(data + name.encode() if data is PDF else data)
+            )
+            for name in names
+        ],
     )
 
 
@@ -62,9 +71,115 @@ def test_ingests_sections_and_bridges_consecutive_pages(
 
     result = _use_case(repository, parser).execute(_command("a.pdf"))
 
-    assert result == MessageResponse(message="Successfully ingested a.pdf (3 chunks).")
+    assert result.message == "Successfully ingested a.pdf (3 chunks)."
+    assert result.files[0].chunks == 3
     bridge = repository.sessions["session-1"][-1]
     assert bridge.text == "first page second"
+
+
+class FailingRepository(InMemoryRepository):
+    """Store chunks until a configured save call fails."""
+
+    def __init__(self, fail_on_save: int) -> None:
+        """Fail on the given 1-based ``save_nodes`` call."""
+        super().__init__()
+        self.fail_on_save = fail_on_save
+        self.saves = 0
+
+    def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
+        """Raise like a dropped Qdrant connection on the configured call."""
+        self.saves += 1
+        if self.saves == self.fail_on_save:
+            raise VectorDBConnectionError("connection reset")
+        super().save_nodes(nodes, session_id)
+
+
+def test_failed_file_is_rolled_back_so_it_can_be_retried() -> None:
+    """A failure after some pages were stored leaves no partial document."""
+    repository = FailingRepository(fail_on_save=2)
+    parser = FakeParser(
+        [ParsedSection("first", {"page": 1}), ParsedSection("second", {"page": 2})]
+    )
+    use_case = _use_case(repository, parser)
+
+    with pytest.raises(VectorDBConnectionError):
+        use_case.execute(_command("a.pdf"))
+
+    assert repository.get_session_files("session-1") == []
+    repository.fail_on_save = 0
+    assert use_case.execute(_command("a.pdf")).message.startswith(
+        "Successfully ingested a.pdf"
+    )
+
+
+def test_failed_batch_removes_files_already_stored_by_the_request(
+    repository: InMemoryRepository,
+) -> None:
+    """A later invalid file rolls back earlier files of the same batch only."""
+    repository.save_nodes(
+        [ExtractedNode(text="kept", metadata={"filename": "old.pdf"})],
+        session_id="session-1",
+    )
+    command = IngestDocumentsCommand(
+        session_id="session-1",
+        files=[
+            IncomingFile("a.pdf", io.BytesIO(PDF)),
+            IncomingFile("b.pdf", io.BytesIO(b"not a pdf")),
+        ],
+    )
+    policy = UploadPolicy(
+        max_files_per_session=3, max_file_bytes=1024 * 1024, max_batch_bytes=1024**2
+    )
+
+    with pytest.raises(InvalidInputError):
+        _use_case(repository, policy=policy).execute(command)
+
+    assert repository.get_session_files("session-1") == ["old.pdf"]
+
+
+def test_rollback_failure_does_not_hide_the_ingestion_error() -> None:
+    """The caller sees the original error even when cleanup also fails."""
+    repository = FailingRepository(fail_on_save=1)
+
+    def broken_delete(session_id: str, filename: str) -> None:
+        raise VectorDBConnectionError("still down")
+
+    repository.delete_document = broken_delete  # type: ignore[method-assign]
+
+    with pytest.raises(VectorDBConnectionError, match="connection reset"):
+        _use_case(repository).execute(_command("a.pdf"))
+
+
+def test_same_bytes_under_another_name_are_refused(
+    repository: InMemoryRepository,
+) -> None:
+    """A renamed copy would double the document's chunks in every answer."""
+    use_case = _use_case(repository)
+    use_case.execute(_command("report.pdf", data=SAME))
+
+    with pytest.raises(ConflictError) as raised:
+        use_case.execute(_command("report-copy.pdf", data=SAME))
+
+    assert raised.value.code == "duplicate_content"
+    assert "report.pdf" in raised.value.detail
+    assert repository.get_session_files("session-1") == ["report.pdf"]
+
+
+def test_identical_files_in_one_batch_are_refused(
+    repository: InMemoryRepository,
+) -> None:
+    with pytest.raises(InvalidInputError) as raised:
+        _use_case(repository).execute(_command("a.pdf", "b.pdf", data=SAME))
+    assert raised.value.code == "duplicate_content"
+    assert repository.get_session_files("session-1") == []
+
+
+def test_chunks_record_the_content_digest(repository: InMemoryRepository) -> None:
+    _use_case(repository).execute(_command("a.pdf"))
+    digest = repository.sessions["session-1"][0].metadata["content_sha256"]
+    assert len(digest) == 64
+    assert repository.find_document_by_content("session-1", digest) == "a.pdf"
+    assert repository.find_document_by_content("other", digest) is None
 
 
 def test_summarizes_multi_file_batches(repository: InMemoryRepository) -> None:
@@ -111,13 +226,47 @@ def test_parser_value_errors_become_invalid_input(
     repository: InMemoryRepository,
 ) -> None:
     class BrokenParser(FakeParser):
-        def parse_sections(
-            self, file_bytes: bytes, filename: str
-        ) -> list[ParsedSection]:
-            raise ValueError("OCR page limit exceeded.")
+        def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
+            raise ValueError("Parser failure.")
 
-    with pytest.raises(InvalidInputError, match="OCR page limit exceeded"):
+    with pytest.raises(InvalidInputError, match="Parser failure") as raised:
         _use_case(repository, BrokenParser()).execute(_command("a.pdf"))
+    assert raised.value.code == "invalid_document"
+
+
+def test_document_error_codes_reach_the_caller(
+    repository: InMemoryRepository,
+) -> None:
+    """Encrypted or corrupted files keep their specific reason code."""
+
+    class EncryptedParser(FakeParser):
+        def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
+            raise DocumentError("The PDF is password-protected.", "encrypted_document")
+
+    with pytest.raises(InvalidInputError) as raised:
+        _use_case(repository, EncryptedParser()).execute(_command("a.pdf"))
+    assert raised.value.code == "encrypted_document"
+
+
+def test_response_lists_each_file_with_its_notices(
+    repository: InMemoryRepository,
+) -> None:
+    """Partial OCR is reported per file while the document stays indexed."""
+    parser = FakeParser(
+        [ParsedSection("one", {"page": 1}), ParsedSection("two", {"page": 3})],
+        notices=("ocr_page_limit",),
+    )
+
+    result = _use_case(repository, parser).execute(_command("scan.pdf"))
+
+    assert [file.model_dump() for file in result.files] == [
+        {
+            "filename": "scan.pdf",
+            "chunks": 2,
+            "sections": 2,
+            "notices": ["ocr_page_limit"],
+        }
+    ]
 
 
 def test_enforces_file_and_batch_byte_limits(repository: InMemoryRepository) -> None:

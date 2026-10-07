@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from html.parser import HTMLParser
 from typing import Any, Protocol
 
@@ -12,18 +13,28 @@ from docx.text.paragraph import Paragraph
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from backend.core.domain.documents import ParsedSection
-from backend.core.domain.exceptions import EmptyDocumentError
+from backend.core.domain.documents import ParsedDocument, ParsedSection
+from backend.core.domain.exceptions import DocumentError, EmptyDocumentError
 from backend.core.domain.upload_policy import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 from backend.infrastructure.parsers.ocr import (
     OCRError,
-    OCRImageLimitError,
-    OCRPageLimitError,
     OCRSettings,
+    OCRTimeoutError,
+    OCRUnavailableError,
     RasterizablePage,
     extract_image_text,
     extract_page_text,
 )
+from backend.infrastructure.parsers.pdf_text import (
+    logical_page_text,
+    text_layer_is_garbled,
+)
+
+# Notice codes returned with a document that was indexed only in part.
+NOTICE_OCR_PAGE_LIMIT = "ocr_page_limit"
+NOTICE_OCR_IMAGE_LIMIT = "ocr_image_limit"
+NOTICE_OCR_PARTIAL = "ocr_partial"
+NOTICE_OCR_UNAVAILABLE = "ocr_unavailable"
 
 __all__ = [
     "LocalDocumentParser",
@@ -100,44 +111,68 @@ def parse_document(file_bytes: bytes, filename: str) -> str:
 
 def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSection]:
     """Extracts text with page, slide, paragraph, or section metadata."""
+    return parse_document_file(file_bytes, filename).sections
+
+
+def parse_document_file(file_bytes: bytes, filename: str) -> ParsedDocument:
+    """Extract sections and notices about parts skipped by OCR limits.
+
+    Raises:
+        DocumentError: The file is unsupported, corrupted, or encrypted.
+        EmptyDocumentError: No text could be extracted.
+    """
     lower_name = filename.lower()
+    notices: list[str] = []
+    settings = OCRSettings.from_environment()
     if lower_name.endswith(".pdf"):
-        sections = _parse_pdf_sections(file_bytes)
+        sections = _parse_pdf_sections(file_bytes, notices)
     elif lower_name.endswith(".docx"):
-        sections = _parse_docx_sections(file_bytes)
+        sections = _parse_docx_sections(file_bytes, notices)
     elif lower_name.endswith(".pptx"):
-        sections = _parse_pptx_sections(file_bytes)
+        sections = _parse_pptx_sections(file_bytes, notices)
     elif lower_name.endswith(IMAGE_EXTENSIONS):
         sections = _parse_image_sections(file_bytes)
     elif lower_name.endswith(TEXT_EXTENSIONS):
         sections = _parse_text_sections(file_bytes, lower_name)
     else:
-        raise ValueError("Unsupported file format.")
+        raise DocumentError("Unsupported file format.", "unsupported_file")
     if not sections:
-        if lower_name.endswith(".pdf"):
-            raise EmptyDocumentError("Scanned PDFs require OCR, but OCR is disabled.")
-        if lower_name.endswith(IMAGE_EXTENSIONS):
-            raise EmptyDocumentError("Image-based documents require enabled OCR.")
+        if NOTICE_OCR_UNAVAILABLE in notices:
+            raise DocumentError(
+                "The document needs OCR, but Tesseract OCR is not installed.",
+                "ocr_unavailable",
+            )
+        needs_ocr = lower_name.endswith((".pdf", *IMAGE_EXTENSIONS))
+        if needs_ocr and not settings.enabled:
+            raise EmptyDocumentError(
+                "Scanned documents require OCR, but OCR is disabled.", "ocr_disabled"
+            )
+        if needs_ocr:
+            raise EmptyDocumentError(
+                "OCR found no readable text in the document.", "no_readable_text"
+            )
         raise EmptyDocumentError("The document contains no text.")
-    return sections
+    return ParsedDocument(sections, tuple(dict.fromkeys(notices)))
 
 
 class LocalDocumentParser:
     """``DocumentParser`` adapter backed by PyMuPDF, python-docx/pptx, and OCR."""
 
-    def parse_sections(self, file_bytes: bytes, filename: str) -> list[ParsedSection]:
+    def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
         """Extract traceable sections with the format-specific local parser."""
-        return parse_document_sections(file_bytes, filename)
+        return parse_document_file(file_bytes, filename)
 
 
-def _parse_docx_sections(file_bytes: bytes) -> list[ParsedSection]:
+def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
     """Extract traceable paragraphs and tables from DOCX bytes."""
     try:
         document = Document(io.BytesIO(file_bytes))
     except Exception as exc:
-        raise ValueError("Corrupted or invalid DOCX document.") from exc
+        raise DocumentError(
+            "Corrupted or invalid DOCX document.", "corrupt_file"
+        ) from exc
     settings = OCRSettings.from_environment()
-    sections: list[ParsedSection] = []
+    builder = _DocxSectionBuilder()
     paragraph = 0
     ocr_images = 0
     for section_index, child in enumerate(
@@ -145,33 +180,126 @@ def _parse_docx_sections(file_bytes: bytes) -> list[ParsedSection]:
     ):
         if isinstance(child, CT_P):
             paragraph_object = Paragraph(child, document)
-            parts = (
-                [paragraph_object.text.strip()] if paragraph_object.text.strip() else []
-            )
+            images: list[str] = []
             if settings.enabled:
                 for image in _docx_paragraph_images(paragraph_object, document):
-                    text, ocr_images = _extract_embedded_image(
-                        image, settings, ocr_images, "Word"
+                    recognized, ocr_images = _extract_embedded_image(
+                        image, settings, ocr_images, notices
                     )
-                    if text:
-                        parts.append(text)
-            value = "\n\n".join(parts).strip()
-            if value:
+                    images.append(recognized)
+            if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
-                sections.append(ParsedSection(value, {"paragraph": paragraph}))
         elif isinstance(child, CT_Tbl):
             value = _format_docx_table(Table(child, document)).strip()
             if value:
-                sections.append(ParsedSection(value, {"section": section_index}))
-    return sections
+                builder.table(value, section_index)
+    return builder.finish()
 
 
-def _parse_pptx_sections(file_bytes: bytes) -> list[ParsedSection]:
+# Word paragraphs are often a single line; one chunk per paragraph produced
+# 9-18 word chunks that lost their context. Paragraphs under the same heading
+# are grouped up to roughly one chunk, and every group carries its heading path.
+_MAX_SECTION_WORDS = 180
+_MAX_HEADING_WORDS = 25
+_HEADING_STYLE = re.compile(r"^(?:heading|title|عنوان)\s*(\d*)$", re.IGNORECASE)
+
+
+def _docx_heading_level(paragraph: Paragraph) -> int | None:
+    """Return 0 for a title, N for "Heading N", or None for body text."""
+    style = paragraph.style
+    while style is not None:
+        match = _HEADING_STYLE.match((style.name or "").strip())
+        if match:
+            return int(match.group(1)) if match.group(1) else 0
+        style = style.base_style
+    outline = paragraph._p.xpath("./w:pPr/w:outlineLvl/@w:val")
+    return int(outline[0]) + 1 if outline else None
+
+
+class _DocxSectionBuilder:
+    """Group body paragraphs under their headings into chunk-sized sections."""
+
+    def __init__(self) -> None:
+        self.sections: list[ParsedSection] = []
+        self.headings: dict[int, str] = {}
+        self.parts: list[str] = []
+        self.words = 0
+        self.first = 0
+        self.last = 0
+
+    def _path(self) -> str:
+        return " › ".join(self.headings[level] for level in sorted(self.headings))
+
+    def _with_path(self, body: str) -> str:
+        path = self._path()
+        return f"{path}\n{body}" if path else body
+
+    def flush(self) -> None:
+        if not self.parts:
+            return
+        metadata = {"paragraph": self.first}
+        if self.last > self.first:
+            metadata["paragraph_end"] = self.last
+        self.sections.append(
+            ParsedSection(self._with_path("\n".join(self.parts)), metadata)
+        )
+        self.parts, self.words = [], 0
+
+    def heading(self, level: int, text: str) -> None:
+        self.flush()
+        self.headings = {
+            depth: title for depth, title in self.headings.items() if depth < level
+        }
+        self.headings[level] = text
+
+    def paragraph(self, text: str, number: int) -> None:
+        words = len(text.split())
+        if self.parts and self.words + words > _MAX_SECTION_WORDS:
+            self.flush()
+        if not self.parts:
+            self.first = number
+        self.parts.append(text)
+        self.words += words
+        self.last = number
+
+    def add(self, paragraph: Paragraph, images: list[str], number: int) -> bool:
+        """Add one Word paragraph and its OCR'd images; return whether it had text."""
+        text = paragraph.text.strip()
+        recognized = "\n\n".join(image for image in images if image).strip()
+        if not text and not recognized:
+            return False
+        level = _docx_heading_level(paragraph) if text else None
+        if level is not None and len(text.split()) <= _MAX_HEADING_WORDS:
+            self.heading(level, text)
+            if recognized:
+                self.paragraph(recognized, number)
+        else:
+            body = "\n\n".join(part for part in (text, recognized) if part)
+            self.paragraph(body, number)
+        return True
+
+    def table(self, text: str, position: int) -> None:
+        self.flush()
+        self.sections.append(
+            ParsedSection(self._with_path(text), {"section": position})
+        )
+
+    def finish(self) -> list[ParsedSection]:
+        self.flush()
+        if not self.sections and self.headings:
+            # A document of headings only still has searchable text.
+            self.sections.append(ParsedSection(self._path(), {"paragraph": 1}))
+        return self.sections
+
+
+def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
     """Extract traceable slide content and tables from PPTX bytes."""
     try:
         presentation = Presentation(io.BytesIO(file_bytes))
     except Exception as exc:
-        raise ValueError("Corrupted or invalid PPTX document.") from exc
+        raise DocumentError(
+            "Corrupted or invalid PPTX document.", "corrupt_file"
+        ) from exc
     settings = OCRSettings.from_environment()
     sections: list[ParsedSection] = []
     ocr_images = 0
@@ -182,7 +310,7 @@ def _parse_pptx_sections(file_bytes: bytes) -> list[ParsedSection]:
                 parts.append(_format_pptx_table(shape.table))
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and settings.enabled:
                 text, ocr_images = _extract_embedded_image(
-                    shape.image.blob, settings, ocr_images, "PowerPoint"
+                    shape.image.blob, settings, ocr_images, notices
                 )
                 if text:
                     parts.append(text)
@@ -205,21 +333,31 @@ def _docx_paragraph_images(paragraph: Paragraph, document: Any) -> list[bytes]:
     return images
 
 
+def _ocr_unavailable(exc: OCRUnavailableError) -> DocumentError:
+    """OCR cannot run at all for a file that is only an image."""
+    return DocumentError(f"OCR is unavailable: {exc}", "ocr_unavailable")
+
+
 def _extract_embedded_image(
-    image: bytes, settings: OCRSettings, processed: int, source: str
+    image: bytes, settings: OCRSettings, processed: int, notices: list[str]
 ) -> tuple[str, int]:
-    """OCR one bounded Office image and return its text and updated counter."""
+    """OCR one Office image within the image budget; skip it when over budget.
+
+    Text of the rest of the document is still indexed: images past
+    ``OCR_MAX_IMAGES`` or images OCR cannot read only add a notice.
+    """
     next_count = processed + 1
     if next_count > settings.max_images:
-        raise OCRImageLimitError(
-            f"Documents are limited to {settings.max_images} OCR images."
-        )
+        notices.append(NOTICE_OCR_IMAGE_LIMIT)
+        return "", next_count
     try:
         return extract_image_text(image, settings), next_count
-    except OCRError as exc:
-        raise ValueError(
-            f"An embedded {source} image could not be processed: {exc}"
-        ) from exc
+    except OCRUnavailableError:
+        notices.append(NOTICE_OCR_UNAVAILABLE)
+        return "", next_count
+    except (OCRError, ValueError):
+        notices.append(NOTICE_OCR_PARTIAL)
+        return "", next_count
 
 
 def _parse_image_sections(file_bytes: bytes) -> list[ParsedSection]:
@@ -229,19 +367,63 @@ def _parse_image_sections(file_bytes: bytes) -> list[ParsedSection]:
         return []
     try:
         text = extract_image_text(file_bytes, settings)
+    except OCRUnavailableError as exc:
+        raise _ocr_unavailable(exc) from exc
+    except OCRTimeoutError as exc:
+        raise DocumentError(f"OCR timed out: {exc}", "ocr_timeout") from exc
     except OCRError as exc:
-        raise ValueError(f"The image could not be processed: {exc}") from exc
+        raise DocumentError(
+            f"The image could not be processed: {exc}", "ocr_failed"
+        ) from exc
+    except ValueError as exc:
+        raise DocumentError(str(exc), "corrupt_file") from exc
     return [ParsedSection(text, {"page": 1})] if text else []
 
 
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+# Below this share of Arabic-script letters, a Windows-1256 reading is not
+# Persian/Arabic text and Windows-1252 (Western) is used instead.
+_MIN_ARABIC_LETTER_SHARE = 0.3
+
+
+def _arabic_letter_share(text: str) -> float:
+    letters = [char for char in text if char.isalpha()]
+    if not letters:
+        return 0.0
+    arabic = sum("؀" <= char <= "ۿ" for char in letters)
+    return arabic / len(letters)
+
+
 def _decode_text(file_bytes: bytes) -> str:
-    """Decode bounded text formats as UTF-8 while rejecting binary payloads."""
+    """Decode text files: UTF-8, UTF-16 with BOM, or legacy Windows code pages.
+
+    Persian text saved by older Windows editors (Notepad before 2019, Excel
+    CSV exports) uses Windows-1256; Western files use Windows-1252. Binary
+    payloads are rejected.
+    """
+    if file_bytes.startswith(_UTF16_BOMS):
+        try:
+            return file_bytes.decode("utf-16")
+        except UnicodeDecodeError as exc:
+            raise DocumentError(
+                "The UTF-16 text file is malformed.", "text_encoding"
+            ) from exc
     if b"\x00" in file_bytes:
-        raise ValueError("The text file contains binary data.")
+        raise DocumentError("The text file contains binary data.", "unsupported_file")
     try:
         return file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    persian = file_bytes.decode("cp1256", errors="replace")
+    if _arabic_letter_share(persian) >= _MIN_ARABIC_LETTER_SHARE:
+        return persian.replace("�", "")
+    try:
+        return file_bytes.decode("cp1252")
     except UnicodeDecodeError as exc:
-        raise ValueError("Text files must use UTF-8 encoding.") from exc
+        raise DocumentError(
+            "The text encoding was not recognized; save the file as UTF-8.",
+            "text_encoding",
+        ) from exc
 
 
 def _parse_text_sections(file_bytes: bytes, filename: str) -> list[ParsedSection]:
@@ -251,7 +433,9 @@ def _parse_text_sections(file_bytes: bytes, filename: str) -> list[ParsedSection
         try:
             value = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise ValueError("The JSON document is invalid.") from exc
+            raise DocumentError(
+                "The JSON document is invalid.", "corrupt_file"
+            ) from exc
         text = json.dumps(value, ensure_ascii=False, indent=2)
     elif filename.endswith((".html", ".htm", ".xml")):
         parser = _VisibleTextExtractor()
@@ -356,8 +540,10 @@ def _format_pptx_table(table: Any) -> str:
 
 
 def _needs_pdf_ocr(page: _PDFPage, text: str, settings: OCRSettings) -> bool:
-    """Detect scanned pages and image pages with only a short text layer."""
+    """Detect scanned pages, broken text layers, and sparse image pages."""
     if not text:
+        return True
+    if settings.enabled and text_layer_is_garbled(text):
         return True
     if not settings.enabled or sum(char.isalnum() for char in text) >= 40:
         return False
@@ -366,45 +552,62 @@ def _needs_pdf_ocr(page: _PDFPage, text: str, settings: OCRSettings) -> bool:
 
 
 def _pdf_page_text(
-    page: _PDFPage, text: str, settings: OCRSettings, scanned_pages: int
+    page: _PDFPage,
+    text: str,
+    settings: OCRSettings,
+    scanned_pages: int,
+    notices: list[str],
 ) -> tuple[str, int]:
-    """OCR one suspect page while retaining usable native text on OCR failure."""
+    """OCR one suspect page while retaining usable native text on OCR failure.
+
+    Pages past ``OCR_MAX_PAGES`` and pages OCR cannot read keep their native
+    text (often empty) and add a notice instead of rejecting the document.
+    """
     if not _needs_pdf_ocr(page, text, settings):
         return text, scanned_pages
     scanned_pages += 1
     if not settings.enabled:
-        return "", scanned_pages
+        return "" if text_layer_is_garbled(text) else text, scanned_pages
     if scanned_pages > settings.max_pages:
-        if text:
-            return text, scanned_pages
-        raise OCRPageLimitError(
-            f"Scanned PDFs are limited to {settings.max_pages} OCR pages."
-        )
+        notices.append(NOTICE_OCR_PAGE_LIMIT)
+        return "" if text_layer_is_garbled(text) else text, scanned_pages
     try:
         recognized = extract_page_text(page, settings)
-    except OCRError as exc:
-        if text:
-            return text, scanned_pages
-        raise ValueError(f"Scanned PDFs could not be processed: {exc}") from exc
+    except OCRUnavailableError:
+        # The text pages are still useful; the notice names the setup problem.
+        notices.append(NOTICE_OCR_UNAVAILABLE)
+        return "" if text_layer_is_garbled(text) else text, scanned_pages
+    except OCRError:
+        notices.append(NOTICE_OCR_PARTIAL)
+        return "" if text_layer_is_garbled(text) else text, scanned_pages
+    if recognized and text_layer_is_garbled(text):
+        return recognized, scanned_pages
     if recognized and text and text not in recognized:
         return f"{text}\n\n{recognized}", scanned_pages
     return recognized or text, scanned_pages
 
 
-def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
+def _parse_pdf_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
     """Extract ordered PDF pages and OCR image pages with sparse text layers."""
     try:
         document = pymupdf.open(stream=file_bytes, filetype="pdf")
     except Exception as exc:
-        raise ValueError("Corrupted or invalid PDF document.") from exc
+        raise DocumentError(
+            "Corrupted or invalid PDF document.", "corrupt_file"
+        ) from exc
+    if getattr(document, "needs_pass", False) is True:
+        document.close()
+        raise DocumentError("The PDF is password-protected.", "encrypted_document")
 
     settings = OCRSettings.from_environment()
     sections: list[ParsedSection] = []
     scanned_pages = 0
     try:
         for page_number, page in enumerate(document, start=1):
-            text = page.get_text("text").strip()
-            text, scanned_pages = _pdf_page_text(page, text, settings, scanned_pages)
+            text = logical_page_text(page)
+            text, scanned_pages = _pdf_page_text(
+                page, text, settings, scanned_pages, notices
+            )
             if text:
                 sections.append(
                     ParsedSection(text=text, metadata={"page": page_number})

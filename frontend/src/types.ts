@@ -27,16 +27,33 @@ export interface IngestionCapabilities {
 
 export interface AppCapabilities { ingestion: IngestionCapabilities }
 
+export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }
+
 export interface Citation {
   filename: string;
-  locations: Array<{ kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }>;
+  locations: SourceLocation[];
 }
+
+/** One numbered excerpt given to the model; `cited` when the answer used [n]. */
+export interface SourcePassage {
+  n: number;
+  filename: string;
+  location?: SourceLocation;
+  text: string;
+  cited: boolean;
+  score?: number;
+}
+
+/** Where an answer's content came from, shown as a badge on the answer. */
+export type Grounding = 'documents' | 'hybrid' | 'general' | 'not_found';
 
 export interface ResponseVariant {
   id: string;
   content: string;
   timestamp: number;
+  grounding?: Grounding;
   citations?: Citation[];
+  sources?: SourcePassage[];
   error?: boolean;
   prompt?: string;
   continuation?: Message[];
@@ -48,6 +65,8 @@ export interface Message {
   content: string;
   timestamp: number;
   citations?: Citation[];
+  sources?: SourcePassage[];
+  grounding?: Grounding;
   isStreaming?: boolean;
   error?: boolean;
   variants?: ResponseVariant[];
@@ -62,6 +81,18 @@ export interface SessionDocument {
   errorMessage?: string;
   enabled?: boolean;
   uploadProgress?: number;
+  /** Chunks indexed and pages/slides/paragraphs read, from the ingest response. */
+  chunks?: number;
+  sections?: number;
+  /** Partial-indexing notice codes such as `ocr_page_limit`. */
+  notices?: string[];
+}
+
+export interface IngestedFile {
+  filename: string;
+  chunks?: number;
+  sections?: number;
+  notices: string[];
 }
 
 export interface Session {
@@ -73,6 +104,8 @@ export interface Session {
   messages: Message[];
   ragMode: RAGMode;
   draft?: string;
+  /** Questions suggested from the indexed documents; `key` names the document set. */
+  suggestions?: { key: string; questions: string[] };
 }
 
 export interface AppSettings {

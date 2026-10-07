@@ -13,6 +13,22 @@ from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 
 
+class FakeReranker:
+    """Record requested depths and return preset (or unchanged) nodes."""
+
+    def __init__(self, result: list[ExtractedNode] | None = None) -> None:
+        """Return ``result`` when given, otherwise the candidates."""
+        self.result = result
+        self.depths: list[int] = []
+
+    def rerank(
+        self, query: str, nodes: list[ExtractedNode], top_n: int
+    ) -> list[ExtractedNode]:
+        """Return the first ``top_n`` preset or candidate nodes."""
+        self.depths.append(top_n)
+        return list(nodes if self.result is None else self.result)[:top_n]
+
+
 @patch("backend.core.service.condenser.Settings")
 def test_condense_question(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()
@@ -30,6 +46,34 @@ def test_condense_question(mock_settings: MagicMock) -> None:
     condensed = condenser.condense("پایتخت آن کجاست؟", history)
     assert condensed == "پایتخت ایران کجاست؟"
     mock_llm.complete.assert_called_once()
+
+
+def test_condenser_falls_back_to_the_question_when_the_model_fails() -> None:
+    """A slow or failing rewrite never blocks the answer."""
+    llm = MagicMock()
+    llm.complete.side_effect = TimeoutError("slow model")
+    history = [ChatMessage(role=MessageRole.USER, content="درباره ایران بگو")]
+
+    assert CondenseQuestionPipeline(llm).condense("پایتخت آن؟", history) == (
+        "پایتخت آن؟"
+    )
+
+
+def test_condenser_sends_only_recent_bounded_history() -> None:
+    """Long conversations do not crowd the question out of the prompt."""
+    llm = MagicMock()
+    llm.complete.return_value = "standalone"
+    history = [
+        ChatMessage(role=MessageRole.USER, content=f"turn {index} " + "x" * 5000)
+        for index in range(10)
+    ]
+
+    assert CondenseQuestionPipeline(llm).condense("and then?", history) == (
+        "standalone"
+    )
+    prompt = llm.complete.call_args.args[0]
+    assert "turn 3 " not in prompt and "turn 4 " in prompt
+    assert len(prompt) < 6 * 1300 + 2000
 
 
 @patch("backend.core.strategies.strict_rag.Settings")
@@ -121,30 +165,19 @@ def test_llm_only_strategy(mock_settings: MagicMock) -> None:
     mock_llm.complete.assert_called_once()
 
 
-@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
-def test_hybrid_rag_strategy(
-    mock_settings: MagicMock, mock_rerank_cls: MagicMock
-) -> None:
+def test_hybrid_rag_strategy(mock_settings: MagicMock) -> None:
     mock_repo = MagicMock()
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text="raw text", score=0.6)
     ]
-
-    mock_rerank = MagicMock()
-    # Mock reranked node structure
-    from llama_index.core.schema import NodeWithScore, TextNode
-
-    mock_rerank.postprocess_nodes.return_value = [
-        NodeWithScore(node=TextNode(text="reranked text"), score=0.9)
-    ]
-    mock_rerank_cls.return_value = mock_rerank
+    reranker = FakeReranker([ExtractedNode(text="reranked text", score=0.9)])
 
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "Hybrid answer"
     mock_settings.llm = mock_llm
 
-    strategy = HybridRAGStrategy(mock_repo)
+    strategy = HybridRAGStrategy(mock_repo, reranker=reranker)
     stages: list[str] = []
     result = strategy.execute("query", [], progress=stages.append)
 
@@ -152,8 +185,23 @@ def test_hybrid_rag_strategy(
     assert stages == ["retrieving", "generating"]
     assert [node.text for node in result.source_nodes] == ["raw text", "reranked text"]
     mock_repo.similarity_search.assert_called_once()
-    mock_rerank.postprocess_nodes.assert_called_once()
+    assert len(reranker.depths) == 1
     mock_llm.complete.assert_called_once()
+
+
+@patch("backend.core.strategies.hybrid_rag.Settings")
+def test_hybrid_without_reranker_keeps_dense_order(mock_settings: MagicMock) -> None:
+    """Hybrid still answers when no cross-encoder is available."""
+    repo = MagicMock()
+    repo.similarity_search.return_value = [
+        ExtractedNode(text="weaker", score=0.6),
+        ExtractedNode(text="stronger", score=0.9),
+    ]
+    mock_settings.llm.complete.return_value = "answer"
+
+    result = HybridRAGStrategy(repo, top_n_rerank=2).execute("query", [])
+
+    assert [node.text for node in result.source_nodes] == ["stronger", "weaker"]
 
 
 @patch("backend.core.strategies.strict_rag.Settings")
@@ -199,33 +247,25 @@ def test_strict_rag_multi_chunk_dispersed_aggregation(
     assert "متن کاملاً بی‌ربط" not in called_prompt
 
 
-@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
-def test_hybrid_rag_expanded_candidate_pool(
-    mock_settings: MagicMock, mock_rerank_cls: MagicMock
-) -> None:
+def test_hybrid_rag_expanded_candidate_pool(mock_settings: MagicMock) -> None:
     """Verifies that Hybrid RAG fetches an expanded candidate pool (e.g. 30) for top_k=15."""
-    from llama_index.core.schema import NodeWithScore, TextNode
-
     mock_repo = MagicMock()
     # Mock returning 30 candidate nodes
     mock_repo.similarity_search.return_value = [
         ExtractedNode(text=f"Candidate {i}", score=0.7) for i in range(30)
     ]
-
-    mock_rerank = MagicMock()
-    # Mock reranked top 15 nodes
-    mock_rerank.postprocess_nodes.return_value = [
-        NodeWithScore(node=TextNode(text=f"Reranked {i}"), score=0.9 - i * 0.01)
-        for i in range(15)
-    ]
-    mock_rerank_cls.return_value = mock_rerank
+    reranker = FakeReranker(
+        [ExtractedNode(text=f"Reranked {i}", score=0.9 - i * 0.01) for i in range(15)]
+    )
 
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "Aggregated Hybrid Response"
     mock_settings.llm = mock_llm
 
-    strategy = HybridRAGStrategy(mock_repo, top_k_retrieve=25, top_n_rerank=15)
+    strategy = HybridRAGStrategy(
+        mock_repo, top_k_retrieve=25, top_n_rerank=15, reranker=reranker
+    )
     result = strategy.execute("query", [], top_k=15)
 
     assert result.answer == "Aggregated Hybrid Response"
@@ -274,16 +314,21 @@ def test_hybrid_dense_anchors_preserve_multilingual_hits_across_files() -> None:
 
 
 def test_strict_rag_prompt_has_dynamic_language_and_code_rules() -> None:
-    """Verifies that STRICT_RAG_PROMPT_TEMPLATE enforces dynamic language matching and code rules."""
+    """Verifies that the strict prompt keeps language matching and code checks."""
+    from backend.core.strategies.prompt_rules import (
+        CODE_VERIFICATION_RULES,
+        LANGUAGE_RULES,
+    )
     from backend.core.strategies.strict_rag import STRICT_RAG_PROMPT_TEMPLATE
 
-    assert "MANDATORY LANGUAGE RULES" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "Match the natural language used by the user" in STRICT_RAG_PROMPT_TEMPLATE
+    assert LANGUAGE_RULES in STRICT_RAG_PROMPT_TEMPLATE
+    assert CODE_VERIFICATION_RULES in STRICT_RAG_PROMPT_TEMPLATE
     assert "Persian (فارسی)" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "English" in STRICT_RAG_PROMPT_TEMPLATE
     assert "Chinese" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "Do NOT consider the presence of English code" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "CONTENT & CODE VERIFICATION RULES" in STRICT_RAG_PROMPT_TEMPLATE
+    assert (
+        "Do not treat them as a sign that the question is in English"
+        in STRICT_RAG_PROMPT_TEMPLATE
+    )
     assert "بله، این اطلاعات/کد در سند وجود دارد" in STRICT_RAG_PROMPT_TEMPLATE
     assert (
         "Yes, this information/code is present in the document"
@@ -292,16 +337,26 @@ def test_strict_rag_prompt_has_dynamic_language_and_code_rules() -> None:
 
 
 def test_hybrid_rag_prompt_has_dynamic_language_and_code_rules() -> None:
-    """Verifies that HYBRID_RAG_PROMPT_TEMPLATE enforces dynamic language matching and code rules."""
+    """Verifies that the hybrid prompt keeps language matching and code checks."""
     from backend.core.strategies.hybrid_rag import HYBRID_RAG_PROMPT_TEMPLATE
+    from backend.core.strategies.prompt_rules import (
+        CODE_VERIFICATION_RULES,
+        LANGUAGE_RULES,
+    )
 
-    assert "MANDATORY LANGUAGE RULES" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "Match the natural language used by the user" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert LANGUAGE_RULES in HYBRID_RAG_PROMPT_TEMPLATE
+    assert CODE_VERIFICATION_RULES in HYBRID_RAG_PROMPT_TEMPLATE
     assert "Persian (فارسی)" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "English" in HYBRID_RAG_PROMPT_TEMPLATE
     assert "Chinese" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "Do NOT consider the presence of English code" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "CONTENT & CODE VERIFICATION RULES" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert (
+        "Do not treat them as a sign that the question is in English"
+        in HYBRID_RAG_PROMPT_TEMPLATE
+    )
+    assert "بله، این اطلاعات/کد در سند وجود دارد" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert (
+        "Yes, this information/code is present in the document"
+        in HYBRID_RAG_PROMPT_TEMPLATE
+    )
 
 
 def test_condenser_prompt_has_code_preservation_rule() -> None:
@@ -376,10 +431,9 @@ def test_strict_tagged_question_refuses_when_one_named_file_lacks_evidence(
     mock_settings.llm.complete.assert_not_called()
 
 
-@patch("backend.core.strategies.hybrid_rag.FlashRankRerank")
 @patch("backend.core.strategies.hybrid_rag.Settings")
 def test_hybrid_tagged_question_keeps_each_named_file_when_top_k_is_one(
-    mock_settings: MagicMock, mock_rerank_cls: MagicMock
+    mock_settings: MagicMock,
 ) -> None:
     repo = MagicMock()
     repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
@@ -387,10 +441,10 @@ def test_hybrid_tagged_question_keeps_each_named_file_when_top_k_is_one(
         [ExtractedNode(text="costs", score=0.91, metadata={"filename": "a.pdf"})],
         [ExtractedNode(text="dates", score=0.86, metadata={"filename": "b.pdf"})],
     ]
-    mock_rerank_cls.return_value.postprocess_nodes.return_value = []
+    reranker = FakeReranker([])
     mock_settings.llm.complete.return_value = "answer"
 
-    result = HybridRAGStrategy(repo).execute(
+    result = HybridRAGStrategy(repo, reranker=reranker).execute(
         "compare",
         [],
         session_id="s",
@@ -406,4 +460,4 @@ def test_hybrid_tagged_question_keeps_each_named_file_when_top_k_is_one(
         "costs",
         "dates",
     ]
-    assert mock_rerank_cls.call_args_list[-1].kwargs["top_n"] == 2
+    assert reranker.depths[-1] == 2
