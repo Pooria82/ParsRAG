@@ -21,7 +21,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
   const toBottom = () => {
     const element = scrollRef.current;

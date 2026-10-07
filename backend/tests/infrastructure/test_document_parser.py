@@ -3,7 +3,7 @@ import os
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-import fitz  # type: ignore  # PyMuPDF does not ship complete type information.
+import pymupdf
 import pytest
 from docx import Document
 from PIL import Image
@@ -19,7 +19,7 @@ from backend.infrastructure.parsers.document_parser import (
 )
 
 
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     # Mock a PDF document with one page but no text
     mock_doc = MagicMock()
@@ -36,7 +36,7 @@ def test_parse_empty_pdf(mock_fitz_open: MagicMock) -> None:
     mock_doc.close.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_pdf_sections_keep_page_numbers(mock_fitz_open: MagicMock) -> None:
     mock_doc = MagicMock()
     first, second = MagicMock(), MagicMock()
@@ -52,7 +52,7 @@ def test_pdf_sections_keep_page_numbers(mock_fitz_open: MagicMock) -> None:
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_page_text")
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_scanned_pdf_uses_ocr_when_enabled(
     mock_fitz_open: MagicMock,
     mock_extract_page_text: MagicMock,
@@ -76,7 +76,7 @@ def test_scanned_pdf_uses_ocr_when_enabled(
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_page_text")
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_mixed_pdf_only_ocrs_scanned_pages(
     mock_fitz_open: MagicMock,
     mock_extract_page_text: MagicMock,
@@ -102,7 +102,7 @@ def test_mixed_pdf_only_ocrs_scanned_pages(
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_page_text")
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_sparse_pdf_text_layer_does_not_hide_image_evidence(
     mock_open: MagicMock,
     mock_extract: MagicMock,
@@ -125,7 +125,7 @@ def test_sparse_pdf_text_layer_does_not_hide_image_evidence(
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_page_text")
-@patch("backend.infrastructure.parsers.document_parser.fitz.open")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_pdf_ocr_page_limit_is_enforced(
     mock_fitz_open: MagicMock,
     mock_extract_page_text: MagicMock,
@@ -189,7 +189,7 @@ def test_page_bridge_keeps_both_sides_bounded_and_traceable() -> None:
 
 def test_real_two_page_pdf_preserves_one_split_fact() -> None:
     """A real PDF page turn keeps both halves available to one retrieval chunk."""
-    document = fitz.open()
+    document = pymupdf.open()
     document.new_page().insert_text((72, 72), "The invoice total is")
     document.new_page().insert_text((72, 72), "425 euros due today")
     payload = document.tobytes()

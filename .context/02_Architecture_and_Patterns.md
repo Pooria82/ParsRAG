@@ -3,7 +3,7 @@
 ## 1. Definitive Technology Stack
 To achieve FAANG-level production readiness, the initially proposed stack has been critically evaluated and upgraded. Below are the finalized technology decisions and their justifications:
 
-- **Frontend UI: React 18, TypeScript, and Vite**
+- **Frontend UI: React 19, TypeScript, and Vite**
   - *Justification:* A dedicated React workspace provides precise control over bilingual RTL/LTR behavior, local state, accessibility, document management, and the branded interaction design. FastAPI serves the production build from `frontend/dist`.
 - **Backend Framework: FastAPI** *(Retained)*
   - *Justification:* Asynchronous, high-performance web framework with native Pydantic validation and auto-generated OpenAPI docs. Ideal for serving LLMs and decoupling the backend from the UI.
