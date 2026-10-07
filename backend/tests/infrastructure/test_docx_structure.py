@@ -88,4 +88,4 @@ def test_paragraph_ranges_are_cited_as_ranges() -> None:
             )
         ]
     )
-    assert "[source: r.docx, paragraphs: 3-7]" in context
+    assert "[1] r.docx, paragraphs: 3-7\nمتن" in context
