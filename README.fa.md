@@ -313,6 +313,7 @@ docker compose down
 | `PARSRAG_MAX_REQUEST_BYTES` | `534773760` | سقف body شامل سربار multipart |
 | `OCR_ENABLED` | `1` | فعال‌سازی مسیرهای Tesseract |
 | `OCR_LANGUAGES` | `fas+eng` | زبان‌های OCR |
+| `OCR_DPI` | `200` | وضوح تصویرسازی صفحه‌های اسکن‌شده PDF |
 | `OCR_MAX_PAGES` | `30` | سقف صفحات تصویری PDF |
 | `OCR_MAX_IMAGES` | `30` | سقف تصاویر مستقیم یا داخل Office |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | محافظ ابعاد بازشده تصویر |

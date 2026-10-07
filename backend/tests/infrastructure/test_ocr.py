@@ -4,6 +4,7 @@ import subprocess
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import pymupdf
 import pytest
 from PIL import Image
 
@@ -15,6 +16,27 @@ from backend.infrastructure.parsers.ocr import (
     extract_page_text,
     normalize_ocr_text,
 )
+
+TSV_HEADER = (
+    "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop"
+    "\twidth\theight\tconf\ttext"
+)
+
+
+def tsv(*words: tuple[int, int, int, float, str]) -> bytes:
+    """Build Tesseract TSV for (block, paragraph, line, confidence, word) rows."""
+    rows = [TSV_HEADER]
+    for index, (block, paragraph, line, confidence, word) in enumerate(words, 1):
+        rows.append(
+            f"5\t1\t{block}\t{paragraph}\t{line}\t{index}\t0\t0\t10\t10"
+            f"\t{confidence}\t{word}"
+        )
+    return "\n".join(rows).encode()
+
+
+def completed(stdout: bytes) -> subprocess.CompletedProcess[bytes]:
+    """Wrap Tesseract output in a successful process result."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr=b"")
 
 
 def test_ocr_settings_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,8 +66,8 @@ def test_extract_page_text_invokes_tesseract(mock_run: MagicMock) -> None:
     page.rect.width = 612
     page.rect.height = 792
     page.get_pixmap.return_value.tobytes.return_value = b"png"
-    mock_run.return_value = subprocess.CompletedProcess(
-        args=[], returncode=0, stdout="متن  اسکن‌شده\n".encode(), stderr=b""
+    mock_run.return_value = completed(
+        tsv((1, 1, 1, 91.0, "\u200fمتن\u200f"), (1, 1, 1, 90.0, "اسکن‌شده"))
     )
     settings = OCRSettings(True, "fas+eng", 300, 12, 5)
 
@@ -55,6 +77,8 @@ def test_extract_page_text_invokes_tesseract(mock_run: MagicMock) -> None:
     assert mock_run.call_args.kwargs["input"] == b"png"
     assert mock_run.call_args.kwargs["timeout"] == 12
     assert mock_run.call_args.args[0][:3] == ["tesseract", "stdin", "stdout"]
+    assert "--oem" in mock_run.call_args.args[0]
+    assert mock_run.call_count == 1
 
 
 @patch(
@@ -93,8 +117,8 @@ def test_extract_image_text_validates_and_normalizes_raster(
     """Standalone and embedded images are normalized before Tesseract runs."""
     source = BytesIO()
     Image.new("RGB", (640, 480), "white").save(source, format="JPEG")
-    mock_run.return_value = subprocess.CompletedProcess(
-        args=[], returncode=0, stdout=" متن تصویر ".encode(), stderr=b""
+    mock_run.return_value = completed(
+        tsv((1, 1, 1, 88.0, "متن"), (1, 1, 1, 87.0, "تصویر"))
     )
 
     result = extract_image_text(
@@ -122,3 +146,67 @@ def test_pdf_ocr_rejects_oversized_page_before_rasterization() -> None:
     with pytest.raises(ValueError, match="OCR pixel limit"):
         extract_page_text(page, OCRSettings(True, "fas+eng", 600, 12, 5))
     page.get_pixmap.assert_not_called()
+
+
+@patch("backend.infrastructure.parsers.ocr.subprocess.run")
+def test_uncertain_pages_are_reread_as_one_block(mock_run: MagicMock) -> None:
+    """A dropped-line first pass is replaced by a more confident block pass."""
+    page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
+    page.get_pixmap.return_value.tobytes.return_value = b"png"
+    mock_run.side_effect = [
+        completed(tsv((1, 1, 1, 40.0, "ناقص"))),
+        completed(
+            tsv(
+                (1, 1, 1, 92.0, "سطر"),
+                (1, 1, 1, 92.0, "اول"),
+                (1, 1, 2, 90.0, "سطر"),
+                (1, 1, 2, 90.0, "دوم"),
+            )
+        ),
+    ]
+
+    result = extract_page_text(page, OCRSettings(True, "fas+eng", 300, 12, 5))
+
+    assert result == "سطر اول\nسطر دوم"
+    assert [
+        call.args[0][call.args[0].index("--psm") + 1]
+        for call in mock_run.call_args_list
+    ] == ["3", "6"]
+
+
+@patch("backend.infrastructure.parsers.ocr.subprocess.run")
+def test_confident_first_pass_wins_over_weaker_block_pass(mock_run: MagicMock) -> None:
+    """The block pass replaces the first reading only when it is more confident."""
+    page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
+    page.get_pixmap.return_value.tobytes.return_value = b"png"
+    mock_run.side_effect = [
+        completed(tsv((1, 1, 1, 70.0, "خواندن"), (2, 1, 1, 70.0, "دوم"))),
+        completed(tsv((1, 1, 1, 30.0, "خراب"))),
+    ]
+
+    result = extract_page_text(page, OCRSettings(True, "fas+eng", 300, 12, 5))
+
+    assert result == "خواندن\n\nدوم"
+
+
+def test_bidi_controls_are_removed_from_ocr_text() -> None:
+    """Invisible direction marks never reach chunks or embeddings."""
+    assert normalize_ocr_text("\u200eGL\u200f متن\u061c") == "GL متن"
+
+
+def test_page_rasters_are_grayscale_without_contrast_stretching() -> None:
+    """PDF pages reach Tesseract as grayscale renders, unmodified."""
+    page = MagicMock()
+    page.rect.width = 612
+    page.rect.height = 792
+    page.get_pixmap.return_value.tobytes.return_value = b"png"
+    with patch("backend.infrastructure.parsers.ocr.subprocess.run") as run:
+        run.return_value = completed(tsv((1, 1, 1, 95.0, "متن")))
+        extract_page_text(page, OCRSettings(True, "fas+eng", 200, 12, 5))
+
+    assert page.get_pixmap.call_args.kwargs["colorspace"] is pymupdf.csGRAY
+    assert run.call_args.kwargs["input"] == b"png"

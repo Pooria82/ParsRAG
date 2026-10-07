@@ -24,6 +24,10 @@ from backend.infrastructure.parsers.ocr import (
     extract_image_text,
     extract_page_text,
 )
+from backend.infrastructure.parsers.pdf_text import (
+    logical_page_text,
+    text_layer_is_garbled,
+)
 
 __all__ = [
     "LocalDocumentParser",
@@ -356,8 +360,10 @@ def _format_pptx_table(table: Any) -> str:
 
 
 def _needs_pdf_ocr(page: _PDFPage, text: str, settings: OCRSettings) -> bool:
-    """Detect scanned pages and image pages with only a short text layer."""
+    """Detect scanned pages, broken text layers, and sparse image pages."""
     if not text:
+        return True
+    if settings.enabled and text_layer_is_garbled(text):
         return True
     if not settings.enabled or sum(char.isalnum() for char in text) >= 40:
         return False
@@ -386,6 +392,8 @@ def _pdf_page_text(
         if text:
             return text, scanned_pages
         raise ValueError(f"Scanned PDFs could not be processed: {exc}") from exc
+    if recognized and text_layer_is_garbled(text):
+        return recognized, scanned_pages
     if recognized and text and text not in recognized:
         return f"{text}\n\n{recognized}", scanned_pages
     return recognized or text, scanned_pages
@@ -403,7 +411,7 @@ def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
     scanned_pages = 0
     try:
         for page_number, page in enumerate(document, start=1):
-            text = page.get_text("text").strip()
+            text = logical_page_text(page)
             text, scanned_pages = _pdf_page_text(page, text, settings, scanned_pages)
             if text:
                 sections.append(
