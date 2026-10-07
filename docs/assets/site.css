@@ -1,0 +1,117 @@
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("fonts/Vazirmatn-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light dark;
+  --canvas: #f7f8f4;
+  --surface: #fdfefb;
+  --ink: #18322b;
+  --muted: #4c6159;
+  --accent: #146a57;
+  --accent-ink: #ffffff;
+  --selection: #dce9e2;
+  --line: #d6e1db;
+  --code: #eef3ef;
+  --radius: 14px;
+  --font: "Vazirmatn", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #101815;
+    --surface: #18231f;
+    --ink: #e5eee9;
+    --muted: #a8bbb2;
+    --accent: #79c5aa;
+    --accent-ink: #0d1a15;
+    --selection: #263b32;
+    --line: #2b3d35;
+    --code: #14201c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+header.site {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 0;
+}
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+.brand img { width: 36px; height: 36px; }
+nav.site { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.95rem; }
+nav.site a { color: var(--muted); text-decoration: none; }
+nav.site a:hover { color: var(--accent); }
+
+.hero { padding: 56px 0 40px; text-align: center; }
+.hero img.mark { width: 88px; height: 88px; }
+.hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.2; margin: 18px 0 12px; letter-spacing: -0.01em; }
+.hero p.lead { font-size: clamp(1.05rem, 2.4vw, 1.25rem); color: var(--muted); max-width: 760px; margin: 0 auto 28px; }
+.actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.button {
+  display: inline-block; padding: 12px 22px; border-radius: 999px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--accent);
+}
+.button.primary { background: var(--accent); color: var(--accent-ink); }
+.button.secondary { color: var(--accent); background: transparent; }
+
+figure.shot { margin: 40px auto 0; max-width: 1000px; }
+figure.shot img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line); display: block; }
+figure.shot figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 10px; text-align: center; }
+
+section { padding: 48px 0; border-top: 1px solid var(--line); }
+section h2 { font-size: 1.6rem; margin: 0 0 8px; }
+section p.intro { color: var(--muted); margin: 0 0 24px; max-width: 760px; }
+
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.97rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+th, td { text-align: start; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.table-scroll { overflow-x: auto; }
+
+pre {
+  background: var(--code); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; overflow-x: auto; direction: ltr; text-align: left; font-size: 0.9rem;
+}
+code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+.gallery { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.gallery img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line); }
+
+footer.site { padding: 32px 0 48px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); }
+footer.site p { margin: 4px 0; }
+
+[dir="rtl"] pre, [dir="rtl"] code { direction: ltr; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .button { transition: transform 180ms ease, background-color 180ms ease; }
+  .button:hover { transform: translateY(-1px); }
+}
+
+@media (max-width: 640px) {
+  header.site { flex-direction: column; align-items: flex-start; }
+  .hero { padding-top: 32px; }
+}
