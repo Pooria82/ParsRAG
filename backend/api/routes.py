@@ -8,7 +8,7 @@ are mapped centrally by ``backend.api.errors``.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
@@ -26,6 +26,7 @@ from backend.api.dependencies import (
     get_reuse_document,
     require_runtime_ready,
 )
+from backend.api.streaming import event_stream
 from backend.core.dto.input.documents import DeleteDocumentRequest, ReuseDocumentRequest
 from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
 from backend.core.dto.input.model import (
@@ -151,6 +152,20 @@ def query_rag(
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""
     return use_case.execute(request)
+
+
+@router.post("/query/stream")
+def stream_query(
+    request: QueryRequest,
+    _ready: None = Depends(require_runtime_ready),
+    use_case: AnswerQuery = Depends(get_answer_query),  # noqa: B008
+) -> StreamingResponse:
+    """Stream stages, numbered sources, answer text, and the final result (SSE)."""
+    return StreamingResponse(
+        event_stream(use_case.stream(request)),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/queries/{request_id}/progress", response_model=QueryProgressResponse)

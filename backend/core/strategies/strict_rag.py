@@ -9,16 +9,15 @@ from llama_index.core.prompts import PromptTemplate
 
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.exceptions import VectorDBConnectionError
-from backend.core.dto.output.query import QueryResponse
+from backend.core.dto.output.query import PreparedAnswer
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
-from backend.core.port.query_strategy import QueryStrategy
-from backend.core.service.citations import extract_citations
 from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
     configured_depth,
 )
+from backend.core.strategies.generation import GeneratingStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     has_tagged_evidence,
@@ -153,7 +152,7 @@ def _has_lexical_evidence(
     return len(terms & evidence) >= max(2, ceil(len(terms) * 0.6))
 
 
-class StrictRAGStrategy(QueryStrategy):
+class StrictRAGStrategy(GeneratingStrategy):
     """Executes a strict Retrieval-Augmented Generation strategy.
 
     This strategy only uses retrieved context to answer the user's question.
@@ -195,7 +194,7 @@ class StrictRAGStrategy(QueryStrategy):
             return self.default_top_k
         return RetrievalOptimizer.calculate_optimal_depth(query, available_files)
 
-    def execute(
+    def prepare(
         self,
         query: str,
         chat_history: list[ChatMessage],
@@ -204,8 +203,8 @@ class StrictRAGStrategy(QueryStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
-    ) -> QueryResponse:
-        """Executes the strict RAG pipeline.
+    ) -> PreparedAnswer:
+        """Retrieve, apply the evidence gates, and build the grounded prompt.
 
         Args:
             query (str): The user's input query.
@@ -217,7 +216,7 @@ class StrictRAGStrategy(QueryStrategy):
             document_segments: File-scoped question segments from explicit mentions.
 
         Returns:
-            QueryResponse: The generated answer or a refusal if context is insufficient.
+            PreparedAnswer: The prompt with numbered sources, or a refusal.
         """
         if progress:
             progress("retrieving")
@@ -251,9 +250,9 @@ class StrictRAGStrategy(QueryStrategy):
 
         # 3. Threshold Check
         if not nodes:
-            return QueryResponse(
-                answer="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
-                source_nodes=[],
+            return PreparedAnswer(
+                immediate="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
+                outcome="no_documents",
             )
 
         highest_score = max(
@@ -264,16 +263,16 @@ class StrictRAGStrategy(QueryStrategy):
             and not is_document_overview_question(query)
             and not _has_lexical_evidence(query, nodes, self.threshold)
         ):
-            return QueryResponse(
-                answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
-                source_nodes=[],
+            return PreparedAnswer(
+                immediate="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
+                outcome="no_evidence",
             )
         if document_segments and not has_tagged_evidence(
             nodes, document_segments, self.threshold
         ):
-            return QueryResponse(
-                answer="برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد. (Insufficient evidence across the mentioned documents.)",
-                source_nodes=[],
+            return PreparedAnswer(
+                immediate="برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد. (Insufficient evidence across the mentioned documents.)",
+                outcome="partial_evidence",
             )
 
         # 4. Adaptive Relevance Filtering
@@ -301,12 +300,4 @@ class StrictRAGStrategy(QueryStrategy):
         )
         context_str = format_multi_doc_context(filtered_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
-
-        if progress:
-            progress("generating")
-        answer = str(self.llm.complete(prompt)).strip()
-        return QueryResponse(
-            answer=answer,
-            source_nodes=filtered_nodes,
-            cited=extract_citations(answer, len(filtered_nodes)),
-        )
+        return PreparedAnswer(prompt=prompt, sources=filtered_nodes)
