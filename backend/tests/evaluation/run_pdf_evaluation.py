@@ -29,6 +29,7 @@ from backend.infrastructure.llm.factory import (
     get_model_configuration,
     setup_llm_and_embeddings,
 )
+from backend.infrastructure.llm.reranker import FlashRankReranker
 from backend.infrastructure.parsers.chunker import chunk_text
 from backend.infrastructure.parsers.document_parser import parse_document_sections
 from backend.tests.evaluation.scoring import (
@@ -167,7 +168,9 @@ def run_evaluation(
             )
         repository.save_nodes(nodes, session_id)
         strict = StrictRAGStrategy(repository)
-        hybrid = HybridRAGStrategy(repository)
+        hybrid = HybridRAGStrategy(
+            repository, reranker=FlashRankReranker.from_environment()
+        )
         llm_only = LLMOnlyStrategy()
         positives = [
             _evaluate_positive(
