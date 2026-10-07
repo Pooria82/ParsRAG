@@ -108,7 +108,7 @@ def test_keyword_only_match_joins_results_with_its_cosine_score(
 ) -> None:
     """An exact tool name outside the vector top-k is still retrieved."""
     with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
-        settings.embed_model.get_text_embedding.return_value = [1.0, 0.0]
+        settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
         nodes = repository.similarity_search("Katalon", top_k=2, session_id="s")
 
     texts = [node.text for node in nodes]
@@ -122,7 +122,7 @@ def test_new_chunks_are_searchable_after_the_cache_is_invalidated(
     repository: QdrantRepository,
 ) -> None:
     with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
-        settings.embed_model.get_text_embedding.return_value = [1.0, 0.0]
+        settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
         settings.embed_model.get_text_embedding_batch.return_value = [[0.0, 1.0]]
         assert not any(
             "Appium" in node.text
@@ -142,6 +142,6 @@ def test_keyword_fusion_can_be_disabled(
 ) -> None:
     monkeypatch.setenv("KEYWORD_SEARCH", "off")
     with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
-        settings.embed_model.get_text_embedding.return_value = [1.0, 0.0]
+        settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
         nodes = repository.similarity_search("Katalon", top_k=2, session_id="s")
     assert all("Katalon" not in node.text for node in nodes)

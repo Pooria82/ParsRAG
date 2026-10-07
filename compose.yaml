@@ -34,6 +34,7 @@ services:
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       PARSRAG_CONFIG_PATH: /var/lib/parsrag/model-configuration.json
       EMBED_MODEL_NAME: "${EMBED_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      EMBED_E5_PREFIXES: "${EMBED_E5_PREFIXES:-0}"
       EMBED_DEVICE: "${EMBED_DEVICE:-auto}"
       EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
       EMBED_CACHE_DIR: /home/parsrag/.cache/huggingface

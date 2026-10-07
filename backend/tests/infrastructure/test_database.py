@@ -76,7 +76,7 @@ def test_qdrant_similarity_search(
     mock_client = MagicMock()
     mock_qdrant_client_cls.return_value = mock_client
 
-    mock_settings.embed_model.get_text_embedding.return_value = [0.1] * 768
+    mock_settings.embed_model.get_query_embedding.return_value = [0.1] * 768
 
     mock_point = MagicMock()
     mock_point.payload = {"text": "Found text", "page": 1}
@@ -98,6 +98,9 @@ def test_qdrant_similarity_search(
     _, kwargs = mock_client.query_points.call_args
     assert kwargs["collection_name"] == "test_collection"
     assert kwargs["limit"] == 1
+    assert kwargs["query"] == [0.1] * 768
+    mock_settings.embed_model.get_query_embedding.assert_called_once_with("query")
+    mock_settings.embed_model.get_text_embedding.assert_not_called()
     session_condition = kwargs["query_filter"].must[0]
     assert session_condition.match.value == "test_session"
 
@@ -136,7 +139,7 @@ def test_empty_file_filter_returns_no_results_without_embedding(
 ) -> None:
     repo = QdrantRepository(collection_name="test_collection", vector_size=768)
     assert repo.similarity_search("query", file_filter=[]) == []
-    mock_settings.embed_model.get_text_embedding.assert_not_called()
+    mock_settings.embed_model.get_query_embedding.assert_not_called()
 
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")

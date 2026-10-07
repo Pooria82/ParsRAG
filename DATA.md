@@ -106,7 +106,7 @@ repeated, and the copies are independent afterwards.
 
 | Aspect | Value |
 | --- | --- |
-| Collection | `parsrag_<first 12 hex of SHA-256(EMBED_MODEL_NAME)>`, or `QDRANT_COLLECTION` |
+| Collection | `parsrag_<first 12 hex of SHA-256(EMBED_MODEL_NAME)>` (the digest also covers the prefixes when `EMBED_E5_PREFIXES=1`), or `QDRANT_COLLECTION` |
 | Vector | Dense, cosine distance, size probed from the embedding model |
 | Payload | `text`, `filename`, `session_id`, and location fields (`page`, `page_end`, `kind`, `slide`, `paragraph`, `section`) |
 | Payload indexes | `session_id` (keyword), `filename` (keyword) |
@@ -229,6 +229,8 @@ and chunk text.
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `EMBED_MODEL_NAME` | `intfloat/multilingual-e5-base` | Embedding model; also versions the collection name |
+| `EMBED_E5_PREFIXES` | `0` | `1` embeds questions with `query: ` and chunks with `passage: ` (the E5 training format). Starts a new collection, so documents must be uploaded again; measured gain was small (vector-search MRR 0.672 → 0.682) |
+| `EMBED_QUERY_PREFIX` / `EMBED_PASSAGE_PREFIX` | empty | Custom instructions for other embedding models; `none` disables one |
 | `EMBED_DEVICE` | `auto` | `auto`, `cpu`, `cuda`, or `mps` |
 | `EMBED_BATCH_SIZE` | `8` (`32` on CUDA) | Embedding batch, 1–128 |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector store address |

@@ -17,6 +17,7 @@ from llama_index.llms.openai_like import OpenAILike  # type: ignore
 from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.infrastructure.embedding_profile import active_embedding_profile
 from backend.infrastructure.llm.config_store import (
     load_model_configuration,
     save_model_configuration,
@@ -301,14 +302,16 @@ def setup_llm_and_embeddings() -> None:
     configure_model(_configuration, verify=False, persist=False)
 
     # Embeddings use a bounded batch size and move to CUDA when the GPU image is used.
-    embed_model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")
+    profile = active_embedding_profile()
     device = resolve_embedding_device()
     default_batch_size = 32 if device == "cuda" else 8
     embed_batch_size = _bounded_environment_int(
         "EMBED_BATCH_SIZE", default_batch_size, 1, 128
     )
     Settings.embed_model = HuggingFaceEmbedding(
-        model_name=embed_model_name,
+        model_name=profile.model_name,
+        query_instruction=profile.query_prefix or None,
+        text_instruction=profile.passage_prefix or None,
         device=device,
         embed_batch_size=embed_batch_size,
         cache_folder=os.getenv("EMBED_CACHE_DIR") or None,
