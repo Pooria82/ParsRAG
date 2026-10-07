@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 from llama_index.core.llms import ChatMessage, MessageRole
 
-from backend.core.service.condenser import CondenseQuestionPipeline
 from backend.core.domain.documents import ExtractedNode
+from backend.core.service.condenser import CondenseQuestionPipeline
 from backend.core.strategies.hybrid_rag import (
     HybridRAGStrategy,
     _merge_evidence,

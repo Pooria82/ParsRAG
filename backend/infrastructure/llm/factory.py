@@ -13,13 +13,16 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # type: ign
 from llama_index.llms.ollama import Ollama  # type: ignore
 from llama_index.llms.openai_like import OpenAILike  # type: ignore
 
+from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
-from backend.core.domain.enums import ModelProvider
-from backend.infrastructure.llm.endpoint_policy import model_api_is_external, validate_model_api_url
 from backend.infrastructure.llm.config_store import (
     load_model_configuration,
     save_model_configuration,
+)
+from backend.infrastructure.llm.endpoint_policy import (
+    model_api_is_external,
+    validate_model_api_url,
 )
 
 load_dotenv()

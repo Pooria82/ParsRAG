@@ -57,7 +57,9 @@ class ReuseDocument:
                 raise NotFoundError("Source document was not found.")
             target_files = self._repository.get_session_files(session_id)
             if request.filename in target_files:
-                raise ConflictError("The target session already contains this filename.")
+                raise ConflictError(
+                    "The target session already contains this filename."
+                )
             if len(target_files) >= self._policy_provider().max_files_per_session:
                 raise InvalidInputError("The target session is full.")
             copied = self._repository.copy_document(

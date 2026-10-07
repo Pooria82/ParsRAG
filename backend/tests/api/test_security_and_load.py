@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from backend.api.dependencies import get_document_repository
-from backend.api.routes import _validate_archive
 from backend.core.dto.output.query import QueryResponse
+from backend.core.use_case.ingestion.file_validation import validate_archive
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -91,7 +91,7 @@ def test_office_archive_rejects_extreme_expansion_ratio() -> None:
         archive.writestr("word/document.xml", b"0" * (2 * 1024 * 1024))
 
     with pytest.raises(ValueError, match="compression ratio"):
-        _validate_archive(payload.getvalue(), ".docx")
+        validate_archive(payload.getvalue(), ".docx")
 
 
 def test_declared_request_body_limit_is_rejected_before_parsing() -> None:
@@ -112,7 +112,7 @@ def test_declared_request_body_limit_is_rejected_before_parsing() -> None:
 # ==============================================================================
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
 def test_zero_leakage_on_key_error(mock_condenser_cls: MagicMock) -> None:
     """Ensure internal KeyErrors return sterile HTTP 500 without leaking stack traces."""
     mock_condenser = MagicMock()
@@ -129,7 +129,7 @@ def test_zero_leakage_on_key_error(mock_condenser_cls: MagicMock) -> None:
     assert response.json()["detail"] == "An internal server error occurred."
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
 def test_zero_leakage_on_zero_division(mock_condenser_cls: MagicMock) -> None:
     """Ensure division by zero returns sterile HTTP 500 without stack trace leaks."""
     mock_condenser = MagicMock()
@@ -203,8 +203,8 @@ def test_ingest_session_id_sanitization(malicious_session: str) -> None:
 
 
 @pytest.mark.anyio
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 async def test_concurrent_queries_no_race_condition(
     mock_get_strategy: MagicMock,
     mock_condenser_cls: MagicMock,

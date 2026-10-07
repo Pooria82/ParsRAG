@@ -7,13 +7,13 @@ from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
-from backend.core.domain.exceptions import VectorDBConnectionError
-from backend.core.port.document_repository import DocumentRepository
 from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
 from backend.core.dto.output.query import QueryResponse
+from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
-from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     has_tagged_evidence,

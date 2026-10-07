@@ -1,8 +1,8 @@
 import os
 import re
 
-from backend.core.port.document_repository import DocumentRepository
 from backend.core.domain.documents import ExtractedNode
+from backend.core.port.document_repository import DocumentRepository
 
 _BROAD_INDICATORS = (
     "هر سه",

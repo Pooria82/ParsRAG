@@ -6,7 +6,10 @@ from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
 from backend.api.middleware import ContentLengthLimitMiddleware
-from backend.infrastructure.llm.endpoint_policy import model_api_is_external, validate_model_api_url
+from backend.infrastructure.llm.endpoint_policy import (
+    model_api_is_external,
+    validate_model_api_url,
+)
 from backend.main import app
 
 

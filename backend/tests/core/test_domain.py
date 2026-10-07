@@ -1,9 +1,9 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.core.dto.input.query import ChatMessage, QueryRequest
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.enums import QueryMode
+from backend.core.dto.input.query import ChatMessage, QueryRequest
 from backend.core.dto.output.query import QueryResponse
 
 

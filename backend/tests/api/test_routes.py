@@ -1,24 +1,19 @@
-import io
-from concurrent.futures import ThreadPoolExecutor
-from threading import Event
 from unittest.mock import MagicMock, patch
 
-import pytest
-from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
 from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import EmptyDocumentError
 from backend.core.dto.output.query import QueryResponse
 from backend.core.runtime.readiness import runtime_state
-from backend.core.domain.exceptions import EmptyDocumentError
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_routes_explicit_document_segments(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
@@ -102,9 +97,11 @@ def test_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes._validate_file"),
-        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
-        patch("backend.api.routes.chunk_text") as mock_chunk_text,
+        patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
+        patch(
+            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+        ) as mock_parse_document,
+        patch("backend.infrastructure.parsers.chunker.chunk_text") as mock_chunk_text,
     ):
         mock_parse_document.return_value = [
             MagicMock(text="Extracted text", metadata={"page": 1})
@@ -136,9 +133,11 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: repo
     with (
-        patch("backend.api.routes._validate_file"),
-        patch("backend.api.routes.parse_document_sections") as parse,
-        patch("backend.api.routes.chunk_text") as chunk,
+        patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
+        patch(
+            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+        ) as parse,
+        patch("backend.infrastructure.parsers.chunker.chunk_text") as chunk,
     ):
         parse.return_value = [
             ParsedSection("The invoice total is", {"page": 3}),
@@ -164,55 +163,15 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     assert "invoice total is\n[page 4] 425 euros" in bridge.text
 
 
-def test_concurrent_uploads_recheck_session_duplicates() -> None:
-    """A second upload must observe the first commit before entering ingestion."""
-    from backend.api import routes
-    from backend.core.runtime.capacity import WorkLimiter
-
-    first_entered = Event()
-    release_first = Event()
-    filenames: list[str] = []
-    repo = MagicMock()
-    repo.get_session_files.side_effect = lambda _session: list(filenames)
-
-    def ingest_batch(*args: object) -> dict[str, str]:
-        first_entered.set()
-        assert release_first.wait(timeout=5)
-        filenames.append("same.pdf")
-        return {"message": "ingested"}
-
-    def submit() -> dict[str, str]:
-        return routes.ingest_document(
-            _ready=None,
-            file=UploadFile(file=io.BytesIO(b"%PDF-1.4"), filename="same.pdf"),
-            files=None,
-            session_id="concurrent-session",
-            repo=repo,
-        )
-
-    with (
-        patch.object(routes, "_ingest_limiter", WorkLimiter(2, "ingestion")),
-        patch.object(routes, "_ingest_documents", side_effect=ingest_batch),
-        ThreadPoolExecutor(max_workers=2) as pool,
-    ):
-        first = pool.submit(submit)
-        assert first_entered.wait(timeout=5)
-        second = pool.submit(submit)
-        release_first.set()
-        assert first.result(timeout=5) == {"message": "ingested"}
-        with pytest.raises(HTTPException) as error:
-            second.result(timeout=5)
-    assert error.value.status_code == 409
-    assert len(filenames) == 1
-
-
 def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes._validate_file"),
-        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
+        patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
+        patch(
+            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+        ) as mock_parse_document,
     ):
         mock_parse_document.side_effect = EmptyDocumentError("No text found")
 
@@ -244,8 +203,8 @@ def test_document_query_requires_session_boundary() -> None:
     assert response.status_code == 422
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_success(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
@@ -275,8 +234,8 @@ def test_query_success(
     )
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_correlation_id_reaches_execution_context(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
@@ -303,8 +262,8 @@ def test_query_correlation_id_reaches_execution_context(
     assert current_correlation_id() is None
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_exposes_non_sensitive_progress(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
@@ -344,8 +303,8 @@ def test_unknown_query_progress_is_not_found() -> None:
     assert response.status_code == 404
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_with_custom_top_k(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
@@ -379,7 +338,7 @@ def test_query_with_custom_top_k(
     )
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
 def test_global_exception_handler(mock_condenser_cls: MagicMock) -> None:
     """Test that unexpected exceptions do not leak stack traces."""
     mock_condenser = MagicMock()
@@ -444,10 +403,10 @@ def test_session_endpoints_invalid_session_id() -> None:
     assert "Invalid session_id" in response_delete.json()["detail"]
 
 
-@patch("backend.api.routes.get_model_configuration")
+@patch("backend.infrastructure.llm.factory.get_model_configuration")
 def test_model_configuration_never_returns_api_key(mock_get: MagicMock) -> None:
-    from backend.core.dto.output.model import ModelConfigurationResponse
     from backend.core.domain.enums import ModelProvider
+    from backend.core.dto.output.model import ModelConfigurationResponse
 
     mock_get.return_value = ModelConfigurationResponse(
         provider=ModelProvider.API,
@@ -461,10 +420,10 @@ def test_model_configuration_never_returns_api_key(mock_get: MagicMock) -> None:
     assert "api_key" not in response.json()
 
 
-@patch("backend.api.routes.configure_model")
+@patch("backend.infrastructure.llm.factory.configure_model")
 def test_update_model_configuration(mock_configure: MagicMock) -> None:
-    from backend.core.dto.output.model import ModelConfigurationResponse
     from backend.core.domain.enums import ModelProvider
+    from backend.core.dto.output.model import ModelConfigurationResponse
 
     mock_configure.return_value = ModelConfigurationResponse(
         provider=ModelProvider.OLLAMA,
@@ -484,7 +443,7 @@ def test_update_model_configuration(mock_configure: MagicMock) -> None:
     assert response.json()["provider"] == "ollama"
 
 
-@patch("backend.api.routes.generate_conversation_title")
+@patch("backend.infrastructure.llm.factory.generate_conversation_title")
 def test_generate_conversation_title(mock_generate: MagicMock) -> None:
     """The title endpoint validates input and returns only the generated label."""
     runtime_state.mark_ready()

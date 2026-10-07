@@ -23,7 +23,9 @@ class SessionLocks:
     @contextmanager
     def hold(self, *session_ids: str) -> Iterator[None]:
         """Hold every stripe for the given sessions in a deadlock-free order."""
-        locks = sorted({self.lock_for(session_id) for session_id in session_ids}, key=id)
+        locks = sorted(
+            {self.lock_for(session_id) for session_id in session_ids}, key=id
+        )
         with ExitStack() as stack:
             for lock in locks:
                 stack.enter_context(lock)
