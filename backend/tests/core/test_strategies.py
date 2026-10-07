@@ -274,16 +274,21 @@ def test_hybrid_dense_anchors_preserve_multilingual_hits_across_files() -> None:
 
 
 def test_strict_rag_prompt_has_dynamic_language_and_code_rules() -> None:
-    """Verifies that STRICT_RAG_PROMPT_TEMPLATE enforces dynamic language matching and code rules."""
+    """Verifies that the strict prompt keeps language matching and code checks."""
+    from backend.core.strategies.prompt_rules import (
+        CODE_VERIFICATION_RULES,
+        LANGUAGE_RULES,
+    )
     from backend.core.strategies.strict_rag import STRICT_RAG_PROMPT_TEMPLATE
 
-    assert "MANDATORY LANGUAGE RULES" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "Match the natural language used by the user" in STRICT_RAG_PROMPT_TEMPLATE
+    assert LANGUAGE_RULES in STRICT_RAG_PROMPT_TEMPLATE
+    assert CODE_VERIFICATION_RULES in STRICT_RAG_PROMPT_TEMPLATE
     assert "Persian (فارسی)" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "English" in STRICT_RAG_PROMPT_TEMPLATE
     assert "Chinese" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "Do NOT consider the presence of English code" in STRICT_RAG_PROMPT_TEMPLATE
-    assert "CONTENT & CODE VERIFICATION RULES" in STRICT_RAG_PROMPT_TEMPLATE
+    assert (
+        "Do not treat them as a sign that the question is in English"
+        in STRICT_RAG_PROMPT_TEMPLATE
+    )
     assert "بله، این اطلاعات/کد در سند وجود دارد" in STRICT_RAG_PROMPT_TEMPLATE
     assert (
         "Yes, this information/code is present in the document"
@@ -292,16 +297,26 @@ def test_strict_rag_prompt_has_dynamic_language_and_code_rules() -> None:
 
 
 def test_hybrid_rag_prompt_has_dynamic_language_and_code_rules() -> None:
-    """Verifies that HYBRID_RAG_PROMPT_TEMPLATE enforces dynamic language matching and code rules."""
+    """Verifies that the hybrid prompt keeps language matching and code checks."""
     from backend.core.strategies.hybrid_rag import HYBRID_RAG_PROMPT_TEMPLATE
+    from backend.core.strategies.prompt_rules import (
+        CODE_VERIFICATION_RULES,
+        LANGUAGE_RULES,
+    )
 
-    assert "MANDATORY LANGUAGE RULES" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "Match the natural language used by the user" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert LANGUAGE_RULES in HYBRID_RAG_PROMPT_TEMPLATE
+    assert CODE_VERIFICATION_RULES in HYBRID_RAG_PROMPT_TEMPLATE
     assert "Persian (فارسی)" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "English" in HYBRID_RAG_PROMPT_TEMPLATE
     assert "Chinese" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "Do NOT consider the presence of English code" in HYBRID_RAG_PROMPT_TEMPLATE
-    assert "CONTENT & CODE VERIFICATION RULES" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert (
+        "Do not treat them as a sign that the question is in English"
+        in HYBRID_RAG_PROMPT_TEMPLATE
+    )
+    assert "بله، این اطلاعات/کد در سند وجود دارد" in HYBRID_RAG_PROMPT_TEMPLATE
+    assert (
+        "Yes, this information/code is present in the document"
+        in HYBRID_RAG_PROMPT_TEMPLATE
+    )
 
 
 def test_condenser_prompt_has_code_preservation_rule() -> None:

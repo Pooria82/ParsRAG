@@ -5,19 +5,21 @@ from llama_index.core.prompts import PromptTemplate
 from backend.core.dto.output.query import QueryResponse
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
+from backend.core.strategies.prompt_rules import FORMATTING_RULES, LANGUAGE_RULES
 
-LLM_ONLY_PROMPT_TEMPLATE = """\
-You are a helpful AI assistant. Answer the user's question directly.
+LLM_ONLY_PROMPT_TEMPLATE = (
+    """\
+You are a helpful assistant. Answer the user's question directly from your general knowledge.
 
-MANDATORY LANGUAGE RULES:
-1. Match the natural language used by the user in their question:
-   - If the user's question is in Persian (فارسی), respond entirely in Persian.
-   - If the user's question is in English, respond in English.
-   - CRITICAL: Programming code snippets, technical commands, function names, and technical terminology are almost always in English. Do NOT consider the presence of English code or technical terms as an English query. Always determine the target language from the user's surrounding natural language sentences and intent.
-2. Under NO circumstances output in Chinese (中文) or any unintended language.
+"""
+    + LANGUAGE_RULES
+    + "\n\n"
+    + FORMATTING_RULES
+    + """
 
 Query: {query}
 Answer:"""
+)
 
 
 class LLMOnlyStrategy(QueryStrategy):

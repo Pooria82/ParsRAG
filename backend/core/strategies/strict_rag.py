@@ -24,44 +24,47 @@ from backend.core.strategies.multi_doc_utils import (
     resolve_target_files,
     retrieve_document_nodes,
 )
+from backend.core.strategies.prompt_rules import (
+    CITATION_RULES,
+    CODE_VERIFICATION_RULES,
+    FORMATTING_RULES,
+    LANGUAGE_RULES,
+)
 
-STRICT_RAG_PROMPT_TEMPLATE = """\
-You are an expert AI assistant that strictly answers based on the provided context.
-Do not use your own external knowledge under any circumstances.
+STRICT_REFUSAL_FA = "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
+STRICT_REFUSAL_EN = "I do not know based on the provided documents."
 
-MANDATORY LANGUAGE RULES:
-1. Match the natural language used by the user in their question:
-   - If the user's question is in Persian (فارسی), respond entirely in Persian.
-   - If the user's question is in English, respond in English.
-   - CRITICAL: Programming code snippets, technical commands, function names, and technical terminology are almost always in English. Do NOT consider the presence of English code or technical terms as an English query. Always determine the target language from the user's surrounding natural language sentences and intent.
-2. Under NO circumstances output in Chinese (中文) or any unintended language.
+STRICT_RAG_PROMPT_TEMPLATE = (
+    """You answer questions using ONLY the document excerpts in the context below.
 
-CONTENT & CODE VERIFICATION RULES:
-1. If the user asks whether a specific code snippet, function, command, library, or concept is mentioned in the documents:
-   - Compare the code conceptually, structurally, and functionally against the context.
-   - Ignore minor syntax or formatting differences such as missing parentheses, whitespace, omitted variable declarations (e.g. var/let/const), or shortened/rephrased comments.
-   - If the core methods, API calls, or logic exist in the context, explicitly confirm:
-     * In Persian: "بله، این اطلاعات/کد در سند وجود دارد"
-     * In English: "Yes, this information/code is present in the document"
-     and quote the relevant snippet from the document, explaining its section or context.
-2. If the context does not contain the answer, respond strictly with:
-   - In Persian: "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد. (I do not know based on the provided documents.)"
-   - In English: "I do not know based on the provided documents."
+GROUNDING RULES (documents-only mode):
+1. Every fact, number, name, date, and claim in your answer must come from the context. Never add outside knowledge, assumptions, or examples that are not in the context.
+2. The question may use different words, spelling, or language than the documents. Match by meaning, not by exact wording: paraphrase, translate, summarize, and combine information from several excerpts.
+3. You may state conclusions that follow directly from the context, such as what kind of document it is, its main topic, or a comparison the user asks for, as long as you cite the excerpts they rest on.
+4. If the context answers only part of the question, answer that part, then say briefly which part the documents do not cover.
+5. Only when nothing in the context is relevant to the question, reply with exactly one sentence:
+   - Persian: "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
+   - English: "I do not know based on the provided documents."
+6. OCR text may contain recognition errors. Read past obvious noise, but never invent a missing word, number, or relationship to repair it.
 
-DOCUMENT SYNTHESIS RULES:
-- If asked to summarize, compare, or draw conclusions across documents, synthesize the facts comprehensively and state the overarching conclusion clearly.
-- A page-boundary excerpt joins the end of one page to the start of the next. Read both labeled portions together, and cite the supplied page range when both support the answer.
-- OCR text may contain recognition errors. Do not invent a missing word, number, or relationship to repair it.
-- If asked about a specific document, focus your answer on that document while citing the document name where relevant.
-- When a source label includes a page, slide, paragraph, or section, append that exact source label at the end of the relevant answer paragraph. Never invent a location.
+"""
+    + CODE_VERIFICATION_RULES
+    + "\n\n"
+    + CITATION_RULES
+    + "\n\n"
+    + LANGUAGE_RULES
+    + "\n\n"
+    + FORMATTING_RULES
+    + """
 
 Context:
 {context_str}
 
 Query: {query}
 Answer:"""
+)
 
-DEFAULT_STRICT_THRESHOLD = 0.80
+DEFAULT_STRICT_THRESHOLD = 0.75
 _WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
 _QUERY_STOPWORDS = {
     "and",
@@ -103,10 +106,30 @@ _QUERY_STOPWORDS = {
 }
 
 
+_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+DOCUMENT_OVERVIEW_PATTERN = re.compile(
+    r"(درباره\s*(?:چیست|چه|ی\s*چیست)|موضوع(?:\s*اصلی)?|خلاصه|چکیده|جمع[\s\u200c]*بندی"
+    r"|کلیات|چه\s*نوع|نوع\s*(?:سند|فایل)|محتوای\s*(?:کلی|اصلی)"
+    r"|\b(?:summar(?:y|ize|ise)|overview|main\s+topic|what\s+is\s+(?:this|the)\s+"
+    r"(?:document|file|paper|report|pdf)\s+about|what\s+kind\s+of\s+document)\b)",
+    re.IGNORECASE,
+)
+
+
+def is_document_overview_question(query: str) -> bool:
+    """Return whether a question asks about a document as a whole.
+
+    Such questions (topic, type, summary) are answerable from any retrieved
+    content, so their similarity scores do not reflect answerability.
+    """
+    return bool(DOCUMENT_OVERVIEW_PATTERN.search(query))
+
+
 def _evidence_terms(value: str) -> set[str]:
     """Extract distinctive multilingual words for a conservative text check."""
     normalized = unicodedata.normalize("NFKC", value.lower())
     normalized = normalized.replace("ي", "ی").replace("ك", "ک").replace("\u200c", "")
+    normalized = normalized.translate(_DIGITS)
     return set(_WORD.findall(normalized)) - _QUERY_STOPWORDS
 
 
@@ -233,8 +256,10 @@ class StrictRAGStrategy(QueryStrategy):
         highest_score = max(
             [n.score for n in nodes if n.score is not None], default=0.0
         )
-        if highest_score < self.threshold and not _has_lexical_evidence(
-            query, nodes, self.threshold
+        if (
+            highest_score < self.threshold
+            and not is_document_overview_question(query)
+            and not _has_lexical_evidence(query, nodes, self.threshold)
         ):
             return QueryResponse(
                 answer="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
