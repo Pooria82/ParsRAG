@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://pooria82.github.io/ParsRAG/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://pooria82.github.io/ParsRAG/"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://pooria82.github.io/ParsRAG/fa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pooria82.github.io/ParsRAG/"/>
+  </url>
+  <url>
+    <loc>https://pooria82.github.io/ParsRAG/fa/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://pooria82.github.io/ParsRAG/"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://pooria82.github.io/ParsRAG/fa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://pooria82.github.io/ParsRAG/"/>
+  </url>
+</urlset>
