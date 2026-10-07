@@ -5,6 +5,12 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- The project website moved to its own repository,
+  [ParsRAG-Landing](https://github.com/Pooria82/ParsRAG-Landing), and is published at
+  <https://pooria82.github.io/ParsRAG-Landing/>. The old GitHub Pages address redirects there.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
