@@ -156,6 +156,10 @@ Embedding و Qdrant در همه حالت‌ها محلی می‌مانند. کل
 یا متغیر محیطی نگه‌داری می‌شود و در localStorage، لاگ، پاسخ API یا فایل تنظیمات
 پایدار مدل ذخیره نمی‌شود.
 
+طراحی لایه‌ای بک‌اند (پورت‌ها، یوزکیس‌ها و DTOها) در
+[ARCHITECTURE.md](ARCHITECTURE.md) و جزئیات ورود اسناد، ذخیره‌سازی برداری،
+بازیابی و نگهداری داده در [DATA.md](DATA.md) توضیح داده شده است.
+
 ## اجرای سریع با Docker
 
 پیش‌نیازها: Docker Engine و Compose، فضای کافی برای imageها و مدل‌ها و بسته به
@@ -412,6 +416,9 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 ## اسناد پروژه
 
 - [نسخه انگلیسی README](README.md)
+- [معماری سیستم](ARCHITECTURE.md) و نقشه‌های [جریان داده](docs/architecture/data-flow.md)، [یوزکیس‌ها](docs/architecture/use-cases.md) و [DTOها](docs/architecture/dtos.md) (انگلیسی)
+- [راهنمای داده، ورود اسناد و RAG](DATA.md) (انگلیسی)
+- [سوابق تصمیم‌های معماری](.context/)
 - [هویت بصری و قواعد حرکت](frontend/BRAND.md)
 - [نقشه راه پیاده‌سازی](.context/05_Implementation_Roadmap.md)
 - [سیاست امنیت](SECURITY.md)
