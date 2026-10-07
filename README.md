@@ -84,7 +84,7 @@ so a fact split by a page turn can be retrieved with a two-page citation.
 Borderline semantic matches are considered only when the retrieved text also
 contains the question's distinctive terms; unrelated material still fails closed.
 
-**After upgrading to 1.0.0:** existing indexed vectors do not change
+**After upgrading to 0.2.0:** existing indexed vectors do not change
 automatically. Remove and upload a PDF again to apply the new page-boundary
 indexing and OCR behavior. Reusing its old index does not rebuild it.
 

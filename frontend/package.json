@@ -1,7 +1,7 @@
 {
   "name": "parsrag-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Bilingual Persian (Farsi) and English workspace for offline-first document RAG",
   "keywords": ["persian", "farsi", "rag", "document-qa", "ocr", "ollama", "local-llm"],
   "author": "Pooria Madani",
