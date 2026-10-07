@@ -133,3 +133,27 @@
 .source-more>ol{margin-top:6px}
 @keyframes source-flash{0%{background:var(--accent-soft)}100%{background:var(--surface-soft)}}
 @media (prefers-reduced-motion:reduce){.source-card.is-active details{animation:none}.source-chevron{transition:none}}
+
+/* Questions written from the conversation's own documents. */
+.document-questions{margin-top:20px}
+.document-questions .starters-label{display:flex;align-items:center;gap:6px;color:var(--accent)}
+.document-question-list{display:grid;gap:8px}
+.document-question{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:start;padding:12px 15px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent-soft) 55%,var(--surface));font-size:13px;line-height:1.7;color:var(--ink)}
+.document-question:hover,.document-question:focus-visible{background:var(--accent-soft);border-color:var(--accent);box-shadow:var(--shadow)}
+.document-question:hover .starter-arrow{opacity:1}
+.document-question.is-loading{height:46px;border-style:dashed;background:linear-gradient(90deg,var(--surface-soft) 25%,var(--surface-hover) 50%,var(--surface-soft) 75%);background-size:200% 100%;animation:question-shimmer 1.4s linear infinite}
+@keyframes question-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* Where an answer came from. */
+.grounding-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:500;border:1px solid var(--line);color:var(--secondary);background:var(--surface-soft)}
+.grounding-badge small{color:var(--muted);font-size:10px}
+.grounding-documents{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:var(--accent-soft)}
+.grounding-hybrid{color:var(--accent);border-color:var(--line-strong)}
+.grounding-not_found{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
+
+/* Source cards preview their excerpt and mark the question's words. */
+.source-list>header .source-file{margin-inline-start:auto;font-weight:400;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%}
+.source-title .source-preview{font-weight:400;color:var(--ink)}
+.source-card mark{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--ink);border-radius:3px;padding:0 1px}
+@media (prefers-reduced-motion:reduce){.document-question.is-loading{animation:none}}
+.crash-screen{min-height:100dvh;display:grid;place-content:center;gap:14px;text-align:center;padding:24px;background:var(--canvas);color:var(--ink)}.crash-screen h1{font-size:20px}.crash-screen p{color:var(--secondary)}.crash-screen .button{justify-self:center}

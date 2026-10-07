@@ -18,7 +18,7 @@ import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
-import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { answerGrounding, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
 import { citedNumbers } from './core/citations';
@@ -36,7 +36,8 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
   const [queryProgress, setQueryProgress] = useState<{ sessionId: string; stage: QueryStage }>();
-  const [streamDraft, setStreamDraft] = useState<{ sessionId: string; messageId?: string; content: string }>();
+  const [streamDraft, setStreamDraft] = useState<{ sessionId: string; messageId?: string; content: string; sourceCount?: number }>();
+  const [suggesting, setSuggesting] = useState<string>();
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
@@ -129,6 +130,22 @@ export function App() {
   }, [active.id, api, connection, uploadingId, updateSession]);
   useEffect(() => () => { queryRef.current?.controller.abort(); progressRef.current?.abort(); }, []);
 
+  // Suggest questions from the documents of an empty conversation, once per document set.
+  const activeSuggestionKey = suggestionKey(active, settings.language);
+  useEffect(() => {
+    if (connection !== 'online' || active.messages.length || !activeSuggestionKey
+      || active.suggestions?.key === activeSuggestionKey || uploadingId === active.id) return;
+    const sessionId = active.id;
+    const files = active.documents.filter(doc => doc.status === 'indexed' && doc.enabled !== false).map(doc => doc.name);
+    const controller = new AbortController();
+    setSuggesting(sessionId);
+    void api.suggestions(sessionId, settings.language, files, controller.signal).then(questions => {
+      updateSession(sessionId, s => ({ ...s, suggestions: { key: activeSuggestionKey, questions } }));
+    }).catch(() => { /* Generic starters remain when suggestions are unavailable. */ })
+      .finally(() => setSuggesting(current => current === sessionId ? undefined : current));
+    return () => controller.abort();
+  }, [active.id, activeSuggestionKey, active.messages.length, connection, uploadingId, api, settings.language, updateSession]);
+
   const newChat = useCallback(() => {
     const blank = sessionsRef.current.find(s => !s.messages.length && !s.documents.length && !s.draft?.trim());
     const session = blank ?? createSession(settings.language, settings.defaultMode);
@@ -154,7 +171,7 @@ export function App() {
       if (assistantId && s.messages.some(message => message.id === assistantId)) {
         return { ...s, messages: s.messages.map(message => message.id === assistantId ? appendResponseVariant(message, variant) : message), updatedAt: Date.now() };
       }
-      const assistant: Message = { id: messageId, role: 'assistant', parentUserId, content: variant.content, citations: variant.citations, sources: variant.sources, error: variant.error, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
+      const assistant: Message = { id: messageId, role: 'assistant', parentUserId, content: variant.content, citations: variant.citations, sources: variant.sources, grounding: variant.grounding, error: variant.error, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
       return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
     });
   };
@@ -188,7 +205,7 @@ export function App() {
     let streamed = '';
     let streamedSources: unknown[] = [];
     let frame = 0;
-    const showDraft = () => { frame = 0; setStreamDraft({ sessionId: session.id, messageId: target?.assistantId, content: streamed }); };
+    const showDraft = () => { frame = 0; setStreamDraft({ sessionId: session.id, messageId: target?.assistantId, content: streamed, sourceCount: streamedSources.length }); };
     try {
       const raw = await api.queryStream({ ...payload, request_id: requestId }, controller.signal, event => {
         touch();
@@ -202,7 +219,7 @@ export function App() {
       if (controller.signal.aborted) return;
       const data = parseAnswer(raw);
       const content = data.outcome === 'answered' ? data.answer : t.answerOutcomes[data.outcome];
-      const variant: ResponseVariant = { id: crypto.randomUUID(), content, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
+      const variant: ResponseVariant = { id: crypto.randomUUID(), content, citations: data.citations, sources: data.sources, grounding: answerGrounding(session.ragMode, data.outcome), timestamp: Date.now(), prompt: prompt.trim(), continuation: [] };
       commitAnswer(session.id, variant, userMessage.id, target?.assistantId);
       setConnection('online');
       if (firstTurn) {
@@ -387,7 +404,10 @@ export function App() {
       {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
         updateSession(active.id, s => ({ ...s, draft, ragMode: index === 2 ? 'llm-only' : 'hybrid' }));
         setFocusToken(value => value + 1);
-      }} /> : <>
+      }}
+        documentQuestions={active.suggestions?.key === activeSuggestionKey ? active.suggestions.questions : undefined}
+        documentQuestionsLoading={suggesting === active.id}
+        onSelectQuestion={question => void send(active, question)} /> : <>
         <ChatFeed key={active.id} messages={active.messages} language={settings.language} isGenerating={generatingId === active.id} activeMode={active.ragMode}
           queryStage={queryProgress?.sessionId === active.id ? queryProgress.stage : undefined}
           streamingDraft={streamDraft?.sessionId === active.id ? streamDraft : undefined}

@@ -44,10 +44,14 @@ export interface SourcePassage {
   score?: number;
 }
 
+/** Where an answer's content came from, shown as a badge on the answer. */
+export type Grounding = 'documents' | 'hybrid' | 'general' | 'not_found';
+
 export interface ResponseVariant {
   id: string;
   content: string;
   timestamp: number;
+  grounding?: Grounding;
   citations?: Citation[];
   sources?: SourcePassage[];
   error?: boolean;
@@ -62,6 +66,7 @@ export interface Message {
   timestamp: number;
   citations?: Citation[];
   sources?: SourcePassage[];
+  grounding?: Grounding;
   isStreaming?: boolean;
   error?: boolean;
   variants?: ResponseVariant[];
@@ -99,6 +104,8 @@ export interface Session {
   messages: Message[];
   ragMode: RAGMode;
   draft?: string;
+  /** Questions suggested from the indexed documents; `key` names the document set. */
+  suggestions?: { key: string; questions: string[] };
 }
 
 export interface AppSettings {

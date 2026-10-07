@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RotateCcw, X } from 'lucide-react';
-import type { Message, Language, QueryStage, RAGMode } from '../types';
+import { Lightbulb, SearchX, ShieldCheck } from 'lucide-react';
+import type { Grounding, Message, Language, QueryStage, RAGMode, SourcePassage } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
@@ -12,7 +13,18 @@ interface ChatFeedProps {
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
   /** Text streamed so far; `messageId` when it replaces an answer being retried. */
-  streamingDraft?: { messageId?: string; content: string };
+  streamingDraft?: { messageId?: string; content: string; sourceCount?: number };
+}
+
+function GroundingBadge({ language, grounding, sources }: { language: Language; grounding: Grounding; sources?: SourcePassage[] }) {
+  const t = translations[language];
+  const cited = sources?.filter(source => source.cited).length || sources?.length || 0;
+  const count = grounding === 'documents' || grounding === 'hybrid' ? cited : 0;
+  return <span className={'grounding-badge grounding-' + grounding}>
+    {grounding === 'not_found' ? <SearchX size={12} /> : grounding === 'general' ? <Lightbulb size={12} /> : <ShieldCheck size={12} />}
+    {t.groundingLabels[grounding]}
+    {count > 0 && <small>· {t.groundingSources.replace('{count}', count.toLocaleString(language))}</small>}
+  </span>;
 }
 
 export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft }: ChatFeedProps) {
@@ -68,9 +80,12 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                 <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
               </div>
             </> : <>
-              <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
+              <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong>
+                {!message.error && message.grounding && liveDraft?.messageId !== message.id && <GroundingBadge language={language} grounding={message.grounding} sources={message.sources} />}
+                <span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
               {liveDraft?.messageId === message.id ? <div className="prose-content" dir="auto">
-                <ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage} />
+                <ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage}
+                  sourceCount={liveDraft.sourceCount ?? 0} formatNumber={n => n.toLocaleString(language)} />
               </div> : message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content" dir="auto">
                   <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
@@ -81,6 +96,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                     formatNumber={n => n.toLocaleString(language)} />
                 </div>}
               {liveDraft?.messageId !== message.id && !message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
+                question={promptFor(messages, message)}
                 focus={focusedSource?.messageId === message.id ? focusedSource.n : undefined}
                 focusToken={focusedSource?.messageId === message.id ? focusedSource.token : undefined} /> : null}
               {!message.sources?.length && Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
@@ -100,7 +116,8 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
           </article>)}
         {liveDraft && !liveDraft.messageId && <article className="message message-assistant is-streaming" aria-label={t.appName} aria-busy="true">
           <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong></div>
-          <div className="prose-content" dir="auto"><ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage} /></div>
+          <div className="prose-content" dir="auto"><ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage}
+            sourceCount={liveDraft.sourceCount ?? 0} formatNumber={n => n.toLocaleString(language)} /></div>
         </article>}
         {isGenerating && !liveDraft && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
       </div>
@@ -108,6 +125,16 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
     </div>
     {showJump && <button className="jump-button" onClick={toBottom} aria-label={t.jumpToLatest} title={t.jumpToLatest}><ArrowDown size={18} /></button>}
   </div>;
+}
+
+/** The question an answer responds to, for highlighting its terms in sources. */
+function promptFor(messages: Message[], message: Message): string {
+  const active = message.variants?.[message.activeVariant ?? 0];
+  if (active?.prompt) return active.prompt;
+  const parent = message.parentUserId ? messages.find(item => item.id === message.parentUserId) : undefined;
+  if (parent) return parent.content;
+  const index = messages.indexOf(message);
+  return messages.slice(0, index).reverse().find(item => item.role === 'user')?.content ?? '';
 }
 
 function QueryProgress({ language, mode, stage }: { language: Language; mode: RAGMode; stage: QueryStage }) {

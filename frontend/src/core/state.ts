@@ -1,4 +1,4 @@
-import type { AppSettings, Citation, IngestionCapabilities, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument, SourceLocation, SourcePassage } from '../types';
+import type { AppSettings, Citation, Grounding, IngestionCapabilities, Language, Message, RAGMode, ResponseVariant, Session, SessionDocument, SourceLocation, SourcePassage } from '../types';
 import { summarizeSources } from './citations';
 
 /** Longest excerpt kept per source in the browser (characters). */
@@ -124,6 +124,28 @@ export function sourceLocation(metadata: Record<string, unknown>): SourceLocatio
     ?? range('section', finite(metadata.section), undefined);
 }
 
+function parseGrounding(value: unknown): Grounding | undefined {
+  return ['documents', 'hybrid', 'general', 'not_found'].includes(String(value)) ? value as Grounding : undefined;
+}
+
+function parseSuggestions(value: unknown): Session['suggestions'] {
+  if (!isRecord(value) || typeof value.key !== 'string' || !Array.isArray(value.questions)) return undefined;
+  const questions = value.questions.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).slice(0, 3);
+  return { key: value.key, questions };
+}
+
+/** Name the indexed, selected documents so suggestions follow the set. */
+export function suggestionKey(session: Session, language: Language): string {
+  const names = session.documents.filter(doc => doc.status === 'indexed' && doc.enabled !== false).map(doc => doc.name).sort();
+  return names.length ? `${language}:${names.join('\u0000')}` : '';
+}
+
+/** How an answer was produced, from its mode and the server's outcome. */
+export function answerGrounding(mode: RAGMode, outcome: AnswerOutcome): Grounding {
+  if (outcome !== 'answered') return 'not_found';
+  return mode === 'llm-only' ? 'general' : mode === 'strict' ? 'documents' : 'hybrid';
+}
+
 function parseMessages(value: unknown, depth = 0): Message[] {
   if (!Array.isArray(value) || depth > 12) return [];
   return value.filter(isRecord).filter(m => typeof m.id === 'string'
@@ -133,6 +155,7 @@ function parseMessages(value: unknown, depth = 0): Message[] {
         id: variant.id as string, content: variant.content as string,
         timestamp: typeof variant.timestamp === 'number' ? variant.timestamp : 0,
         error: variant.error === true, citations: parseCitations(variant.citations), sources: parseSources(variant.sources),
+        grounding: parseGrounding(variant.grounding),
         prompt: typeof variant.prompt === 'string' ? variant.prompt : undefined,
         continuation: Array.isArray(variant.continuation) ? parseMessages(variant.continuation, depth + 1) : undefined,
       })) : [];
@@ -143,6 +166,7 @@ function parseMessages(value: unknown, depth = 0): Message[] {
         timestamp: active?.timestamp ?? (typeof m.timestamp === 'number' ? m.timestamp : 0),
         error: active?.error ?? m.error === true, citations: active?.citations ?? parseCitations(m.citations),
         sources: active ? active.sources : parseSources(m.sources),
+        grounding: active ? active.grounding : parseGrounding(m.grounding),
         variants: variants.length ? variants : undefined, activeVariant,
         parentUserId: typeof m.parentUserId === 'string' ? m.parentUserId : undefined,
       };
@@ -186,6 +210,7 @@ export function parseSessions(raw: string | null): Session[] {
       ragMode: isMode(s.ragMode) ? s.ragMode : 'hybrid',
       messages: parseMessages(s.messages), documents: parseDocuments(s.documents),
       draft: typeof s.draft === 'string' ? s.draft : '',
+      suggestions: parseSuggestions(s.suggestions),
     }));
   } catch { return []; }
 }
@@ -281,15 +306,15 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
 
 export function appendResponseVariant(message: Message, variant: ResponseVariant): Message {
   const variants = message.variants?.length ? [...message.variants, variant] : [
-    { id: `${message.id}-original`, content: message.content, citations: message.citations, sources: message.sources, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
+    { id: `${message.id}-original`, content: message.content, citations: message.citations, sources: message.sources, grounding: message.grounding, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
     variant,
   ];
-  return { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
+  return { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, grounding: variant.grounding, error: variant.error, timestamp: variant.timestamp, variants, activeVariant: variants.length - 1 };
 }
 
 export function selectResponseVariant(message: Message, index: number): Message {
   const variant = message.variants?.[index];
-  return variant ? { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, error: variant.error, timestamp: variant.timestamp, activeVariant: index } : message;
+  return variant ? { ...message, content: variant.content, citations: variant.citations, sources: variant.sources, grounding: variant.grounding, error: variant.error, timestamp: variant.timestamp, activeVariant: index } : message;
 }
 
 export function prepareTurnRegeneration(messages: Message[], userId: string, assistantId: string | undefined, prompt: string, edit: boolean) {
@@ -316,7 +341,7 @@ function snapshotActiveBranch(message: Message, prompt: string, continuation: Me
     ...variant, prompt: variant.prompt ?? prompt,
   })) : [{
     id: `${message.id}-original`, content: message.content, timestamp: message.timestamp,
-    citations: message.citations, sources: message.sources, error: message.error, prompt,
+    citations: message.citations, sources: message.sources, grounding: message.grounding, error: message.error, prompt,
   }];
   const activeVariant = Math.max(0, Math.min(variants.length - 1, message.activeVariant ?? variants.length - 1));
   variants[activeVariant] = { ...variants[activeVariant], prompt, continuation };
@@ -342,7 +367,7 @@ export function selectConversationBranch(messages: Message[], assistantId: strin
   const prefix = messages.slice(0, assistantIndex + 1).map(message => {
     if (message.id === messages[userIndex].id) return { ...message, content: target.prompt ?? message.content };
     if (message.id === assistantId) return {
-      ...snapshotted, content: target.content, citations: target.citations, sources: target.sources, error: target.error,
+      ...snapshotted, content: target.content, citations: target.citations, sources: target.sources, grounding: target.grounding, error: target.error,
       timestamp: target.timestamp, activeVariant: index,
     };
     return message;

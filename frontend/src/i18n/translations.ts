@@ -18,6 +18,9 @@ export const translations = {
     greeting: 'سلام، خوش آمدید.', heroGreeting: 'از پرسش، به بینش.',
     heroDescription: 'با اسنادتان گفت‌وگو کنید، ایده‌ها را کنار هم بگذارید و پاسخ روشن‌تری پیدا کنید.',
     starterLabel: 'از اینجا شروع کنید',
+    documentQuestionsLabel: 'پرسش‌هایی که اسناد شما پاسخ می‌دهند',
+    groundingLabels: { documents: 'فقط از اسناد', hybrid: 'اسناد و دانش مدل', general: 'دانش عمومی مدل', not_found: 'در اسناد پیدا نشد' },
+    groundingSources: '{count} منبع',
     starterPrompts: [
       { title: 'اصل مطلب را پیدا کن', desc: 'خلاصه‌ای از نکته‌های مهم', prompt: 'اسناد انتخاب‌شده را خلاصه کن و مهم‌ترین نکته‌های هر کدام را با ذکر منبع بنویس.' },
       { title: 'دقیق‌تر نگاه کن', desc: 'مقایسه و تحلیل اسناد', prompt: 'موضوع‌های مشترک و تفاوت‌های اسناد انتخاب‌شده را با ذکر منبع مقایسه کن.' },
@@ -113,6 +116,9 @@ export const translations = {
     greeting: 'Hello. Make yourself at home.', heroGreeting: 'A question. A clearer perspective.',
     heroDescription: 'Talk with your documents, connect ideas, and find the answer that moves you forward.',
     starterLabel: 'A few places to start',
+    documentQuestionsLabel: 'Questions your documents can answer',
+    groundingLabels: { documents: 'Documents only', hybrid: 'Documents + model knowledge', general: 'Model knowledge', not_found: 'Not found in documents' },
+    groundingSources: '{count} sources',
     starterPrompts: [
       { title: 'Find the essentials', desc: 'Get to the heart of a document', prompt: 'Summarize the selected documents, highlighting the key takeaways from each with sources.' },
       { title: 'Look a little closer', desc: 'Compare, connect, and understand', prompt: 'Compare the common themes and differences across the selected documents, citing your sources.' },
