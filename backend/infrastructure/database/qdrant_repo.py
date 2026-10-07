@@ -96,6 +96,11 @@ class QdrantRepository(DocumentRepository):
                 field_name="filename",
                 field_schema=qmodels.PayloadSchemaType.KEYWORD,
             )
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="content_sha256",
+                field_schema=qmodels.PayloadSchemaType.KEYWORD,
+            )
         except Exception as exc:
             # If payload indices already exist or connection succeeds, ignore index re-creation errors
             if "already exists" not in str(exc).lower():
@@ -254,6 +259,37 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to retrieve session files in Qdrant: {exc}"
             ) from exc
+
+    def find_document_by_content(
+        self, session_id: str, content_sha256: str
+    ) -> str | None:
+        """Return the filename of a session document with the same bytes."""
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qmodels.Filter(
+                    must=[
+                        qmodels.FieldCondition(
+                            key="session_id", match=qmodels.MatchValue(value=session_id)
+                        ),
+                        qmodels.FieldCondition(
+                            key="content_sha256",
+                            match=qmodels.MatchValue(value=content_sha256),
+                        ),
+                    ]
+                ),
+                limit=1,
+                with_payload=["filename"],
+                with_vectors=False,
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to look up document content in Qdrant: {exc}"
+            ) from exc
+        if not points or not points[0].payload:
+            return None
+        filename = points[0].payload.get("filename")
+        return str(filename) if filename is not None else None
 
     def copy_document(
         self, source_session_id: str, target_session_id: str, filename: str

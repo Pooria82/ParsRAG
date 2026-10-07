@@ -18,6 +18,7 @@ def test_query_routes_explicit_document_segments(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     repo.get_session_files.return_value = ["a.pdf", "b.pdf"]
     app.dependency_overrides[get_document_repository] = lambda: repo
     mock_condenser_cls.return_value.condense.return_value = "comparison"
@@ -94,6 +95,7 @@ def test_capabilities_expose_server_side_upload_contract() -> None:
 
 def test_ingest_success() -> None:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
@@ -131,6 +133,7 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     from backend.core.domain.documents import ParsedSection
 
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: repo
     with (
         patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
@@ -167,6 +170,7 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
 
 def test_ingest_empty_document() -> None:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
@@ -361,6 +365,7 @@ def test_global_exception_handler(mock_condenser_cls: MagicMock) -> None:
 
 def test_get_session_files_success() -> None:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     mock_repo.get_session_files.return_value = ["file1.pdf", "file2.docx"]
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
@@ -374,6 +379,7 @@ def test_get_session_files_success() -> None:
 
 def test_delete_session_success() -> None:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     response = client.delete("/sessions/test-session-123")
@@ -386,6 +392,7 @@ def test_delete_session_success() -> None:
 
 def test_delete_one_session_document() -> None:
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
     response = client.request(
         "DELETE", "/sessions/test-session-123/files", json={"filename": "راهنما.pdf"}

@@ -46,6 +46,7 @@ def test_tagged_prompt_keeps_each_question_with_its_document() -> None:
 def test_multi_file_ingest_success() -> None:
     """Verifies that uploading multiple files in a single batch succeeds."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
@@ -111,6 +112,7 @@ def test_multi_file_ingest_success() -> None:
 
 def test_reuse_document_copies_indexed_file_without_upload() -> None:
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     repo.get_session_files.side_effect = [["guide.pdf"], []]
     repo.copy_document.return_value = 4
     app.dependency_overrides[get_document_repository] = lambda: repo
@@ -131,6 +133,7 @@ def test_reuse_document_copies_indexed_file_without_upload() -> None:
 
 def test_reuse_rejects_missing_or_duplicate_file() -> None:
     repo = MagicMock()
+    repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: repo
     repo.get_session_files.return_value = []
     missing = client.post(
@@ -157,6 +160,7 @@ def test_reuse_rejects_missing_or_duplicate_file() -> None:
 def test_multi_file_ingest_exceeds_limit() -> None:
     """Verifies that uploading more than 10 files returns HTTP 400."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     files_payload = [
@@ -188,6 +192,7 @@ def test_multi_file_ingest_exceeds_limit() -> None:
 def test_ingest_enforces_capacity_across_separate_requests() -> None:
     """Existing session files count toward the ten-file capacity."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     mock_repo.get_session_files.return_value = [
         f"existing-{index}.pdf" for index in range(10)
     ]
@@ -283,6 +288,7 @@ def test_excerpts_are_numbered_in_document_order_for_citation() -> None:
 def test_strict_rag_balanced_multi_file_retrieval(mock_settings: MagicMock) -> None:
     """Verifies that Strict RAG performs balanced per-file retrieval across 3 session files."""
     mock_repo = MagicMock()
+    mock_repo.find_document_by_content.return_value = None
     mock_repo.get_session_files.return_value = [
         "fileA.docx",
         "fileB.docx",

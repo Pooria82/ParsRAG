@@ -1,11 +1,12 @@
 """Use case: validate, parse, chunk, and index a bounded batch of documents."""
 
+import hashlib
 import io
 import logging
 from collections.abc import Callable
 from typing import BinaryIO
 
-from backend.core.domain.documents import ExtractedNode, ParsedSection
+from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
 from backend.core.domain.exceptions import (
     ConflictError,
     DocumentError,
@@ -143,6 +144,7 @@ class IngestDocuments:
         total_bytes = 0
         ingested: list[IngestedFile] = []
         written_names: list[str] = []
+        digests: dict[str, str] = {}
         try:
             for item in files:
                 if not item.filename:
@@ -154,16 +156,15 @@ class IngestDocuments:
                     policy,
                 )
                 total_bytes += len(file_bytes)
-                try:
-                    validate_upload(item.filename, file_bytes)
-                    document = self._parser.parse(file_bytes, item.filename)
-                except DocumentError as exc:
-                    raise InvalidInputError(str(exc), code=exc.code) from exc
-                except ValueError as exc:
-                    raise InvalidInputError(str(exc), code="invalid_document") from exc
+                digest = hashlib.sha256(file_bytes).hexdigest()
+                self._reject_duplicate_content(
+                    session_id, item.filename, digest, digests
+                )
+                digests[digest] = item.filename
+                document = self._parse(item.filename, file_bytes)
                 written_names.append(item.filename)
                 chunks = self._index_sections(
-                    document.sections, item.filename, session_id
+                    document.sections, item.filename, session_id, digest
                 )
                 total_chunks += chunks
                 ingested.append(
@@ -205,10 +206,48 @@ class IngestDocuments:
                 len(filenames),
             )
 
+    def _parse(self, filename: str, file_bytes: bytes) -> ParsedDocument:
+        """Validate the signature and parse; document problems become input errors."""
+        try:
+            validate_upload(filename, file_bytes)
+            return self._parser.parse(file_bytes, filename)
+        except DocumentError as exc:
+            raise InvalidInputError(str(exc), code=exc.code) from exc
+        except ValueError as exc:
+            raise InvalidInputError(str(exc), code="invalid_document") from exc
+
+    def _reject_duplicate_content(
+        self, session_id: str, filename: str, digest: str, batch: dict[str, str]
+    ) -> None:
+        """Refuse a file whose bytes are already indexed under another name.
+
+        Indexing the same document twice doubles its chunks, so the copies
+        crowd other documents out of every answer's context.
+        """
+        same = batch.get(digest) or self._repository.find_document_by_content(
+            session_id, digest
+        )
+        if same is None:
+            return
+        detail = (
+            f"'{filename}' has the same content as '{same}', which is already "
+            "in this conversation."
+        )
+        if digest in batch:
+            raise InvalidInputError(detail, code="duplicate_content")
+        raise ConflictError(detail, code="duplicate_content")
+
     def _index_sections(
-        self, sections: list[ParsedSection], filename: str, session_id: str
+        self,
+        sections: list[ParsedSection],
+        filename: str,
+        session_id: str,
+        digest: str | None = None,
     ) -> int:
         """Chunk and save each section; return the number of stored chunks."""
+        identity: dict[str, str] = {"filename": filename}
+        if digest:
+            identity["content_sha256"] = digest
         stored = 0
         previous: ParsedSection | None = None
         sections = [
@@ -216,9 +255,7 @@ class IngestDocuments:
             for section in sections
         ]
         for section in sections:
-            nodes = self._chunker.chunk(
-                section.text, {"filename": filename, **section.metadata}
-            )
+            nodes = self._chunker.chunk(section.text, {**identity, **section.metadata})
             bridge = self._page_bridge(previous, section, filename)
             if bridge is not None:
                 nodes.append(bridge)

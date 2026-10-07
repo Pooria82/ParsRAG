@@ -28,6 +28,7 @@ from backend.tests.core.use_case.fakes import (
 )
 
 PDF = b"%PDF-1.4 body"
+SAME = PDF + b" identical"
 SMALL_POLICY = UploadPolicy(
     max_files_per_session=2, max_file_bytes=1024 * 1024, max_batch_bytes=1024 * 1024
 )
@@ -51,7 +52,13 @@ def _use_case(
 def _command(*names: str, data: bytes = PDF) -> IngestDocumentsCommand:
     return IngestDocumentsCommand(
         session_id="session-1",
-        files=[IncomingFile(name, io.BytesIO(data)) for name in names],
+        # Default payloads differ per name so batches are not content duplicates.
+        files=[
+            IncomingFile(
+                name, io.BytesIO(data + name.encode() if data is PDF else data)
+            )
+            for name in names
+        ],
     )
 
 
@@ -141,6 +148,38 @@ def test_rollback_failure_does_not_hide_the_ingestion_error() -> None:
 
     with pytest.raises(VectorDBConnectionError, match="connection reset"):
         _use_case(repository).execute(_command("a.pdf"))
+
+
+def test_same_bytes_under_another_name_are_refused(
+    repository: InMemoryRepository,
+) -> None:
+    """A renamed copy would double the document's chunks in every answer."""
+    use_case = _use_case(repository)
+    use_case.execute(_command("report.pdf", data=SAME))
+
+    with pytest.raises(ConflictError) as raised:
+        use_case.execute(_command("report-copy.pdf", data=SAME))
+
+    assert raised.value.code == "duplicate_content"
+    assert "report.pdf" in raised.value.detail
+    assert repository.get_session_files("session-1") == ["report.pdf"]
+
+
+def test_identical_files_in_one_batch_are_refused(
+    repository: InMemoryRepository,
+) -> None:
+    with pytest.raises(InvalidInputError) as raised:
+        _use_case(repository).execute(_command("a.pdf", "b.pdf", data=SAME))
+    assert raised.value.code == "duplicate_content"
+    assert repository.get_session_files("session-1") == []
+
+
+def test_chunks_record_the_content_digest(repository: InMemoryRepository) -> None:
+    _use_case(repository).execute(_command("a.pdf"))
+    digest = repository.sessions["session-1"][0].metadata["content_sha256"]
+    assert len(digest) == 64
+    assert repository.find_document_by_content("session-1", digest) == "a.pdf"
+    assert repository.find_document_by_content("other", digest) is None
 
 
 def test_summarizes_multi_file_batches(repository: InMemoryRepository) -> None:
