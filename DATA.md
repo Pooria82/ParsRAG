@@ -132,11 +132,13 @@ spread retrieval across files so one large document cannot crowd out the rest.
 
 **Depth.** `RetrievalOptimizer` adapts the number of chunks (8–30, base 12) to
 the question type: summaries, comparisons, enumerations, and tables get more
-context, factoid questions less. A client may override it with `top_k`.
+context, factoid questions less. Precedence: a request's `top_k`, then an
+operator's fixed depth (`STRICT_RAG_TOP_K` / `HYBRID_RERANK_TOP_K`), then the
+adaptive depth.
 
 | Mode | Retrieval | Gate | Context sent to the model |
 | --- | --- | --- | --- |
-| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (0.80 in Compose and `.env.example`; 0.75 if unset), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present; every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
+| Strict | Similarity search | Best score at least `STRICT_RAG_THRESHOLD` (default 0.80), or at least `max(0.55, threshold − 0.20)` with the question's distinctive terms present; every mentioned file needs its own evidence | Chunks scoring at least `max(0.55, 0.7 × best)`, grouped by document with location tags |
 | Hybrid | Wider candidate pool (at least `HYBRID_RETRIEVE_TOP_K`, 25) | None; reranked with FlashRank | Reranked chunks plus at least 3 dense anchors, or one per mentioned file |
 | LLM-only | None | None | Question and history only |
 
@@ -183,9 +185,10 @@ and chunk text.
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector store address |
 | `QDRANT_COLLECTION` | derived | Explicit collection override |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | Upsert batch, 1–512 |
-| `STRICT_RAG_THRESHOLD` | `0.80` (Compose); `0.75` if unset | Strict mode evidence gate |
+| `STRICT_RAG_THRESHOLD` | `0.80` | Strict mode evidence gate |
+| `STRICT_RAG_TOP_K` (alias `RAG_TOP_K`) | empty | Fixed Strict retrieval depth (1–50); empty uses adaptive depth |
+| `HYBRID_RERANK_TOP_K` | empty | Fixed Hybrid reranked chunk count (1–50); empty uses adaptive depth |
 | `HYBRID_RETRIEVE_TOP_K` | `25` | Minimum Hybrid candidate pool |
-| `RAG_TOP_K`, `STRICT_RAG_TOP_K`, `HYBRID_RERANK_TOP_K` | `15` | Read at startup but currently superseded by adaptive depth; a per-request `top_k` is the effective override |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
 | `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds |

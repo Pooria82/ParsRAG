@@ -4,6 +4,7 @@ Analyzes query intent, semantic complexity, and session document cardinality
 to dynamically determine the optimal chunk retrieval depth for RAG strategies.
 """
 
+import os
 import re
 
 # Intent Detection Regex Patterns (Persian & Multilingual)
@@ -36,6 +37,30 @@ COMPOUND_CONNECTOR_PATTERN = re.compile(
     r"\b(و همچنین|علاوه بر این|از طرفی|ضمن اینکه|به علاوه|از سوی دیگر)\b",
     re.IGNORECASE,
 )
+
+
+def configured_depth(*names: str) -> int | None:
+    """Return the first operator-configured retrieval depth, if any.
+
+    Empty or unset variables mean "use adaptive depth". Values are clamped to
+    the same 1-50 range accepted for a per-request ``top_k``; non-numeric
+    values are ignored rather than failing startup.
+
+    Args:
+        *names: Environment variable names in precedence order.
+
+    Returns:
+        int | None: The configured depth, or None when none is set.
+    """
+    for name in names:
+        raw = os.getenv(name, "").strip()
+        if not raw:
+            continue
+        try:
+            return min(50, max(1, int(raw)))
+        except ValueError:
+            continue
+    return None
 
 
 class RetrievalOptimizer:

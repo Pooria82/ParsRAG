@@ -13,7 +13,10 @@ from backend.core.dto.output.query import QueryResponse
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
-from backend.core.service.retrieval_optimizer import RetrievalOptimizer
+from backend.core.service.retrieval_optimizer import (
+    RetrievalOptimizer,
+    configured_depth,
+)
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     has_tagged_evidence,
@@ -58,6 +61,7 @@ Context:
 Query: {query}
 Answer:"""
 
+DEFAULT_STRICT_THRESHOLD = 0.80
 _WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
 _QUERY_STOPWORDS = {
     "and",
@@ -134,16 +138,36 @@ class StrictRAGStrategy(QueryStrategy):
     def __init__(
         self,
         repo: DocumentRepository,
-        default_top_k: int = 15,
+        default_top_k: int | None = None,
     ) -> None:
-        """Configure the repository, evidence threshold, and active model."""
+        """Configure the repository, evidence threshold, depth, and active model.
+
+        Args:
+            repo: The session-scoped document repository.
+            default_top_k: Fixed retrieval depth; defaults to ``STRICT_RAG_TOP_K``
+                or ``RAG_TOP_K`` when set, otherwise adaptive depth is used.
+        """
         self.repo = repo
-        self.threshold = float(os.getenv("STRICT_RAG_THRESHOLD", "0.75"))
-        self.default_top_k = int(
-            os.getenv("STRICT_RAG_TOP_K", os.getenv("RAG_TOP_K", str(default_top_k)))
+        self.threshold = float(
+            os.getenv("STRICT_RAG_THRESHOLD", "").strip() or DEFAULT_STRICT_THRESHOLD
+        )
+        self.default_top_k = (
+            default_top_k
+            if default_top_k is not None
+            else configured_depth("STRICT_RAG_TOP_K", "RAG_TOP_K")
         )
         self.prompt_template = PromptTemplate(STRICT_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
+
+    def _retrieval_depth(
+        self, top_k: int | None, query: str, available_files: list[str]
+    ) -> int:
+        """Prefer the request depth, then the configured depth, then adaptive."""
+        if top_k is not None:
+            return top_k
+        if self.default_top_k is not None:
+            return self.default_top_k
+        return RetrievalOptimizer.calculate_optimal_depth(query, available_files)
 
     def execute(
         self,
@@ -185,11 +209,7 @@ class StrictRAGStrategy(QueryStrategy):
         )
 
         # 2. Determine Optimal Retrieval Depth (Dynamic Optimizer)
-        fetch_k = (
-            top_k
-            if top_k is not None
-            else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
-        )
+        fetch_k = self._retrieval_depth(top_k, query, available_files)
 
         # 2. Retrieve Nodes (Balanced Multi-File vs. Single-File Search)
         nodes = retrieve_document_nodes(

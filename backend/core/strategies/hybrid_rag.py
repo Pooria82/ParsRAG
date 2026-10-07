@@ -1,5 +1,3 @@
-import os
-
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
@@ -12,7 +10,10 @@ from backend.core.dto.output.query import QueryResponse
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
-from backend.core.service.retrieval_optimizer import RetrievalOptimizer
+from backend.core.service.retrieval_optimizer import (
+    RetrievalOptimizer,
+    configured_depth,
+)
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     resolve_target_files,
@@ -122,21 +123,28 @@ class HybridRAGStrategy(QueryStrategy):
         top_k_retrieve: int | None = None,
         top_n_rerank: int | None = None,
     ) -> None:
-        """Configure retrieval depth, reranking, and the active model adapter."""
+        """Configure retrieval depth, reranking, and the active model adapter.
+
+        Args:
+            repo: The session-scoped document repository.
+            top_k_retrieve: Minimum candidate pool; defaults to
+                ``HYBRID_RETRIEVE_TOP_K`` or 25.
+            top_n_rerank: Fixed reranked chunk count; defaults to
+                ``HYBRID_RERANK_TOP_K`` when set, otherwise adaptive depth.
+        """
         self.repo = repo
         self.prompt_template = PromptTemplate(HYBRID_RAG_PROMPT_TEMPLATE)
         self.llm = Settings.llm
         self.default_retrieve_k = (
             top_k_retrieve
             if top_k_retrieve is not None
-            else int(os.getenv("HYBRID_RETRIEVE_TOP_K", "25"))
+            else configured_depth("HYBRID_RETRIEVE_TOP_K") or 25
         )
         self.default_rerank_n = (
             top_n_rerank
             if top_n_rerank is not None
-            else int(os.getenv("HYBRID_RERANK_TOP_K", "15"))
+            else configured_depth("HYBRID_RERANK_TOP_K")
         )
-        self.reranker = FlashRankRerank(top_n=self.default_rerank_n)
 
     def execute(
         self,
@@ -178,11 +186,11 @@ class HybridRAGStrategy(QueryStrategy):
         )
 
         # 2. Determine Optimal Retrieval Depth (Dynamic Optimizer)
-        rerank_n = (
-            top_k
-            if top_k is not None
-            else RetrievalOptimizer.calculate_optimal_depth(query, available_files)
-        )
+        rerank_n = top_k if top_k is not None else self.default_rerank_n
+        if rerank_n is None:
+            rerank_n = RetrievalOptimizer.calculate_optimal_depth(
+                query, available_files
+            )
         if document_segments:
             rerank_n = max(
                 rerank_n, len({filename for filename, _ in document_segments})
@@ -217,11 +225,7 @@ class HybridRAGStrategy(QueryStrategy):
         ]
 
         # 4. Rerank
-        reranker = (
-            FlashRankRerank(top_n=rerank_n)
-            if rerank_n != self.default_rerank_n
-            else self.reranker
-        )
+        reranker = FlashRankRerank(top_n=rerank_n)
         query_bundle = QueryBundle(query_str=query)
         reranked_nodes = reranker.postprocess_nodes(
             nodes_with_score, query_bundle=query_bundle

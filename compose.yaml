@@ -49,10 +49,10 @@ services:
       OCR_MAX_IMAGE_PIXELS: "${OCR_MAX_IMAGE_PIXELS:-40000000}"
       OCR_MIN_IMAGE_PIXELS: "${OCR_MIN_IMAGE_PIXELS:-10000}"
       STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.80}"
-      RAG_TOP_K: "${RAG_TOP_K:-15}"
-      STRICT_RAG_TOP_K: "${STRICT_RAG_TOP_K:-15}"
+      RAG_TOP_K: "${RAG_TOP_K:-}"
+      STRICT_RAG_TOP_K: "${STRICT_RAG_TOP_K:-}"
       HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
-      HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-15}"
+      HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-}"
     volumes:
       - model_cache:/home/parsrag/.cache
       - app_config:/var/lib/parsrag
