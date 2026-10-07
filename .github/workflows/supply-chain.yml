@@ -64,7 +64,7 @@ jobs:
         if: always()
         with:
           sarif_file: trivy-results.sarif
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: parsrag-sbom
           path: parsrag.spdx.json

@@ -58,6 +58,8 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - run: docker build --tag parsrag:${{ github.ref_name }} .
+      - name: Import the application inside the image
+        run: docker run --rm --entrypoint python parsrag:${{ github.ref_name }} -c "import backend.main"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
