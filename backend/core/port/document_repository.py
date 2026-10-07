@@ -1,16 +1,17 @@
-from abc import ABC, abstractmethod
+"""Vector-store port isolating the core from Qdrant and its client library."""
 
-from backend.core.models.domain import ExtractedNode
+from typing import Protocol
+
+from backend.core.domain.documents import ExtractedNode
 
 
-class AbstractDocumentRepository(ABC):
-    """Abstract interface defining the Document Repository contract."""
+class DocumentRepository(Protocol):
+    """Session-scoped storage and similarity search for document chunks."""
 
-    @abstractmethod
     def is_ready(self) -> bool:
         """Return whether the backing store and active collection are reachable."""
+        ...
 
-    @abstractmethod
     def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Saves extracted document nodes into the repository.
 
@@ -18,8 +19,8 @@ class AbstractDocumentRepository(ABC):
             nodes (list[ExtractedNode]): The nodes to save.
             session_id: The required session isolation boundary.
         """
+        ...
 
-    @abstractmethod
     def similarity_search(
         self,
         query: str,
@@ -38,8 +39,8 @@ class AbstractDocumentRepository(ABC):
         Returns:
             list[ExtractedNode]: The top matching nodes.
         """
+        ...
 
-    @abstractmethod
     def get_session_files(self, session_id: str) -> list[str]:
         """Returns the list of distinct filenames indexed in the given session.
 
@@ -49,21 +50,22 @@ class AbstractDocumentRepository(ABC):
         Returns:
             list[str]: Distinct filenames in the session.
         """
+        ...
 
-    @abstractmethod
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes belonging to the given session.
 
         Args:
             session_id (str): The session ID to delete.
         """
+        ...
 
-    @abstractmethod
     def delete_document(self, session_id: str, filename: str) -> None:
         """Deletes every chunk for one document in a session."""
+        ...
 
-    @abstractmethod
     def copy_document(
         self, source_session_id: str, target_session_id: str, filename: str
     ) -> int:
         """Copy existing vectors in bounded pages; return the copied chunk count."""
+        ...

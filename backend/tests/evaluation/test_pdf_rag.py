@@ -1,6 +1,6 @@
 """Tests for deterministic PDF evaluation scoring."""
 
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.documents import ExtractedNode
 from backend.tests.evaluation.scoring import (
     is_strict_refusal,
     normalize_text,

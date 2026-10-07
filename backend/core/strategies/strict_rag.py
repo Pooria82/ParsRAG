@@ -7,12 +7,13 @@ from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.core.query_progress import ProgressCallback
-from backend.core.retrieval_optimizer import RetrievalOptimizer
-from backend.core.strategies.base_strategy import RAGStrategy
+from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.port.progress_tracker import ProgressCallback
+from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     has_tagged_evidence,
@@ -122,7 +123,7 @@ def _has_lexical_evidence(
     return len(terms & evidence) >= max(2, ceil(len(terms) * 0.6))
 
 
-class StrictRAGStrategy(RAGStrategy):
+class StrictRAGStrategy(QueryStrategy):
     """Executes a strict Retrieval-Augmented Generation strategy.
 
     This strategy only uses retrieved context to answer the user's question.
@@ -132,7 +133,7 @@ class StrictRAGStrategy(RAGStrategy):
 
     def __init__(
         self,
-        repo: AbstractDocumentRepository,
+        repo: DocumentRepository,
         default_top_k: int = 15,
     ) -> None:
         """Configure the repository, evidence threshold, and active model."""

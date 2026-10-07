@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 from llama_index.core.llms import ChatMessage, MessageRole
 
-from backend.core.condenser import CondenseQuestionPipeline
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.documents import ExtractedNode
+from backend.core.service.condenser import CondenseQuestionPipeline
 from backend.core.strategies.hybrid_rag import (
     HybridRAGStrategy,
     _merge_evidence,
@@ -13,7 +13,7 @@ from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 
 
-@patch("backend.core.condenser.Settings")
+@patch("backend.core.service.condenser.Settings")
 def test_condense_question(mock_settings: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "پایتخت ایران کجاست؟"
@@ -306,7 +306,7 @@ def test_hybrid_rag_prompt_has_dynamic_language_and_code_rules() -> None:
 
 def test_condenser_prompt_has_code_preservation_rule() -> None:
     """Verifies that CONDENSE_PROMPT_TEMPLATE instructs preserving code snippets verbatim and matching language."""
-    from backend.core.condenser import CONDENSE_PROMPT_TEMPLATE
+    from backend.core.service.condenser import CONDENSE_PROMPT_TEMPLATE
 
     assert "Match the language of the follow up input" in CONDENSE_PROMPT_TEMPLATE
     assert (

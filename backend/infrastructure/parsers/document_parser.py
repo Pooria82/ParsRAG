@@ -1,6 +1,5 @@
 import io
 import json
-from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any, Protocol
 
@@ -13,8 +12,9 @@ from docx.text.paragraph import Paragraph
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from backend.core.exceptions import EmptyDocumentError
-from backend.core.upload_policy import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
+from backend.core.domain.documents import ParsedSection
+from backend.core.domain.exceptions import EmptyDocumentError
+from backend.core.domain.upload_policy import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 from backend.infrastructure.parsers.ocr import (
     OCRError,
     OCRImageLimitError,
@@ -26,19 +26,10 @@ from backend.infrastructure.parsers.ocr import (
 )
 
 __all__ = [
-    "EmptyDocumentError",
-    "ParsedSection",
+    "LocalDocumentParser",
     "parse_document",
     "parse_document_sections",
 ]
-
-
-@dataclass(frozen=True)
-class ParsedSection:
-    """Text extracted from a traceable document location."""
-
-    text: str
-    metadata: dict[str, int]
 
 
 class _PDFPage(RasterizablePage, Protocol):
@@ -129,6 +120,14 @@ def parse_document_sections(file_bytes: bytes, filename: str) -> list[ParsedSect
             raise EmptyDocumentError("Image-based documents require enabled OCR.")
         raise EmptyDocumentError("The document contains no text.")
     return sections
+
+
+class LocalDocumentParser:
+    """``DocumentParser`` adapter backed by PyMuPDF, python-docx/pptx, and OCR."""
+
+    def parse_sections(self, file_bytes: bytes, filename: str) -> list[ParsedSection]:
+        """Extract traceable sections with the format-specific local parser."""
+        return parse_document_sections(file_bytes, filename)
 
 
 def _parse_docx_sections(file_bytes: bytes) -> list[ParsedSection]:

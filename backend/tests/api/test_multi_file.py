@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.domain.documents import ExtractedNode
+from backend.core.dto.output.query import QueryResponse
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     parse_tagged_segments,
@@ -48,9 +49,11 @@ def test_multi_file_ingest_success() -> None:
     app.dependency_overrides[get_document_repository] = lambda: mock_repo
 
     with (
-        patch("backend.api.routes._validate_file"),
-        patch("backend.api.routes.parse_document_sections") as mock_parse_document,
-        patch("backend.api.routes.chunk_text") as mock_chunk_text,
+        patch("backend.core.use_case.ingestion.ingest_documents.validate_upload"),
+        patch(
+            "backend.infrastructure.parsers.document_parser.parse_document_sections"
+        ) as mock_parse_document,
+        patch("backend.infrastructure.parsers.chunker.chunk_text") as mock_chunk_text,
     ):
         mock_parse_document.return_value = [
             MagicMock(text="Extracted text content", metadata={"section": 1})
@@ -306,8 +309,8 @@ def test_strict_rag_balanced_multi_file_retrieval(mock_settings: MagicMock) -> N
     assert "=== سند 3: fileC.docx ===" in called_prompt
 
 
-@patch("backend.api.routes.CondenseQuestionPipeline")
-@patch("backend.api.routes.get_query_strategy")
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
 def test_query_route_with_file_filter(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:

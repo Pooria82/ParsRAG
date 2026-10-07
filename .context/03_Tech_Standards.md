@@ -39,22 +39,33 @@ Based on our microservices architecture, the repository follows a strict Domain-
 ParsRAG/
 ├── .context/                  # Architecture Decision Records (ADRs) and PRDs
 ├── backend/                   # FastAPI & LlamaIndex Core
-│   ├── api/                   # REST endpoints and WebSockets
-│   │   ├── dependencies.py    # FastAPI Depends() injections
-│   │   └── routes.py          # API route definitions
-│   ├── core/                  # Business Logic (Framework Agnostic)
-│   │   ├── interfaces/        # Abstract Base Classes (Strategy & Repository)
-│   │   ├── models/            # Pydantic V2 domain models
-│   │   ├── strategies/        # RAG Query Strategies (Strict, Hybrid, LLM-Only)
-│   │   ├── condenser.py       # Conversational memory re-writer pipeline
-│   │   └── exceptions.py      # Centralized domain errors (ParsRAGError)
-│   ├── infrastructure/        # External I/O (LlamaIndex config, Qdrant, PyMuPDF)
-│   │   ├── database/          # Qdrant repository implementations
-│   │   ├── llm/               # Ollama factory (Prompt templates are encapsulated in strategies)
-│   │   └── parsers/           # Document ingestion and PDF parsing
+│   ├── api/                   # Driving adapter (HTTP)
+│   │   ├── dependencies.py    # Composition root: adapters -> use cases (Depends)
+│   │   ├── errors.py          # ApplicationError -> HTTP status mapping
+│   │   ├── middleware.py      # Origin, body-size, and correlation-ID middleware
+│   │   └── routes.py          # Thin route handlers
+│   ├── core/                  # Business logic (framework agnostic, see ADR 08)
+│   │   ├── domain/            # Entities, enums, session rules, policies, errors
+│   │   ├── dto/
+│   │   │   ├── input/         # Request and command DTOs
+│   │   │   └── output/        # Response DTOs
+│   │   ├── port/              # Protocol contracts implemented by adapters
+│   │   ├── use_case/          # One class per operation, grouped by module
+│   │   │   ├── ingestion/     # Validate, parse, chunk, and index uploads
+│   │   │   ├── query/         # Answer questions and report progress
+│   │   │   ├── session/       # List, reuse, and delete session documents
+│   │   │   ├── model/         # Model connection and conversation titles
+│   │   │   └── system/        # Readiness and capability discovery
+│   │   ├── strategies/        # QueryStrategy implementations (Strict, Hybrid, LLM-Only)
+│   │   ├── service/           # Condense-question pipeline, retrieval optimizer
+│   │   └── runtime/           # Limiter, readiness, progress, locks, correlation
+│   ├── infrastructure/        # Driven adapters
+│   │   ├── database/          # Qdrant DocumentRepository
+│   │   ├── llm/               # Model factory, ModelGateway adapter, endpoint policy
+│   │   └── parsers/           # DocumentParser, TextChunker, and OCR adapters
 │   ├── tests/                 # Backend pytest suite
 │   └── main.py                # FastAPI application entrypoint
-├── frontend/                  # React 18, TypeScript, and Vite UI
+├── frontend/                  # React, TypeScript, and Vite UI
 │   ├── src/                   # Components, state, API client, and styles
 │   ├── public/                # Local fonts and brand assets
 │   └── tests/                 # Deterministic frontend tests

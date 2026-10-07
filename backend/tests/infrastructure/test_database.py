@@ -4,8 +4,8 @@ import pytest
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
 
 
