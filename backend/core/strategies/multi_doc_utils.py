@@ -190,6 +190,14 @@ def _location_tag(node: ExtractedNode) -> str:
     page_end = metadata.get("page_end")
     if isinstance(page, int) and isinstance(page_end, int) and page_end > page:
         return f", pages: {page}-{page_end}"
+    paragraph = metadata.get("paragraph")
+    paragraph_end = metadata.get("paragraph_end")
+    if (
+        isinstance(paragraph, int)
+        and isinstance(paragraph_end, int)
+        and paragraph_end > paragraph
+    ):
+        return f", paragraphs: {paragraph}-{paragraph_end}"
     for key, label in (
         ("page", "page"),
         ("slide", "slide"),
