@@ -373,15 +373,49 @@ def _parse_image_sections(file_bytes: bytes) -> list[ParsedSection]:
     return [ParsedSection(text, {"page": 1})] if text else []
 
 
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+# Below this share of Arabic-script letters, a Windows-1256 reading is not
+# Persian/Arabic text and Windows-1252 (Western) is used instead.
+_MIN_ARABIC_LETTER_SHARE = 0.3
+
+
+def _arabic_letter_share(text: str) -> float:
+    letters = [char for char in text if char.isalpha()]
+    if not letters:
+        return 0.0
+    arabic = sum("؀" <= char <= "ۿ" for char in letters)
+    return arabic / len(letters)
+
+
 def _decode_text(file_bytes: bytes) -> str:
-    """Decode bounded text formats as UTF-8 while rejecting binary payloads."""
+    """Decode text files: UTF-8, UTF-16 with BOM, or legacy Windows code pages.
+
+    Persian text saved by older Windows editors (Notepad before 2019, Excel
+    CSV exports) uses Windows-1256; Western files use Windows-1252. Binary
+    payloads are rejected.
+    """
+    if file_bytes.startswith(_UTF16_BOMS):
+        try:
+            return file_bytes.decode("utf-16")
+        except UnicodeDecodeError as exc:
+            raise DocumentError(
+                "The UTF-16 text file is malformed.", "text_encoding"
+            ) from exc
     if b"\x00" in file_bytes:
         raise DocumentError("The text file contains binary data.", "unsupported_file")
     try:
         return file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    persian = file_bytes.decode("cp1256", errors="replace")
+    if _arabic_letter_share(persian) >= _MIN_ARABIC_LETTER_SHARE:
+        return persian.replace("�", "")
+    try:
+        return file_bytes.decode("cp1252")
     except UnicodeDecodeError as exc:
         raise DocumentError(
-            "Text files must use UTF-8 encoding.", "text_encoding"
+            "The text encoding was not recognized; save the file as UTF-8.",
+            "text_encoding",
         ) from exc
 
 
