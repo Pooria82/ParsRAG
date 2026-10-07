@@ -4,24 +4,26 @@
   <img src="frontend/public/brand/parsrag-mark.svg" width="96" alt="نشان پارس‌رگ">
 </p>
 
-<h1 align="center">پارس‌رگ</h1>
+<h1 align="center">پارس‌رگ (ParsRAG)</h1>
 
 <p align="center">
   <strong>دستیار خصوصی اسناد، طراحی‌شده برای زبان فارسی</strong><br>
-  گفت‌وگوی دقیق و قابل‌ردیابی با فایل‌های فارسی و انگلیسی
+  چت با اسناد فارسی و انگلیسی با پاسخ‌های مستند و قابل‌ردیابی؛ RAG فارسی با مدل زبانی محلی
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="مجوز دسترسی به کد منبع" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
-  <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
+  <img alt="React 19" src="https://img.shields.io/badge/react-19-4B6BFB.svg">
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
 </p>
 
 پارس‌رگ یک فضای کاری دوزبانه و آفلاین‌محور برای پرسش و پاسخ مبتنی بر بازیابی
-اطلاعات (RAG) روی اسناد فارسی و انگلیسی است.
-استخراج متن، OCR، embedding و جست‌وجوی برداری روی سیستم میزبان انجام می‌شوند.
-برای تولید پاسخ می‌توان از Ollama محلی، یک API سازگار با OpenAI در شبکه خصوصی
+اطلاعات (RAG) روی اسناد فارسی و انگلیسی است: چت با PDF، Word، PowerPoint،
+صفحه‌های اسکن‌شده، تصاویر و فایل‌های متنی.
+استخراج متن، OCR با Tesseract، embedding چندزبانه، بازیابی با LlamaIndex و
+جست‌وجوی برداری با Qdrant روی سیستم میزبان انجام می‌شوند.
+برای تولید پاسخ می‌توان از مدل زبانی محلی با Ollama، یک API سازگار با OpenAI در شبکه خصوصی
 یا یک سرویس خارجی استفاده کرد. هر گفت‌وگو اسناد، محدوده جست‌وجو، شاخه‌های
 پاسخ، منابع و چرخه حذف مستقل خود را دارد.
 
@@ -248,7 +250,7 @@ docker compose -f compose.yaml -f compose.gpu.yaml -f compose.gpu-low-vram.yaml 
 به حافظه رزروشده نیاز دارد، overlay را بردارید یا
 `OLLAMA_LOW_VRAM_FIT_TARGET` را افزایش دهید.
 
-image برنامه از wheel رسمی PyTorch CUDA 12.4 استفاده می‌کند و Compose کارت
+image برنامه از PyTorch 2.13 و wheel رسمی CUDA 12.6 استفاده می‌کند و Compose کارت
 NVIDIA را برای هر دو سرویس `app` و `ollama` رزرو می‌کند. برای آماده‌سازی میزبان
 به [راهنمای GPU در Docker Compose](https://docs.docker.com/compose/how-tos/gpu-support/)،
 [راهنمای Docker در Ollama](https://github.com/ollama/ollama/blob/main/docs/docker.mdx)
@@ -265,8 +267,9 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d --build
 ```
 
-این حالت از image مخصوص ROCm در Ollama و wheelهای PyTorch ROCm 6.2 استفاده
-می‌کند. سازگاری کارت و درایور را پیش از استقرار بررسی کنید؛ برای سخت‌افزار
+این حالت از image مخصوص ROCm در Ollama و PyTorch 2.6 با wheelهای ROCm 6.2 استفاده
+می‌کند تا نسخهٔ جدیدتر ROCm روی سخت‌افزار AMD آزموده شود. سازگاری کارت و درایور را
+پیش از استقرار بررسی کنید؛ برای سخت‌افزار
 پشتیبانی‌نشده از پروفایل CPU یا API مدل استفاده کنید.
 
 برنامه در `http://127.0.0.1:8000` یا پورت `PARSRAG_PORT` در دسترس است.

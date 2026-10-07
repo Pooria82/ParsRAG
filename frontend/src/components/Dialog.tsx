@@ -15,7 +15,7 @@ interface DialogProps {
 /** Native modal semantics keep keyboard focus and background interaction scoped. */
 export function Dialog({ open, onClose, title, closeLabel, subtitle, className = '', guided = false, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
-  const closeTimer = useRef<number>();
+  const closeTimer = useRef<number | undefined>(undefined);
   const [closing, setClosing] = useState(false);
   const titleId = useId();
   useEffect(() => {

@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "CommonJS", "moduleResolution": "node",
+    "module": "CommonJS", "moduleResolution": "bundler",
     "allowImportingTsExtensions": false, "noEmit": false,
     "outDir": "tests/.compiled", "rootDir": "src"
   },

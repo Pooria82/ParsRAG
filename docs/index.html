@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ParsRAG — Offline Persian (Farsi) RAG for chatting with documents</title>
+  <meta name="description" content="ParsRAG is a bilingual, offline-first RAG workspace for chatting with Persian (Farsi) and English PDF, Word, PowerPoint and scanned documents using local LLMs, with cited sources.">
+  <meta name="keywords" content="Persian RAG, Farsi RAG, chat with PDF, document question answering, local LLM, Ollama, LlamaIndex, Qdrant, OCR, offline AI">
+  <meta name="author" content="Pooria Madani">
+  <link rel="canonical" href="https://pooria82.github.io/ParsRAG/">
+  <link rel="alternate" hreflang="en" href="https://pooria82.github.io/ParsRAG/">
+  <link rel="alternate" hreflang="fa" href="https://pooria82.github.io/ParsRAG/fa/">
+  <link rel="alternate" hreflang="x-default" href="https://pooria82.github.io/ParsRAG/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ParsRAG">
+  <meta property="og:title" content="ParsRAG — Offline Persian (Farsi) RAG for chatting with documents">
+  <meta property="og:description" content="Ask cited, traceable questions across Persian and English documents. Parsing, OCR, embeddings and vector search run locally.">
+  <meta property="og:url" content="https://pooria82.github.io/ParsRAG/">
+  <meta property="og:image" content="https://pooria82.github.io/ParsRAG/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="fa_IR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#146a57">
+  <link rel="icon" href="assets/parsrag-mark.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="preload" href="assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "ParsRAG",
+    "alternateName": "پارس‌رگ",
+    "description": "Bilingual, offline-first retrieval-augmented generation (RAG) workspace for chatting with Persian (Farsi) and English documents using local LLMs, with cited sources.",
+    "url": "https://pooria82.github.io/ParsRAG/",
+    "codeRepository": "https://github.com/Pooria82/ParsRAG",
+    "programmingLanguage": ["Python", "TypeScript"],
+    "runtimePlatform": ["Docker", "Python 3.12"],
+    "license": "https://github.com/Pooria82/ParsRAG/blob/main/LICENSE",
+    "keywords": "Persian, Farsi, RAG, retrieval-augmented generation, document question answering, OCR, local LLM, Ollama, LlamaIndex, Qdrant",
+    "inLanguage": ["en", "fa"],
+    "author": { "@type": "Person", "name": "Pooria Madani" },
+    "image": "https://pooria82.github.io/ParsRAG/social-preview.png"
+  }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="./"><img src="assets/parsrag-mark.svg" alt="" width="36" height="36">ParsRAG</a>
+      <nav class="site" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#modes">Answer modes</a>
+        <a href="#start">Quick start</a>
+        <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">Architecture</a>
+        <a href="fa/" hreflang="fa" lang="fa">فارسی</a>
+      </nav>
+    </header>
+  </div>
+
+  <main>
+    <div class="wrap">
+      <div class="hero">
+        <img class="mark" src="assets/parsrag-mark.svg" alt="ParsRAG logo" width="88" height="88">
+        <h1>Offline Persian (Farsi) RAG for chatting with your documents</h1>
+        <p class="lead">ParsRAG answers questions about Persian and English PDFs, Word and PowerPoint files, scans, and text, with a citation for every answer. Parsing, OCR, embeddings, and vector search stay on your workstation; answers come from a local LLM through Ollama or a model API you choose.</p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/Pooria82/ParsRAG">View on GitHub</a>
+          <a class="button secondary" href="#start">Quick start</a>
+        </div>
+        <figure class="shot">
+          <img src="screenshots/workspace-en-dark.png" width="1440" height="900" alt="ParsRAG workspace answering a question with cited document sources in dark mode">
+          <figcaption>A conversation with its own documents, cited sources, and answer branches.</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Built for Persian documents</h2>
+        <p class="intro">Right-to-left text, Persian OCR, and multilingual embeddings are first-class, not afterthoughts.</p>
+        <div class="grid">
+          <div class="card"><h3>Cited, traceable answers</h3><p>Every answer lists the file plus page range, slide, paragraph, or section it came from.</p></div>
+          <div class="card"><h3>Broad document support</h3><p>PDF, DOCX, PPTX, images, Markdown, JSON, CSV, HTML, YAML, logs, and source code.</p></div>
+          <div class="card"><h3>OCR where it matters</h3><p>Persian and English Tesseract OCR for scanned pages, images, and pictures inside Office files.</p></div>
+          <div class="card"><h3>Local-first by design</h3><p>Embeddings and Qdrant vectors never leave the host. Remote model APIs require an explicit, disclosed opt-in.</p></div>
+          <div class="card"><h3>Precise prompts</h3><p>Mention files with <code>@</code> to bind parts of a question to specific sources; use <code>/</code> for quick actions.</p></div>
+          <div class="card"><h3>Runs on your hardware</h3><p>CPU by default, with Docker Compose overlays for NVIDIA and supported AMD GPUs.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="modes">
+      <div class="wrap">
+        <h2>Three explicit answer modes</h2>
+        <p class="intro">Choose how much the model may rely on its own knowledge.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">Mode</th><th scope="col">Retrieval</th><th scope="col">Model knowledge</th><th scope="col">Use it for</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Strict</strong></td><td>Required, with an evidence gate</td><td>Excluded by the prompt contract</td><td>Answers that must stay grounded in your documents</td></tr>
+              <tr><td><strong>Hybrid</strong></td><td>Required and reranked</td><td>May supplement evidence</td><td>Explanations and synthesis with document priority</td></tr>
+              <tr><td><strong>LLM-only</strong></td><td>Bypassed</td><td>Used directly</td><td>General chat unrelated to uploads</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens">
+      <div class="wrap">
+        <h2>Bilingual interface</h2>
+        <p class="intro">The same workspace in English and Persian, light and dark.</p>
+        <div class="gallery">
+          <img src="screenshots/home-en-light.png" width="1440" height="900" loading="lazy" alt="ParsRAG home screen in English, light theme">
+          <img src="screenshots/sources-en-light.png" width="1440" height="900" loading="lazy" alt="Answer sources panel showing cited PDF pages">
+          <img src="screenshots/model-en-light.png" width="1440" height="900" loading="lazy" alt="Model settings for local Ollama or an OpenAI-compatible API">
+          <img src="screenshots/workspace-fa-dark.png" width="1440" height="900" loading="lazy" alt="Persian right-to-left workspace in dark theme">
+        </div>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>Quick start with Docker</h2>
+        <p class="intro">Requires Docker Engine with Compose and 8–16 GB RAM, depending on the model. The full guide covers API models, CPU, NVIDIA, and AMD.</p>
+<pre><code>git clone https://github.com/Pooria82/ParsRAG.git
+cd ParsRAG
+cp .env.example .env
+docker compose --profile local-model up -d qdrant ollama
+docker compose --profile local-model run --rm ollama-init
+docker compose --profile local-model up -d --build app</code></pre>
+        <p>Then open <code>http://127.0.0.1:8000</code>. Read the <a href="https://github.com/Pooria82/ParsRAG#docker-quick-start">installation guide</a>, the <a href="https://github.com/Pooria82/ParsRAG/blob/main/ARCHITECTURE.md">architecture</a>, and the <a href="https://github.com/Pooria82/ParsRAG/blob/main/DATA.md">data and RAG guide</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <p>ParsRAG is source-available, not open source. See the <a href="https://github.com/Pooria82/ParsRAG/blob/main/LICENSE">license</a> and <a href="https://github.com/Pooria82/ParsRAG/blob/main/CITATION.cff">how to cite it</a>.</p>
+      <p>© Pooria Madani · <a href="fa/" hreflang="fa" lang="fa">نسخه فارسی</a></p>
+    </div>
+  </footer>
+</body>
+</html>
