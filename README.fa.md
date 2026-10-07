@@ -274,6 +274,11 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d -
 
 برنامه در `http://127.0.0.1:8000` یا پورت `PARSRAG_PORT` در دسترس است.
 
+API فقط به نام‌های `localhost`، `127.0.0.1` و `::1` پاسخ می‌دهد. اگر با
+`PARSRAG_BIND_HOST` برنامه را روی رابط شبکهٔ دیگری در دسترس می‌گذارید، نام یا
+آدرسی را که با آن برنامه را باز می‌کنید در `PARSRAG_ALLOWED_HOSTS` (با کاما جدا)
+بنویسید؛ درخواست با نام‌های دیگر پاسخ `400 Host is not trusted` می‌گیرد.
+
 ```powershell
 docker compose ps
 docker compose logs -f app

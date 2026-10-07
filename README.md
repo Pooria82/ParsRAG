@@ -275,6 +275,11 @@ should use the CPU profile or an API provider.
 
 Open `http://127.0.0.1:8000` or the port configured by `PARSRAG_PORT`.
 
+The API answers only to `localhost`, `127.0.0.1`, and `::1`. If you bind the
+app to another interface with `PARSRAG_BIND_HOST`, list the names or addresses
+you will open it with in `PARSRAG_ALLOWED_HOSTS` (comma-separated); other host
+names receive `400 Host is not trusted`.
+
 ```powershell
 docker compose ps
 docker compose logs -f app
