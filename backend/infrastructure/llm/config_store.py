@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from backend.core.models.domain import ModelConfigurationRequest
+from backend.core.dto.input.model import ModelConfigurationRequest
 
 
 def model_configuration_path() -> Path:

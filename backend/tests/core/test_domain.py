@@ -1,13 +1,10 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.core.models.domain import (
-    ChatMessage,
-    ExtractedNode,
-    QueryMode,
-    QueryRequest,
-    QueryResponse,
-)
+from backend.core.dto.input.query import ChatMessage, QueryRequest
+from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.enums import QueryMode
+from backend.core.dto.output.query import QueryResponse
 
 
 def test_query_mode_enum() -> None:

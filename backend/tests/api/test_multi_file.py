@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.domain.documents import ExtractedNode
+from backend.core.dto.output.query import QueryResponse
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     parse_tagged_segments,

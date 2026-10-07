@@ -11,12 +11,9 @@ from pptx import Presentation
 from pptx.util import Inches
 
 from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
-from backend.infrastructure.parsers.document_parser import (
-    EmptyDocumentError,
-    ParsedSection,
-    parse_document,
-    parse_document_sections,
-)
+from backend.core.domain.exceptions import EmptyDocumentError
+from backend.core.domain.documents import ParsedSection
+from backend.infrastructure.parsers.document_parser import parse_document, parse_document_sections
 
 
 @patch("backend.infrastructure.parsers.document_parser.fitz.open")

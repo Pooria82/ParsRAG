@@ -12,17 +12,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router as api_router
-from backend.core.exceptions import ParsRAGError
-from backend.core.runtime import runtime_state
-from backend.core.security import (
-    ContentLengthLimitMiddleware,
-    RequestContextMiddleware,
-    TrustedOriginMiddleware,
-    configured_browser_origins,
-)
-from backend.core.upload_policy import UploadPolicy
+from backend.core.domain.exceptions import ParsRAGError
+from backend.core.runtime.readiness import runtime_state
+from backend.api.middleware import ContentLengthLimitMiddleware, RequestContextMiddleware, TrustedOriginMiddleware, configured_browser_origins
+from backend.core.domain.upload_policy import UploadPolicy
 from backend.infrastructure.llm.factory import setup_llm_and_embeddings
-from backend.infrastructure.parsers.document_parser import EmptyDocumentError
+from backend.core.domain.exceptions import EmptyDocumentError
 
 # Load environment variables
 load_dotenv()

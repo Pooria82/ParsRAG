@@ -8,12 +8,12 @@ from llama_index.core import Settings
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.domain.documents import ExtractedNode
 
 
-class QdrantRepository(AbstractDocumentRepository):
+class QdrantRepository(DocumentRepository):
     """Qdrant-backed implementation of the Document Repository.
 
     Handles creation of collections, generating embeddings for documents,

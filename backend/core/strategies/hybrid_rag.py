@@ -6,12 +6,13 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.postprocessor.flashrank_rerank import FlashRankRerank  # type: ignore
 
-from backend.core.exceptions import VectorDBConnectionError
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.core.query_progress import ProgressCallback
-from backend.core.retrieval_optimizer import RetrievalOptimizer
-from backend.core.strategies.base_strategy import RAGStrategy
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.domain.documents import ExtractedNode
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.progress_tracker import ProgressCallback
+from backend.core.service.retrieval_optimizer import RetrievalOptimizer
+from backend.core.port.query_strategy import QueryStrategy
 from backend.core.strategies.multi_doc_utils import (
     format_multi_doc_context,
     resolve_target_files,
@@ -107,7 +108,7 @@ def _merge_evidence(
     return merged
 
 
-class HybridRAGStrategy(RAGStrategy):
+class HybridRAGStrategy(QueryStrategy):
     """Executes a hybrid RAG strategy with fallback, reranking, and multi-file support.
 
     This strategy retrieves a broad candidate pool across the document collection
@@ -117,7 +118,7 @@ class HybridRAGStrategy(RAGStrategy):
 
     def __init__(
         self,
-        repo: AbstractDocumentRepository,
+        repo: DocumentRepository,
         top_k_retrieve: int | None = None,
         top_n_rerank: int | None = None,
     ) -> None:

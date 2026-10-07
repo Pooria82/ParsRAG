@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from threading import BoundedSemaphore
 
-from fastapi import HTTPException
+from backend.core.domain.exceptions import CapacityExceededError
 
 
 class WorkLimiter:
@@ -19,11 +19,10 @@ class WorkLimiter:
 
     @contextmanager
     def slot(self) -> Iterator[None]:
-        """Reserve one slot or return an explicit overload response."""
+        """Reserve one slot or raise an explicit overload error."""
         if not self._semaphore.acquire(blocking=False):
-            raise HTTPException(
-                status_code=429,
-                detail=f"The {self._operation} capacity is currently full. Try again shortly.",
+            raise CapacityExceededError(
+                f"The {self._operation} capacity is currently full. Try again shortly."
             )
         try:
             yield

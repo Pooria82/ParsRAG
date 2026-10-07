@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from backend.api.dependencies import get_document_repository
 from backend.api.routes import _validate_archive
-from backend.core.models.domain import QueryResponse
+from backend.core.dto.output.query import QueryResponse
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)

@@ -19,7 +19,8 @@ from typing import TypedDict, cast
 
 from dotenv import load_dotenv
 
-from backend.core.models.domain import ExtractedNode, QueryResponse
+from backend.core.domain.documents import ExtractedNode
+from backend.core.dto.output.query import QueryResponse
 from backend.core.strategies.hybrid_rag import HybridRAGStrategy
 from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy

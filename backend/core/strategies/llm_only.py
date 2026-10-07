@@ -2,9 +2,9 @@ from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.prompts import PromptTemplate
 
-from backend.core.models.domain import QueryResponse
-from backend.core.query_progress import ProgressCallback
-from backend.core.strategies.base_strategy import RAGStrategy
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.progress_tracker import ProgressCallback
+from backend.core.port.query_strategy import QueryStrategy
 
 LLM_ONLY_PROMPT_TEMPLATE = """\
 You are a helpful AI assistant. Answer the user's question directly.
@@ -20,7 +20,7 @@ Query: {query}
 Answer:"""
 
 
-class LLMOnlyStrategy(RAGStrategy):
+class LLMOnlyStrategy(QueryStrategy):
     """Executes a pure LLM strategy without any retrieval.
 
     This strategy answers the user's question relying solely on the LLM's

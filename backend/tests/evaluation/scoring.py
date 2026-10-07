@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import TypedDict
 
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.documents import ExtractedNode
 
 
 class ExpectedFact(TypedDict):

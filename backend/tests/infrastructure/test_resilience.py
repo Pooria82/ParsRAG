@@ -7,10 +7,8 @@ from fastapi.testclient import TestClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 
 from backend.api.dependencies import get_document_repository
-from backend.core.exceptions import (
-    VectorDBConnectionError,
-)
-from backend.core.models.domain import ExtractedNode
+from backend.core.domain.exceptions import VectorDBConnectionError
+from backend.core.domain.documents import ExtractedNode
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
 from backend.main import app
 

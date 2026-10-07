@@ -8,9 +8,10 @@ from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
-from backend.core.models.domain import ExtractedNode, QueryResponse
-from backend.core.runtime import runtime_state
-from backend.infrastructure.parsers.document_parser import EmptyDocumentError
+from backend.core.domain.documents import ExtractedNode
+from backend.core.dto.output.query import QueryResponse
+from backend.core.runtime.readiness import runtime_state
+from backend.core.domain.exceptions import EmptyDocumentError
 from backend.main import app
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -130,7 +131,7 @@ def test_ingest_success() -> None:
 
 def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     """Cross-page OCR facts enter the same session without a separate upload."""
-    from backend.infrastructure.parsers.document_parser import ParsedSection
+    from backend.core.domain.documents import ParsedSection
 
     repo = MagicMock()
     app.dependency_overrides[get_document_repository] = lambda: repo
@@ -166,7 +167,7 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
 def test_concurrent_uploads_recheck_session_duplicates() -> None:
     """A second upload must observe the first commit before entering ingestion."""
     from backend.api import routes
-    from backend.core.capacity import WorkLimiter
+    from backend.core.runtime.capacity import WorkLimiter
 
     first_entered = Event()
     release_first = Event()
@@ -280,7 +281,7 @@ def test_query_correlation_id_reaches_execution_context(
     mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
 ) -> None:
     """Downstream work can correlate logs with the response header."""
-    from backend.core.security import current_correlation_id
+    from backend.core.runtime.correlation import current_correlation_id
 
     seen: list[str | None] = []
 
@@ -445,7 +446,8 @@ def test_session_endpoints_invalid_session_id() -> None:
 
 @patch("backend.api.routes.get_model_configuration")
 def test_model_configuration_never_returns_api_key(mock_get: MagicMock) -> None:
-    from backend.core.models.domain import ModelConfigurationResponse, ModelProvider
+    from backend.core.dto.output.model import ModelConfigurationResponse
+    from backend.core.domain.enums import ModelProvider
 
     mock_get.return_value = ModelConfigurationResponse(
         provider=ModelProvider.API,
@@ -461,7 +463,8 @@ def test_model_configuration_never_returns_api_key(mock_get: MagicMock) -> None:
 
 @patch("backend.api.routes.configure_model")
 def test_update_model_configuration(mock_configure: MagicMock) -> None:
-    from backend.core.models.domain import ModelConfigurationResponse, ModelProvider
+    from backend.core.dto.output.model import ModelConfigurationResponse
+    from backend.core.domain.enums import ModelProvider
 
     mock_configure.return_value = ModelConfigurationResponse(
         provider=ModelProvider.OLLAMA,

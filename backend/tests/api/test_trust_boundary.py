@@ -5,11 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
-from backend.core.security import (
-    ContentLengthLimitMiddleware,
-    model_api_is_external,
-    validate_model_api_url,
-)
+from backend.api.middleware import ContentLengthLimitMiddleware
+from backend.infrastructure.llm.endpoint_policy import model_api_is_external, validate_model_api_url
 from backend.main import app
 
 
@@ -43,7 +40,7 @@ def test_model_api_url_rejects_ambiguous_urls(url: str) -> None:
         validate_model_api_url(url)
 
 
-@patch("backend.core.security._resolved_addresses")
+@patch("backend.infrastructure.llm.endpoint_policy._resolved_addresses")
 def test_public_model_api_requires_https(mock_resolve: MagicMock) -> None:
     """Public model traffic must be encrypted while private HTTP remains valid."""
     from ipaddress import ip_address
@@ -58,7 +55,7 @@ def test_public_model_api_requires_https(mock_resolve: MagicMock) -> None:
     )
 
 
-@patch("backend.core.security._resolved_addresses")
+@patch("backend.infrastructure.llm.endpoint_policy._resolved_addresses")
 def test_model_api_rejects_link_local_targets(mock_resolve: MagicMock) -> None:
     """Link-local endpoints cannot be used to probe instance metadata services."""
     from ipaddress import ip_address
@@ -68,7 +65,7 @@ def test_model_api_rejects_link_local_targets(mock_resolve: MagicMock) -> None:
         validate_model_api_url("http://metadata.internal")
 
 
-@patch("backend.core.security._resolved_addresses")
+@patch("backend.infrastructure.llm.endpoint_policy._resolved_addresses")
 def test_api_disclosure_distinguishes_public_and_private_hosts(
     mock_resolve: MagicMock,
 ) -> None:

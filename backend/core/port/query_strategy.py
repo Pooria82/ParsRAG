@@ -1,15 +1,16 @@
-from abc import ABC, abstractmethod
+"""Strategy port selected per request to answer in Strict, Hybrid, or LLM-only mode."""
+
+from typing import Protocol
 
 from llama_index.core.llms import ChatMessage
 
-from backend.core.models.domain import QueryResponse
-from backend.core.query_progress import ProgressCallback
+from backend.core.dto.output.query import QueryResponse
+from backend.core.port.progress_tracker import ProgressCallback
 
 
-class RAGStrategy(ABC):
-    """Abstract base class for all RAG strategies."""
+class QueryStrategy(Protocol):
+    """One answer-generation pipeline for a single query mode."""
 
-    @abstractmethod
     def execute(
         self,
         query: str,
@@ -34,3 +35,4 @@ class RAGStrategy(ABC):
         Returns:
             QueryResponse: The generated answer.
         """
+        ...

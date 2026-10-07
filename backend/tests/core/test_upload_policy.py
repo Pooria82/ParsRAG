@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.core.upload_policy import UploadPolicy
+from backend.core.domain.upload_policy import UploadPolicy
 
 
 def test_upload_policy_defaults_support_ten_large_documents(

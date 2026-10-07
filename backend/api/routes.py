@@ -15,34 +15,21 @@ from fastapi.responses import JSONResponse
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
 
 from backend.api.dependencies import get_document_repository, get_query_strategy
-from backend.core.capacity import WorkLimiter
-from backend.core.condenser import CondenseQuestionPipeline
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import (
-    AppCapabilitiesResponse,
-    ConversationTitleRequest,
-    ConversationTitleResponse,
-    DeleteDocumentRequest,
-    IngestionCapabilities,
-    ModelConfigurationRequest,
-    ModelConfigurationResponse,
-    OllamaModel,
-    QueryMode,
-    QueryRequest,
-    QueryResponse,
-    ReuseDocumentRequest,
-)
-from backend.core.query_progress import get_query_stage, set_query_stage
-from backend.core.runtime import runtime_state
-from backend.core.security import current_correlation_id
+from backend.core.runtime.capacity import WorkLimiter
+from backend.core.service.condenser import CondenseQuestionPipeline
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.dto.output.capabilities import AppCapabilitiesResponse, IngestionCapabilities
+from backend.core.dto.input.model import ConversationTitleRequest, ModelConfigurationRequest
+from backend.core.dto.output.model import ConversationTitleResponse, ModelConfigurationResponse, OllamaModel
+from backend.core.dto.input.documents import DeleteDocumentRequest, ReuseDocumentRequest
+from backend.core.domain.enums import QueryMode
+from backend.core.dto.input.query import QueryRequest
+from backend.core.dto.output.query import QueryResponse
+from backend.core.runtime.query_progress import get_query_stage, set_query_stage
+from backend.core.runtime.readiness import runtime_state
+from backend.core.runtime.correlation import current_correlation_id
 from backend.core.strategies.multi_doc_utils import parse_tagged_segments
-from backend.core.upload_policy import (
-    IMAGE_EXTENSIONS,
-    OFFICE_EXTENSIONS,
-    SUPPORTED_EXTENSIONS,
-    TEXT_EXTENSIONS,
-    UploadPolicy,
-)
+from backend.core.domain.upload_policy import IMAGE_EXTENSIONS, OFFICE_EXTENSIONS, SUPPORTED_EXTENSIONS, TEXT_EXTENSIONS, UploadPolicy
 from backend.infrastructure.llm.factory import (
     configure_model,
     generate_conversation_title,
@@ -50,10 +37,8 @@ from backend.infrastructure.llm.factory import (
     list_ollama_models,
 )
 from backend.infrastructure.parsers.chunker import bridge_adjacent_pages, chunk_text
-from backend.infrastructure.parsers.document_parser import (
-    ParsedSection,
-    parse_document_sections,
-)
+from backend.core.domain.documents import ParsedSection
+from backend.infrastructure.parsers.document_parser import parse_document_sections
 
 router = APIRouter()
 logger = logging.getLogger("parsrag.operations")
@@ -255,7 +240,7 @@ def ingest_document(
     file: UploadFile | None = File(None),  # noqa: B008
     files: list[UploadFile] | None = File(None),  # noqa: B008
     session_id: str = Form(...),
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
     """Ingest a bounded set of supported files into one isolated session."""
     # 1. Validate session_id
@@ -319,7 +304,7 @@ def ingest_document(
 def _ingest_documents(
     upload_list: list[UploadFile],
     session_id: str,
-    repo: AbstractDocumentRepository,
+    repo: DocumentRepository,
     policy: UploadPolicy,
 ) -> dict[str, str]:
     """Perform bounded parsing, chunking, and persistence for one upload batch."""
@@ -384,7 +369,7 @@ def _ingest_documents(
 def query_rag(
     request: QueryRequest,
     _ready: None = Depends(require_runtime_ready),
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> QueryResponse:
     """Processes a query using the specified RAG mode and multi-file options."""
     request_id = str(request.request_id) if request.request_id else None
@@ -467,7 +452,7 @@ def read_query_progress(request_id: UUID) -> dict[str, str]:
 @router.get("/sessions/{session_id}/files", response_model=list[str])
 def get_session_files(
     session_id: str,
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> list[str]:
     """Retrieves all distinct filenames indexed for a given session."""
     if not SESSION_ID_REGEX.match(session_id):
@@ -482,7 +467,7 @@ def get_session_files(
 def reuse_session_document(
     session_id: str,
     request: ReuseDocumentRequest,
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, int | str]:
     """Reuse a prior session's indexed vectors without storing raw upload bytes."""
     if (
@@ -525,7 +510,7 @@ def reuse_session_document(
 @router.delete("/sessions/{session_id}")
 def delete_session(
     session_id: str,
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
     """Deletes all indexed vectors and documents for a given session."""
     if not SESSION_ID_REGEX.match(session_id):
@@ -542,7 +527,7 @@ def delete_session(
 def delete_session_document(
     session_id: str,
     request: DeleteDocumentRequest,
-    repo: AbstractDocumentRepository = Depends(get_document_repository),  # noqa: B008
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
 ) -> dict[str, str]:
     """Deletes one indexed document without affecting the rest of the session."""
     if not SESSION_ID_REGEX.match(session_id):

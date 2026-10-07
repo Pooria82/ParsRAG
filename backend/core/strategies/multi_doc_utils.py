@@ -1,8 +1,8 @@
 import os
 import re
 
-from backend.core.interfaces.repository import AbstractDocumentRepository
-from backend.core.models.domain import ExtractedNode
+from backend.core.port.document_repository import DocumentRepository
+from backend.core.domain.documents import ExtractedNode
 
 _BROAD_INDICATORS = (
     "هر سه",
@@ -89,7 +89,7 @@ def parse_tagged_segments(
 
 
 def retrieve_document_nodes(
-    repo: AbstractDocumentRepository,
+    repo: DocumentRepository,
     query: str,
     available_files: list[str],
     file_filter: list[str] | None,

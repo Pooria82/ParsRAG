@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from backend.core.capacity import WorkLimiter
+from backend.core.runtime.capacity import WorkLimiter
 
 
 def test_work_limiter_rejects_saturation_without_waiting() -> None:
