@@ -56,7 +56,7 @@ test('error bodies without a code, nested codes, and HTML stay usable', () => {
 });
 
 test('every error code shown to users has Persian and English text', () => {
-  const codes = ['encrypted_document', 'corrupt_file', 'ocr_disabled', 'duplicate_file', 'vector_store_unavailable', 'busy'];
+  const codes = ['encrypted_document', 'corrupt_file', 'ocr_disabled', 'duplicate_file', 'duplicate_content', 'vector_store_unavailable', 'busy'];
   for (const code of codes) {
     assert.ok(uploadErrorMessage(code, 'fa'));
     assert.ok(uploadErrorMessage(code, 'en'));

@@ -222,6 +222,37 @@ def test_document_copy_reuses_vectors_in_bounded_pages(
     mock_settings.embed_model.get_text_embedding_batch.assert_not_called()
 
 
+def test_documents_are_found_by_content_digest_within_a_session() -> None:
+    """The real local engine filters on session and content digest."""
+    client = QdrantClient(location=":memory:")
+    client.create_collection(
+        collection_name="digest_test",
+        vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+    )
+    client.upsert(
+        collection_name="digest_test",
+        points=[
+            qmodels.PointStruct(
+                id=1,
+                vector=[0.2, 0.8],
+                payload={
+                    "session_id": "s1",
+                    "filename": "report.pdf",
+                    "content_sha256": "abc",
+                    "text": "evidence",
+                },
+            )
+        ],
+    )
+    repo = object.__new__(QdrantRepository)
+    repo.client = client
+    repo.collection_name = "digest_test"
+
+    assert repo.find_document_by_content("s1", "abc") == "report.pdf"
+    assert repo.find_document_by_content("s2", "abc") is None
+    assert repo.find_document_by_content("s1", "other") is None
+
+
 def test_document_copy_is_searchable_in_target_session() -> None:
     """Exercise Qdrant's actual local engine, including payload and vector copies."""
     client = QdrantClient(location=":memory:")

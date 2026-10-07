@@ -48,6 +48,9 @@ flowchart LR
   ID, at most 10 files, no duplicate names, and no names already in the session.
 - It then reads each file in 1 MiB chunks, stopping at 100 MiB per file and
   500 MiB per batch.
+- A file whose bytes match a document already in the conversation (SHA-256,
+  stored as `content_sha256` on its chunks) is refused with `duplicate_content`,
+  even under another name; two identical files in one upload are refused too.
 - Content must match its extension: PDFs start with `%PDF-`; DOCX/PPTX are ZIP
   archives with the expected parts, at most 10,000 entries, at most 200 MiB
   expanded, and at most a 200:1 compression ratio per entry.

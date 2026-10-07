@@ -21,6 +21,7 @@ const UPLOAD: Messages = {
   batch_too_large: { fa: 'حجم کل فایل‌های این بارگذاری بیشتر از حد مجاز است.', en: 'The upload batch is larger than the allowed size.' },
   too_large: { fa: 'حجم درخواست بیشتر از حد مجاز است.', en: 'The request is larger than allowed.' },
   duplicate_file: { fa: 'فایلی با همین نام در این گفت‌وگو هست.', en: 'A file with this name is already in this conversation.' },
+  duplicate_content: { fa: 'محتوای این فایل با سندی که در همین گفت‌وگو هست یکسان است؛ نسخهٔ تکراری اضافه نشد.', en: 'This file has the same content as a document already in this conversation; the copy was not added.' },
   too_many_files: { fa: 'تعداد فایل‌های این گفت‌وگو به سقف رسیده است.', en: 'This conversation has reached its file limit.' },
   invalid_document: { fa: 'این فایل قابل پردازش نیست.', en: 'This file could not be processed.' },
 };

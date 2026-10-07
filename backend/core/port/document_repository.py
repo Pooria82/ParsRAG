@@ -52,6 +52,12 @@ class DocumentRepository(Protocol):
         """
         ...
 
+    def find_document_by_content(
+        self, session_id: str, content_sha256: str
+    ) -> str | None:
+        """Return the name of a session document with these exact bytes, if any."""
+        ...
+
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes belonging to the given session.
 
