@@ -181,6 +181,18 @@ export class ParsRagApiClient {
     return result;
   }
 
+  /** Questions the session's selected documents can answer (may be empty). */
+  async suggestions(sessionId: string, language: 'fa' | 'en', files: string[], signal?: AbortSignal): Promise<string[]> {
+    const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}/suggestions`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language, files }), signal,
+    });
+    if (!response.ok) throw await failure(response);
+    const payload: unknown = await response.json();
+    const questions = typeof payload === 'object' && payload !== null ? (payload as { questions?: unknown }).questions : undefined;
+    return Array.isArray(questions) ? questions.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).slice(0, 3) : [];
+  }
+
   async conversationTitle(prompt: string, language: 'fa' | 'en', signal?: AbortSignal): Promise<string> {
     const response = await fetch(this.url('/conversations/title'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

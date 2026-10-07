@@ -24,6 +24,7 @@ from backend.api.dependencies import (
     get_read_model_configuration,
     get_read_query_progress,
     get_reuse_document,
+    get_suggest_questions,
     require_runtime_ready,
 )
 from backend.api.streaming import event_stream
@@ -32,6 +33,7 @@ from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsComman
 from backend.core.dto.input.model import (
     ConversationTitleRequest,
     ModelConfigurationRequest,
+    QuestionSuggestionRequest,
 )
 from backend.core.dto.input.query import QueryRequest
 from backend.core.dto.output.capabilities import AppCapabilitiesResponse
@@ -42,6 +44,7 @@ from backend.core.dto.output.model import (
     ConversationTitleResponse,
     ModelConfigurationResponse,
     OllamaModel,
+    QuestionSuggestionResponse,
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
@@ -53,6 +56,7 @@ from backend.core.use_case.model.list_ollama_models import ListOllamaModels
 from backend.core.use_case.model.read_model_configuration import (
     ReadModelConfiguration,
 )
+from backend.core.use_case.model.suggest_questions import SuggestQuestions
 from backend.core.use_case.query.answer_query import AnswerQuery
 from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
@@ -195,6 +199,19 @@ def reuse_session_document(
     use_case: ReuseDocument = Depends(get_reuse_document),  # noqa: B008
 ) -> ReusedDocumentResponse:
     """Reuse a prior session's indexed vectors without storing raw upload bytes."""
+    return use_case.execute(session_id, request)
+
+
+@router.post(
+    "/sessions/{session_id}/suggestions", response_model=QuestionSuggestionResponse
+)
+def suggest_session_questions(
+    session_id: str,
+    request: QuestionSuggestionRequest,
+    _ready: None = Depends(require_runtime_ready),
+    use_case: SuggestQuestions = Depends(get_suggest_questions),  # noqa: B008
+) -> QuestionSuggestionResponse:
+    """Propose questions the session's documents can answer."""
     return use_case.execute(session_id, request)
 
 

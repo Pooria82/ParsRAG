@@ -44,3 +44,9 @@ class LlamaIndexModelGateway:
     def generate_title(self, prompt: str, language: Literal["fa", "en"]) -> str:
         """Generate a sanitized short title with the active model."""
         return factory.generate_conversation_title(prompt, language)
+
+    def suggest_questions(
+        self, excerpts: list[str], language: Literal["fa", "en"]
+    ) -> list[str]:
+        """Generate sanitized document-specific questions with the active model."""
+        return factory.suggest_document_questions(excerpts, language)

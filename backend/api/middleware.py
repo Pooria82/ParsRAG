@@ -128,7 +128,9 @@ class TrustedOriginMiddleware:
             or _same_origin(origin, headers.get("host", ""))
         )
         if protects_request and not trusted:
-            response = b'{"detail":"Browser origin is not trusted."}'
+            response = (
+                b'{"detail":"Browser origin is not trusted.","code":"untrusted_origin"}'
+            )
             await send(
                 {
                     "type": "http.response.start",

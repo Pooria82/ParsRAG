@@ -43,6 +43,7 @@ const COMMON: Messages = {
   not_ready: { fa: 'مدل‌ها هنوز در حال آماده‌شدن هستند. کمی صبر کنید.', en: 'Models are still loading. Please wait a moment.' },
   internal_error: { fa: 'خطای داخلی سرویس رخ داد. گزارش‌ها را بررسی کنید.', en: 'An internal service error occurred. Check the logs.' },
   network: { fa: 'ارتباط با سرویس برقرار نشد. اجرای برنامه و اتصال را بررسی کنید.', en: 'Could not reach the service. Check that it is running.' },
+  untrusted_origin: { fa: 'سرویس به نشانی‌ای که این صفحه از آن باز شده اعتماد ندارد. نشانی را به PARSRAG_ALLOWED_ORIGINS بیفزایید یا برنامه را از نشانی خود سرویس باز کنید.', en: 'The service does not trust the address this page was opened from. Add it to PARSRAG_ALLOWED_ORIGINS or open the app from the service’s own address.' },
 };
 
 const NOTICES: Messages = {
