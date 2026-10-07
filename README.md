@@ -312,6 +312,7 @@ load its weights.
 | `PARSRAG_MAX_FILE_BYTES` | `104857600` | 100 MiB per file |
 | `PARSRAG_MAX_BATCH_BYTES` | `524288000` | 500 MiB per request batch |
 | `PARSRAG_MAX_REQUEST_BYTES` | `534773760` | HTTP body ceiling including multipart overhead |
+| `PARSRAG_TMPFS_SIZE` | `576m` | RAM-backed `/tmp` in Docker that holds uploads during a request; keep it at least `PARSRAG_MAX_REQUEST_BYTES` |
 | `OCR_ENABLED` | `1` | Enable Tesseract paths |
 | `OCR_LANGUAGES` | `fas+eng` | OCR language set |
 | `OCR_MAX_PAGES` | `30` | Scanned PDF page bound |
