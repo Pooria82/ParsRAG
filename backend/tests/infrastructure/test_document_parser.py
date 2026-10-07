@@ -72,6 +72,27 @@ def test_scanned_pdf_uses_ocr_when_enabled(
     assert sections[0].text == "متن فارسی اسکن‌شده"
     assert sections[0].metadata == {"page": 1}
     mock_extract_page_text.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_garbled_text_layers_are_replaced_by_ocr(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pages whose fonts lack Unicode maps are read by OCR, not appended to it."""
+    monkeypatch.setenv("OCR_ENABLED", "true")
+    garbled = MagicMock()
+    garbled.get_text.return_value = "ÊÌåÇ ÈÑÇí ÊÓÊ ÇÓÊ " * 5
+    document = MagicMock()
+    document.__iter__.return_value = [garbled]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.return_value = "متن بازخوانی شده"
+
+    sections = parse_document_sections(b"pdf", "broken-font.pdf")
+
+    assert [section.text for section in sections] == ["متن بازخوانی شده"]
     document.close.assert_called_once()
 
 
