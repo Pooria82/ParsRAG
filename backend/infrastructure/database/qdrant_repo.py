@@ -1,4 +1,3 @@
-import hashlib
 import os
 import uuid
 from contextlib import suppress
@@ -11,6 +10,7 @@ from qdrant_client.http import models as qmodels
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.exceptions import VectorDBConnectionError
 from backend.core.port.document_repository import DocumentRepository
+from backend.infrastructure.embedding_profile import active_embedding_profile
 
 
 class QdrantRepository(DocumentRepository):
@@ -50,9 +50,7 @@ class QdrantRepository(DocumentRepository):
         explicit = os.getenv("QDRANT_COLLECTION", "").strip()
         if explicit:
             return explicit
-        model_name = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-base")
-        version = hashlib.sha256(model_name.encode("utf-8")).hexdigest()[:12]
-        return f"parsrag_{version}"
+        return active_embedding_profile().collection_name
 
     def _existing_vector_size(self) -> int | None:
         """Read the vector size advertised by an existing collection."""
@@ -170,7 +168,7 @@ class QdrantRepository(DocumentRepository):
         if file_filter == []:
             return []
         try:
-            query_embedding = Settings.embed_model.get_text_embedding(query)
+            query_embedding = Settings.embed_model.get_query_embedding(query)
 
             if session_id is None:
                 return []
