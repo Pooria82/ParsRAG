@@ -214,19 +214,51 @@ def test_office_images_past_the_limit_are_skipped_not_fatal(
     assert notices == ["ocr_image_limit", "ocr_partial"]
 
 
-def test_missing_tesseract_is_reported_instead_of_skipped() -> None:
-    """OCR that cannot run at all is a setup problem, not a partial result."""
+def test_missing_tesseract_skips_images_with_a_notice() -> None:
+    """Word text is indexed even when the images cannot be read."""
     from backend.infrastructure.parsers.document_parser import _extract_embedded_image
     from backend.infrastructure.parsers.ocr import OCRSettings, OCRUnavailableError
 
-    with (
-        patch(
-            "backend.infrastructure.parsers.document_parser.extract_image_text",
-            side_effect=OCRUnavailableError("missing"),
-        ),
-        pytest.raises(DocumentError) as raised,
+    notices: list[str] = []
+    with patch(
+        "backend.infrastructure.parsers.document_parser.extract_image_text",
+        side_effect=OCRUnavailableError("missing"),
     ):
-        _extract_embedded_image(b"img", OCRSettings(True, "fas", 200, 30, 30), 0, [])
+        result = _extract_embedded_image(
+            b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+        )
+    assert result == ("", 1)
+    assert notices == ["ocr_unavailable"]
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
+def test_missing_tesseract_keeps_text_pages_of_a_pdf(
+    mock_fitz_open: MagicMock,
+    mock_extract_page_text: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One scanned page no longer rejects a PDF whose other pages have text."""
+    from backend.infrastructure.parsers.ocr import OCRUnavailableError
+
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    text_page, scanned_page = MagicMock(), MagicMock()
+    text_page.get_text.return_value = "این صفحه متن کافی دارد و نیازی به OCR ندارد."
+    scanned_page.get_text.return_value = ""
+    document = MagicMock()
+    document.needs_pass = False
+    document.__iter__.return_value = [text_page, scanned_page]
+    mock_fitz_open.return_value = document
+    mock_extract_page_text.side_effect = OCRUnavailableError("missing")
+
+    parsed = parse_document_file(b"pdf", "mixed.pdf")
+
+    assert [section.metadata for section in parsed.sections] == [{"page": 1}]
+    assert parsed.notices == ("ocr_unavailable",)
+
+    document.__iter__.return_value = [scanned_page]
+    with pytest.raises(DocumentError) as raised:
+        parse_document_file(b"pdf", "scan.pdf")
     assert raised.value.code == "ocr_unavailable"
 
 

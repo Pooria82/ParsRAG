@@ -50,6 +50,7 @@ const NOTICES: Messages = {
   ocr_page_limit: { fa: 'فقط صفحه‌های اسکن‌شدهٔ اول خوانده شد (سقف OCR).', en: 'Only the first scanned pages were read (OCR limit).' },
   ocr_image_limit: { fa: 'متن برخی تصویرها خوانده نشد (سقف OCR تصویر).', en: 'Some images were not read (OCR image limit).' },
   ocr_partial: { fa: 'OCR بخشی از صفحه‌ها یا تصویرها را نتوانست بخواند.', en: 'OCR could not read some pages or images.' },
+  ocr_unavailable: { fa: 'OCR نصب نیست؛ صفحه‌ها و تصویرهای اسکن‌شده خوانده نشدند.', en: 'OCR is not installed; scanned pages and images were not read.' },
 };
 
 /** Translate an API error code for an upload, or undefined when unknown. */
