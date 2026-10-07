@@ -246,7 +246,7 @@ support a larger context without layer offload. The overlay sets Ollama's free
 VRAM fit target to zero; remove the overlay or increase
 `OLLAMA_LOW_VRAM_FIT_TARGET` if the desktop needs reserved VRAM.
 
-The app image uses the official PyTorch CUDA 12.4 wheel index. Compose reserves
+The app image uses PyTorch 2.13 with the official CUDA 12.6 wheel index. Compose reserves
 the NVIDIA device for both `app` and `ollama`. See the official
 [Docker Compose GPU guide](https://docs.docker.com/compose/how-tos/gpu-support/),
 [Ollama Docker guide](https://github.com/ollama/ollama/blob/main/docs/docker.mdx),
@@ -262,7 +262,8 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d --build
 ```
 
-It uses the ROCm Ollama image and PyTorch ROCm 6.2 wheels. Check GPU and driver
+It uses the ROCm Ollama image and pins PyTorch 2.6 with ROCm 6.2 wheels until
+the newer ROCm runtime is validated on AMD hardware. Check GPU and driver
 compatibility before deployment; unsupported hardware falls back poorly and
 should use the CPU profile or an API provider.
 

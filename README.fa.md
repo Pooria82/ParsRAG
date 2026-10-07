@@ -244,7 +244,7 @@ docker compose -f compose.yaml -f compose.gpu.yaml -f compose.gpu-low-vram.yaml 
 به حافظه رزروشده نیاز دارد، overlay را بردارید یا
 `OLLAMA_LOW_VRAM_FIT_TARGET` را افزایش دهید.
 
-image برنامه از wheel رسمی PyTorch CUDA 12.4 استفاده می‌کند و Compose کارت
+image برنامه از PyTorch 2.13 و wheel رسمی CUDA 12.6 استفاده می‌کند و Compose کارت
 NVIDIA را برای هر دو سرویس `app` و `ollama` رزرو می‌کند. برای آماده‌سازی میزبان
 به [راهنمای GPU در Docker Compose](https://docs.docker.com/compose/how-tos/gpu-support/)،
 [راهنمای Docker در Ollama](https://github.com/ollama/ollama/blob/main/docs/docker.mdx)
@@ -261,8 +261,9 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d --build
 ```
 
-این حالت از image مخصوص ROCm در Ollama و wheelهای PyTorch ROCm 6.2 استفاده
-می‌کند. سازگاری کارت و درایور را پیش از استقرار بررسی کنید؛ برای سخت‌افزار
+این حالت از image مخصوص ROCm در Ollama و PyTorch 2.6 با wheelهای ROCm 6.2 استفاده
+می‌کند تا نسخهٔ جدیدتر ROCm روی سخت‌افزار AMD آزموده شود. سازگاری کارت و درایور را
+پیش از استقرار بررسی کنید؛ برای سخت‌افزار
 پشتیبانی‌نشده از پروفایل CPU یا API مدل استفاده کنید.
 
 برنامه در `http://127.0.0.1:8000` یا پورت `PARSRAG_PORT` در دسترس است.
