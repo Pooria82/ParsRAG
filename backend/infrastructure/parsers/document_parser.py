@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from html.parser import HTMLParser
 from typing import Any, Protocol
 
@@ -165,7 +166,7 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
             "Corrupted or invalid DOCX document.", "corrupt_file"
         ) from exc
     settings = OCRSettings.from_environment()
-    sections: list[ParsedSection] = []
+    builder = _DocxSectionBuilder()
     paragraph = 0
     ocr_images = 0
     for section_index, child in enumerate(
@@ -173,25 +174,116 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
     ):
         if isinstance(child, CT_P):
             paragraph_object = Paragraph(child, document)
-            parts = (
-                [paragraph_object.text.strip()] if paragraph_object.text.strip() else []
-            )
+            images: list[str] = []
             if settings.enabled:
                 for image in _docx_paragraph_images(paragraph_object, document):
-                    text, ocr_images = _extract_embedded_image(
+                    recognized, ocr_images = _extract_embedded_image(
                         image, settings, ocr_images, notices
                     )
-                    if text:
-                        parts.append(text)
-            value = "\n\n".join(parts).strip()
-            if value:
+                    images.append(recognized)
+            if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
-                sections.append(ParsedSection(value, {"paragraph": paragraph}))
         elif isinstance(child, CT_Tbl):
             value = _format_docx_table(Table(child, document)).strip()
             if value:
-                sections.append(ParsedSection(value, {"section": section_index}))
-    return sections
+                builder.table(value, section_index)
+    return builder.finish()
+
+
+# Word paragraphs are often a single line; one chunk per paragraph produced
+# 9-18 word chunks that lost their context. Paragraphs under the same heading
+# are grouped up to roughly one chunk, and every group carries its heading path.
+_MAX_SECTION_WORDS = 180
+_MAX_HEADING_WORDS = 25
+_HEADING_STYLE = re.compile(r"^(?:heading|title|عنوان)\s*(\d*)$", re.IGNORECASE)
+
+
+def _docx_heading_level(paragraph: Paragraph) -> int | None:
+    """Return 0 for a title, N for "Heading N", or None for body text."""
+    style = paragraph.style
+    while style is not None:
+        match = _HEADING_STYLE.match((style.name or "").strip())
+        if match:
+            return int(match.group(1)) if match.group(1) else 0
+        style = style.base_style
+    outline = paragraph._p.xpath("./w:pPr/w:outlineLvl/@w:val")
+    return int(outline[0]) + 1 if outline else None
+
+
+class _DocxSectionBuilder:
+    """Group body paragraphs under their headings into chunk-sized sections."""
+
+    def __init__(self) -> None:
+        self.sections: list[ParsedSection] = []
+        self.headings: dict[int, str] = {}
+        self.parts: list[str] = []
+        self.words = 0
+        self.first = 0
+        self.last = 0
+
+    def _path(self) -> str:
+        return " › ".join(self.headings[level] for level in sorted(self.headings))
+
+    def _with_path(self, body: str) -> str:
+        path = self._path()
+        return f"{path}\n{body}" if path else body
+
+    def flush(self) -> None:
+        if not self.parts:
+            return
+        metadata = {"paragraph": self.first}
+        if self.last > self.first:
+            metadata["paragraph_end"] = self.last
+        self.sections.append(
+            ParsedSection(self._with_path("\n".join(self.parts)), metadata)
+        )
+        self.parts, self.words = [], 0
+
+    def heading(self, level: int, text: str) -> None:
+        self.flush()
+        self.headings = {
+            depth: title for depth, title in self.headings.items() if depth < level
+        }
+        self.headings[level] = text
+
+    def paragraph(self, text: str, number: int) -> None:
+        words = len(text.split())
+        if self.parts and self.words + words > _MAX_SECTION_WORDS:
+            self.flush()
+        if not self.parts:
+            self.first = number
+        self.parts.append(text)
+        self.words += words
+        self.last = number
+
+    def add(self, paragraph: Paragraph, images: list[str], number: int) -> bool:
+        """Add one Word paragraph and its OCR'd images; return whether it had text."""
+        text = paragraph.text.strip()
+        recognized = "\n\n".join(image for image in images if image).strip()
+        if not text and not recognized:
+            return False
+        level = _docx_heading_level(paragraph) if text else None
+        if level is not None and len(text.split()) <= _MAX_HEADING_WORDS:
+            self.heading(level, text)
+            if recognized:
+                self.paragraph(recognized, number)
+        else:
+            body = "\n\n".join(part for part in (text, recognized) if part)
+            self.paragraph(body, number)
+        return True
+
+    def table(self, text: str, position: int) -> None:
+        self.flush()
+        self.sections.append(
+            ParsedSection(self._with_path(text), {"section": position})
+        )
+
+    def finish(self) -> list[ParsedSection]:
+        self.flush()
+        if not self.sections and self.headings:
+            # A document of headings only still has searchable text.
+            self.sections.append(ParsedSection(self._path(), {"paragraph": 1}))
+        return self.sections
 
 
 def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:

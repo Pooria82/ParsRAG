@@ -55,7 +55,7 @@ flowchart LR
 | Format | Section unit | Metadata |
 | --- | --- | --- |
 | PDF | Page | `page` |
-| DOCX | Paragraph (with embedded-image OCR) or table | `paragraph` or `section` |
+| DOCX | Paragraphs under the same heading, grouped up to about 180 words and prefixed with the heading path (`Title › Heading 1 › …`); tables separately, also with the path. Embedded images are OCR'd in place | `paragraph` (+ `paragraph_end`) or `section` |
 | PPTX | Slide, including tables | `slide` |
 | Images | Whole image (OCR) | `page` = 1 |
 | Text, Markdown, JSON, CSV, HTML/XML, YAML, config, logs, code | Whole file or normalized blocks | `section` |
