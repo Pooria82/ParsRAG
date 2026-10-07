@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: source available" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
-  <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
+  <img alt="React 19" src="https://img.shields.io/badge/react-19-4B6BFB.svg">
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
 </p>
 

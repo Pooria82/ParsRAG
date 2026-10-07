@@ -1,18 +1,45 @@
 version: 2
+# Updates target develop (the integration branch) so they run the current CI
+# and reach main only through a release pull request.
+# requirements.lock is not maintained by Dependabot: when a Python update
+# raises a floor above a locked pin, bump that pin in the same pull request.
 updates:
   - package-ecosystem: pip
     directory: "/"
+    target-branch: develop
     schedule: { interval: weekly }
     groups:
-      python-runtime: { patterns: ["*"] }
+      python-runtime:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: npm
     directory: "/frontend"
+    target-branch: develop
     schedule: { interval: weekly }
     groups:
-      frontend-runtime: { patterns: ["*"] }
+      # Major upgrades (React, TypeScript, icon sets) arrive as separate pull
+      # requests so routine patches are never blocked behind migration work.
+      frontend-runtime:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: develop
     schedule: { interval: monthly }
+    groups:
+      github-actions:
+        patterns: ["*"]
+
   - package-ecosystem: docker
     directory: "/"
+    target-branch: develop
     schedule: { interval: monthly }
+    ignore:
+      # Build stages track Node.js LTS lines only.
+      - dependency-name: "node"
+        versions: ["23.x", "25.x", "27.x", "29.x"]
+      # The backend supports Python 3.12 only (pyproject requires-python).
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
