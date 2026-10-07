@@ -12,7 +12,7 @@ type TransitionDocument = Document & {
 };
 
 export function useLanguageTransition(onChange: (language: Language) => void) {
-  const activeTransition = useRef<ViewTransition>();
+  const activeTransition = useRef<ViewTransition | undefined>(undefined);
   return useCallback((language: Language) => {
     const root = document.documentElement;
     const transitionDocument = document as TransitionDocument;

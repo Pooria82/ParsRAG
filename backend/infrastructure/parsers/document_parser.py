@@ -3,7 +3,7 @@ import json
 from html.parser import HTMLParser
 from typing import Any, Protocol
 
-import fitz  # type: ignore  # PyMuPDF
+import pymupdf
 from docx import Document
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
@@ -394,7 +394,7 @@ def _pdf_page_text(
 def _parse_pdf_sections(file_bytes: bytes) -> list[ParsedSection]:
     """Extract ordered PDF pages and OCR image pages with sparse text layers."""
     try:
-        document = fitz.open(stream=file_bytes, filetype="pdf")
+        document = pymupdf.open(stream=file_bytes, filetype="pdf")
     except Exception as exc:
         raise ValueError("Corrupted or invalid PDF document.") from exc
 

@@ -8,22 +8,24 @@
 
 <p align="center">
   <strong>Private document intelligence, designed for Persian.</strong><br>
-  Ask traceable questions across Persian and English documents.
+  Chat with Persian (Farsi) and English documents and get cited, traceable answers.
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: source available" src="https://img.shields.io/badge/license-source--available-8B5E3C.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-315B7D.svg">
-  <img alt="React 18" src="https://img.shields.io/badge/react-18-4B6BFB.svg">
+  <img alt="React 19" src="https://img.shields.io/badge/react-19-4B6BFB.svg">
   <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg">
 </p>
 
 ParsRAG is a bilingual, offline-first retrieval-augmented generation (RAG)
-workspace for Persian and English document Q&A. Parsing,
-OCR, embeddings, and vector search run on the host. Generation can use local
-Ollama, a private OpenAI-compatible endpoint, or an external API when local
-hardware is unavailable. Every conversation has its own documents, retrieval
-scope, answer branches, sources, and deletion lifecycle.
+workspace for chatting with Persian (Farsi) and English documents: PDF, Word
+(DOCX), PowerPoint (PPTX), scanned pages, images, and text files. Parsing,
+Tesseract OCR, multilingual-e5 embeddings, LlamaIndex retrieval, and Qdrant
+vector search run on the host. Answers come from a local LLM through Ollama, a
+private OpenAI-compatible endpoint, or an external API when local hardware is
+unavailable. Every conversation has its own documents, retrieval scope, answer
+branches, cited sources, and deletion lifecycle.
 
 ## Interface preview
 
@@ -250,7 +252,7 @@ support a larger context without layer offload. The overlay sets Ollama's free
 VRAM fit target to zero; remove the overlay or increase
 `OLLAMA_LOW_VRAM_FIT_TARGET` if the desktop needs reserved VRAM.
 
-The app image uses the official PyTorch CUDA 12.4 wheel index. Compose reserves
+The app image uses PyTorch 2.13 with the official CUDA 12.6 wheel index. Compose reserves
 the NVIDIA device for both `app` and `ollama`. See the official
 [Docker Compose GPU guide](https://docs.docker.com/compose/how-tos/gpu-support/),
 [Ollama Docker guide](https://github.com/ollama/ollama/blob/main/docs/docker.mdx),
@@ -266,7 +268,8 @@ docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config 
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model up -d --build
 ```
 
-It uses the ROCm Ollama image and PyTorch ROCm 6.2 wheels. Check GPU and driver
+It uses the ROCm Ollama image and pins PyTorch 2.6 with ROCm 6.2 wheels until
+the newer ROCm runtime is validated on AMD hardware. Check GPU and driver
 compatibility before deployment; unsupported hardware falls back poorly and
 should use the CPU profile or an API provider.
 

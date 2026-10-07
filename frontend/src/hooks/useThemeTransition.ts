@@ -17,7 +17,7 @@ export interface ThemeOrigin {
 }
 
 export function useThemeTransition(onChange: (theme: Theme) => void) {
-  const activeTransition = useRef<ThemeTransition>();
+  const activeTransition = useRef<ThemeTransition | undefined>(undefined);
 
   return useCallback((theme: Theme, origin?: ThemeOrigin) => {
     const root = document.documentElement;

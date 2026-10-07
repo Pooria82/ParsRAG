@@ -7,7 +7,7 @@ from io import BytesIO
 from math import ceil, isfinite
 from typing import Protocol
 
-import fitz  # type: ignore  # PyMuPDF has no complete type information.
+import pymupdf
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 
@@ -126,7 +126,7 @@ def extract_page_text(
     pixels = ceil(width * active.dpi / 72) * ceil(height * active.dpi / 72)
     if pixels > active.max_image_pixels:
         raise OCRError("The PDF page exceeds the configured OCR pixel limit.")
-    pixmap = page.get_pixmap(dpi=active.dpi, colorspace=fitz.csRGB, alpha=False)
+    pixmap = page.get_pixmap(dpi=active.dpi, colorspace=pymupdf.csRGB, alpha=False)
     image = pixmap.tobytes("png")
     return _run_tesseract(image, active)
 
