@@ -11,9 +11,12 @@ interface ChatFeedProps {
   onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
+  /** Text streamed so far; `messageId` when it replaces an answer being retried. */
+  streamingDraft?: { messageId?: string; content: string };
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft }: ChatFeedProps) {
+  const liveDraft = isGenerating && streamingDraft?.content ? streamingDraft : undefined;
   const t = translations[language];
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -37,7 +40,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       if (element) element.scrollTop = element.scrollHeight;
     } else setShowJump(true);
     previousCount.current = messages.length;
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, liveDraft?.content]);
   const copy = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.content);
@@ -54,7 +57,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       <div className="message-list" role="log" aria-label={t.conversations} aria-live="polite" aria-relevant="additions">
         {messages.map(message => message.role === 'system'
           ? <p key={message.id} className="system-message">{message.content}</p>
-          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '')} aria-label={message.role === 'user' ? t.you : t.appName}>
+          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '') + (liveDraft?.messageId === message.id ? ' is-streaming' : '')} aria-label={message.role === 'user' ? t.you : t.appName} aria-busy={liveDraft?.messageId === message.id || undefined}>
             {message.role === 'user' ? <>
               {editing?.id === message.id ? <form className="prompt-edit" onSubmit={event => { event.preventDefault(); const value = editing.value.trim(); if (value && value !== message.content) onEditPrompt(message.id, value); setEditing(null); }}>
                 <textarea autoFocus value={editing.value} onChange={event => setEditing({ id: message.id, value: event.target.value })} aria-label={t.editPrompt} />
@@ -66,7 +69,9 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </div>
             </> : <>
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong><span className="message-time">{new Date(message.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</span></div>
-              {message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
+              {liveDraft?.messageId === message.id ? <div className="prose-content" dir="auto">
+                <ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage} />
+              </div> : message.error ? <div className="message-error-body" dir="auto"><AlertCircle size={18} /><p>{message.content}</p></div> :
                 <div className="prose-content" dir="auto">
                   <ProgressiveMarkdown content={message.content} active={revealingMessageId === message.id}
                     externalImageLabel={t.externalImage} onComplete={onRevealComplete}
@@ -75,7 +80,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                     citeLabel={n => t.openSource.replace('{n}', n.toLocaleString(language))}
                     formatNumber={n => n.toLocaleString(language)} />
                 </div>}
-              {!message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
+              {liveDraft?.messageId !== message.id && !message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
                 focus={focusedSource?.messageId === message.id ? focusedSource.n : undefined}
                 focusToken={focusedSource?.messageId === message.id ? focusedSource.token : undefined} /> : null}
               {!message.sources?.length && Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>
@@ -93,7 +98,11 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               </div>
             </>}
           </article>)}
-        {isGenerating && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
+        {liveDraft && !liveDraft.messageId && <article className="message message-assistant is-streaming" aria-label={t.appName} aria-busy="true">
+          <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong></div>
+          <div className="prose-content" dir="auto"><ProgressiveMarkdown content={liveDraft.content} active={false} streaming externalImageLabel={t.externalImage} /></div>
+        </article>}
+        {isGenerating && !liveDraft && <QueryProgress language={language} mode={activeMode} stage={queryStage ?? 'understanding'} />}
       </div>
       {copyError && <p role="status" className="copy-error">{t.copyFailed}</p>}
     </div>
