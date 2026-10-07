@@ -10,6 +10,7 @@ from backend.core.dto.output.query import QueryResponse
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.port.query_strategy import QueryStrategy
+from backend.core.service.context_budget import fit_to_context, model_context_window
 from backend.core.service.retrieval_optimizer import (
     RetrievalOptimizer,
     configured_depth,
@@ -252,6 +253,11 @@ class HybridRAGStrategy(QueryStrategy):
             else 3,
         )
 
+        final_source_nodes = fit_to_context(
+            final_source_nodes,
+            context_window=model_context_window(self.llm),
+            fixed_prompt=self.prompt_template.format(context_str="", query=query),
+        )
         context_str = format_multi_doc_context(final_source_nodes)
         prompt = self.prompt_template.format(context_str=context_str, query=query)
 
