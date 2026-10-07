@@ -26,6 +26,18 @@ and this project uses Semantic Versioning.
 - Scrollbars across the workspace, panels, menus, and long-form content now
   share the active color theme and remain usable in light and dark modes.
 
+### Changed
+
+- The backend core is organized as ports and adapters: Protocol ports,
+  one use case per operation, input/output DTOs, and a single composition
+  root. The HTTP contract is unchanged; OpenAPI now documents typed responses
+  for health, ingestion, progress, reuse, and deletion endpoints.
+
+### Documentation
+
+- Added ARCHITECTURE.md, DATA.md, ADR 08, and blueprints for data flow, use
+  cases, and DTOs.
+
 ### Upgrade note
 
 - Remove and upload previously indexed PDFs again to gain page-boundary chunks
