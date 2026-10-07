@@ -19,6 +19,7 @@ import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, Q
 import { translations } from './i18n/translations';
 import { appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
+import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -420,7 +421,14 @@ export function App() {
         else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);
         else updateSettings(updated);
       }} busy={busy}
-      onClearAllData={clearAllData} />
+      onClearAllData={clearAllData}
+      onExportBackup={() => downloadText(`parsrag-backup-${new Date().toISOString().slice(0, 10)}.json`, createBackup(sessionsRef.current, settings), 'application/json')}
+      onImportBackup={async file => {
+        const backup = parseBackup(await file.text(), window.location.origin);
+        const merged = mergeSessions(sessionsRef.current, backup.sessions);
+        setSessions(merged.sessions);
+        return { added: merged.added, updated: merged.updated };
+      }} />
     <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} onStageChange={changeTourStage} activeStage={tourStage} />
   </div>;
 }

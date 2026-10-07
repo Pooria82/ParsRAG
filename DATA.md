@@ -175,9 +175,15 @@ recorded in [ADR 02](.context/02_Architecture_and_Patterns.md).
 | Clear all data | Deletes every known session in Qdrant before clearing browser storage, and reports partial failures |
 | Change embedding model | New collection; re-upload documents |
 
-There is no automatic expiry. For a full backup, snapshot the `qdrant_data`
-volume and export browser storage together, because conversations reference
-session IDs stored in Qdrant. Removing the volume securely deletes all vectors
+There is no automatic expiry. **Settings → Model and data → Conversation
+backup** downloads every conversation, its answer sources, and the interface
+preferences as a versioned JSON file (`parsrag-workspace`, version 1; no API
+key, no backend address) and restores it, adding new conversations and
+replacing a local copy only when the imported one is newer. Each conversation
+can also be downloaded as Markdown from its menu. Documents are not part of
+the file: for a full backup, also snapshot the `qdrant_data` volume, because
+conversations reference session IDs stored in Qdrant; on another machine,
+upload the documents again. Removing the volume securely deletes all vectors
 and chunk text.
 
 ## 7. Configuration reference
