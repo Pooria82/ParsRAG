@@ -2,6 +2,12 @@
   "name": "parsrag-frontend",
   "private": true,
   "version": "1.0.0",
+  "description": "Bilingual Persian (Farsi) and English workspace for offline-first document RAG",
+  "keywords": ["persian", "farsi", "rag", "document-qa", "ocr", "ollama", "local-llm"],
+  "author": "Pooria Madani",
+  "homepage": "https://github.com/Pooria82/ParsRAG#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Pooria82/ParsRAG.git", "directory": "frontend" },
+  "bugs": { "url": "https://github.com/Pooria82/ParsRAG/issues" },
   "type": "module",
   "scripts": {
     "dev": "vite",

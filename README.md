@@ -8,7 +8,7 @@
 
 <p align="center">
   <strong>Private document intelligence, designed for Persian.</strong><br>
-  Ask traceable questions across Persian and English documents.
+  Chat with Persian (Farsi) and English documents and get cited, traceable answers.
 </p>
 
 <p align="center">
@@ -19,11 +19,13 @@
 </p>
 
 ParsRAG is a bilingual, offline-first retrieval-augmented generation (RAG)
-workspace for Persian and English document Q&A. Parsing,
-OCR, embeddings, and vector search run on the host. Generation can use local
-Ollama, a private OpenAI-compatible endpoint, or an external API when local
-hardware is unavailable. Every conversation has its own documents, retrieval
-scope, answer branches, sources, and deletion lifecycle.
+workspace for chatting with Persian (Farsi) and English documents: PDF, Word
+(DOCX), PowerPoint (PPTX), scanned pages, images, and text files. Parsing,
+Tesseract OCR, multilingual-e5 embeddings, LlamaIndex retrieval, and Qdrant
+vector search run on the host. Answers come from a local LLM through Ollama, a
+private OpenAI-compatible endpoint, or an external API when local hardware is
+unavailable. Every conversation has its own documents, retrieval scope, answer
+branches, cited sources, and deletion lifecycle.
 
 ## Interface preview
 
