@@ -17,7 +17,7 @@ covered in [ARCHITECTURE.md](ARCHITECTURE.md); trust boundaries in
 
 | Data | Created by | Stored in | Leaves the workstation? |
 | --- | --- | --- | --- |
-| Uploaded file bytes | Browser upload | Process memory only, during ingestion | No — raw files are never written to disk or Qdrant |
+| Uploaded file bytes | Browser upload | Process memory and the RAM-backed `/tmp` (Docker), only while the upload request runs | No — raw files are never written to disk or Qdrant in Docker. A source install spools uploads above 1 MiB to the OS temporary directory and deletes them when the request ends |
 | Parsed text chunks and metadata | `IngestDocuments` | Qdrant payload (`text`, `filename`, location fields, `session_id`) | No |
 | Embedding vectors | Local `multilingual-e5-base` | Qdrant vectors | No |
 | Conversations, branches, preferences | Frontend | Browser `localStorage` | No |

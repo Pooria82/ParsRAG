@@ -316,6 +316,7 @@ docker compose down
 | `PARSRAG_MAX_FILE_BYTES` | `104857600` | ۱۰۰ MiB برای هر فایل |
 | `PARSRAG_MAX_BATCH_BYTES` | `524288000` | ۵۰۰ MiB برای هر batch |
 | `PARSRAG_MAX_REQUEST_BYTES` | `534773760` | سقف body شامل سربار multipart |
+| `PARSRAG_TMPFS_SIZE` | `576m` | حجم `/tmp` مبتنی بر RAM در Docker که فایل‌ها هنگام درخواست آپلود در آن نگه داشته می‌شوند؛ دست‌کم به اندازهٔ `PARSRAG_MAX_REQUEST_BYTES` |
 | `OCR_ENABLED` | `1` | فعال‌سازی مسیرهای Tesseract |
 | `OCR_LANGUAGES` | `fas+eng` | زبان‌های OCR |
 | `OCR_DPI` | `200` | وضوح تصویرسازی صفحه‌های اسکن‌شده PDF |
