@@ -5,6 +5,12 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- English questions get English answers in Hybrid and open-chat modes; they
+  were often answered in Persian. Every prompt now names the answer language,
+  detected from the question.
+
 ## [1.0.0] - 2026-10-08
 
 ### Added

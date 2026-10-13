@@ -31,6 +31,7 @@ from backend.core.strategies.prompt_rules import (
     CODE_VERIFICATION_RULES,
     FORMATTING_RULES,
     LANGUAGE_RULES,
+    answer_language_rule,
 )
 
 STRICT_REFUSAL_FA = "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
@@ -63,6 +64,8 @@ Context:
 {context_str}
 
 Query: {query}
+
+{answer_language}
 Answer:"""
 )
 
@@ -291,13 +294,18 @@ class StrictRAGStrategy(GeneratingStrategy):
             )
 
         # 5. Build Grouped Multi-Document Context within the model's window
+        answer_language = answer_language_rule(query)
         filtered_nodes = order_by_document(
             fit_to_context(
                 filtered_nodes,
                 context_window=model_context_window(self.llm),
-                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+                fixed_prompt=self.prompt_template.format(
+                    context_str="", query=query, answer_language=answer_language
+                ),
             )
         )
         context_str = format_multi_doc_context(filtered_nodes)
-        prompt = self.prompt_template.format(context_str=context_str, query=query)
+        prompt = self.prompt_template.format(
+            context_str=context_str, query=query, answer_language=answer_language
+        )
         return PreparedAnswer(prompt=prompt, sources=filtered_nodes)

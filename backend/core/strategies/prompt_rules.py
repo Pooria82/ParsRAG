@@ -6,6 +6,8 @@ LlamaIndex leaves unknown ``{...}`` placeholders untouched, so LaTeX braces
 are written literally.
 """
 
+import re
+
 LANGUAGE_RULES = """\
 LANGUAGE RULES:
 1. Answer in the natural language of the user's question: Persian (فارسی) questions get a Persian answer, English questions an English answer.
@@ -24,6 +26,38 @@ CITATION RULES:
 - Cite only numbers that appear in the context. Never invent a number, a file name, or a page; do not write file names or page numbers as citations.
 - A page-boundary excerpt joins the end of one page to the start of the next. Read both parts together.
 - If the user asks about a specific document, focus on that document and name it when relevant."""
+
+_PERSIAN_WORD = re.compile(r"[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]+")
+_LATIN_WORD = re.compile(r"[A-Za-z]+")
+# Code spans, @{file} mentions, and links say nothing about the question's language.
+_NEUTRAL = re.compile(r"`[^`]*`|@\{(?:\\.|[^}])*\}|https?://\S+")
+
+
+def question_language(question: str) -> str:
+    """Return ``"fa"`` or ``"en"``: the language the answer should be written in.
+
+    English technical terms are common inside Persian questions, so a question
+    counts as Persian when Persian words make up more than a third of its words.
+    """
+    text = _NEUTRAL.sub(" ", question)
+    persian = len(_PERSIAN_WORD.findall(text))
+    latin = len(_LATIN_WORD.findall(text))
+    if not persian:
+        return "en" if latin else "fa"
+    return "fa" if persian * 2 > latin else "en"
+
+
+def answer_language_rule(question: str) -> str:
+    """An explicit instruction naming the answer language, placed after the question.
+
+    The general language rules and the bilingual examples in the prompt are not
+    enough on their own: models answered English questions in Persian in
+    Hybrid and open-chat modes.
+    """
+    if question_language(question) == "fa":
+        return "ANSWER LANGUAGE: The question is in Persian. Write the whole answer in Persian (فارسی)."
+    return "ANSWER LANGUAGE: The question is in English. Write the whole answer in English, even though the documents or examples may be in Persian."
+
 
 CODE_VERIFICATION_RULES = """\
 CODE AND CONCEPT CHECKS:

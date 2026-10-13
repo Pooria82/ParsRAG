@@ -5,7 +5,11 @@ from llama_index.core.prompts import PromptTemplate
 from backend.core.dto.output.query import PreparedAnswer
 from backend.core.port.progress_tracker import ProgressCallback
 from backend.core.strategies.generation import GeneratingStrategy
-from backend.core.strategies.prompt_rules import FORMATTING_RULES, LANGUAGE_RULES
+from backend.core.strategies.prompt_rules import (
+    FORMATTING_RULES,
+    LANGUAGE_RULES,
+    answer_language_rule,
+)
 
 LLM_ONLY_PROMPT_TEMPLATE = (
     """\
@@ -18,6 +22,8 @@ You are a helpful assistant. Answer the user's question directly from your gener
     + """
 
 Query: {query}
+
+{answer_language}
 Answer:"""
 )
 
@@ -58,4 +64,8 @@ class LLMOnlyStrategy(GeneratingStrategy):
         Returns:
             PreparedAnswer: The prompt; the question is already condensed.
         """
-        return PreparedAnswer(prompt=self.prompt_template.format(query=query))
+        return PreparedAnswer(
+            prompt=self.prompt_template.format(
+                query=query, answer_language=answer_language_rule(query)
+            )
+        )

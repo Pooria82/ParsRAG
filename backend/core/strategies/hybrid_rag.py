@@ -25,6 +25,7 @@ from backend.core.strategies.prompt_rules import (
     CODE_VERIFICATION_RULES,
     FORMATTING_RULES,
     LANGUAGE_RULES,
+    answer_language_rule,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = (
@@ -51,6 +52,8 @@ Context:
 {context_str}
 
 Query: {query}
+
+{answer_language}
 Answer:"""
 )
 
@@ -242,13 +245,18 @@ class HybridRAGStrategy(GeneratingStrategy):
             else 3,
         )
 
+        answer_language = answer_language_rule(query)
         final_source_nodes = order_by_document(
             fit_to_context(
                 final_source_nodes,
                 context_window=model_context_window(self.llm),
-                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+                fixed_prompt=self.prompt_template.format(
+                    context_str="", query=query, answer_language=answer_language
+                ),
             )
         )
         context_str = format_multi_doc_context(final_source_nodes)
-        prompt = self.prompt_template.format(context_str=context_str, query=query)
+        prompt = self.prompt_template.format(
+            context_str=context_str, query=query, answer_language=answer_language
+        )
         return PreparedAnswer(prompt=prompt, sources=final_source_nodes)
