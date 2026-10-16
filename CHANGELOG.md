@@ -23,6 +23,9 @@ and this project uses Semantic Versioning.
   the file that holds the answer can provide most excerpts; each other file
   still contributes its best match, and passages repeated across files are
   kept once.
+- Commands and code in one-cell boxes in Word stay with the sentence that
+  introduces them, so questions about them find them.
+- OCR reads text on tinted panels (for example a light-blue status box).
 
 ### Fixed
 
@@ -31,6 +34,8 @@ and this project uses Semantic Versioning.
   detected from the question.
 - The service retries startup when Qdrant is briefly unavailable instead of
   staying not ready until restarted.
+- A question is no longer limited to one file just because it shares an
+  ordinary word with the file name (such as «اول» or «تست»).
 
 ## [1.0.0] - 2026-10-08
 
