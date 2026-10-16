@@ -14,6 +14,8 @@ and this project uses Semantic Versioning.
   introduces it (the end of the paragraph before it, or the slide's text).
 - Word tables are cited by number and the paragraph they follow
   ("paragraph 120 · table 3") instead of an internal element index.
+- When part of a table is retrieved, the rest of the table comes with it, so
+  questions about the largest or smallest value see every row.
 
 ### Improved
 
