@@ -198,6 +198,31 @@ Set the disclosure flag to `1` only after accepting that an external API receive
 prompts and retrieved document excerpts. The Settings screen records the same
 acknowledgement when configuring an API interactively.
 
+Google AI Studio's free tier works through its OpenAI-compatible endpoint
+(the key comes from aistudio.google.com). `gemini-flash-lite-latest` answers
+in a few seconds and has room for everyday use; on a 52-question Persian test
+it answered 83% of questions completely. `gemini-3-flash-preview` is stronger,
+but its free tier allows only about 20 requests a day per model:
+
+```dotenv
+LLM_PROVIDER=api
+LLM_MODEL_NAME=gemini-flash-lite-latest
+MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+MODEL_API_KEY=your-ai-studio-key
+MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
+```
+
+Gemma models (`gemma-4-26b-a4b-it`) also work, but the free tier allows them
+only 16,000 input tokens a minute: set `MODEL_CONTEXT_WINDOW=12000` or lower,
+and expect about one question a minute.
+
+The `models/` prefix that this endpoint requires is added automatically, and
+model reasoning (`<thought>...</thought>`) is removed from answers. Free tiers
+fail some requests with HTTP 500 or 429; ParsRAG retries those up to
+`MODEL_API_MAX_RETRIES` times (default 4), waiting up to a minute for rate
+limits. Prompts sent on a free tier may be used by the provider; avoid it for
+confidential documents.
+
 ```powershell
 docker compose up -d --build
 ```
