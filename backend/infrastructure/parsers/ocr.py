@@ -91,7 +91,7 @@ class OCRSettings:
     dpi: int
     timeout_seconds: int
     max_pages: int
-    max_images: int = 30
+    max_images: int = 200
     max_image_pixels: int = 40_000_000
     min_image_pixels: int = 10_000
     correct_orientation: bool = False
@@ -106,7 +106,7 @@ class OCRSettings:
             dpi=_environment_int("OCR_DPI", 200, 150, 600),
             timeout_seconds=_environment_int("OCR_TIMEOUT_SECONDS", 45, 1, 300),
             max_pages=_environment_int("OCR_MAX_PAGES", 30, 1, 200),
-            max_images=_environment_int("OCR_MAX_IMAGES", 30, 1, 500),
+            max_images=_environment_int("OCR_MAX_IMAGES", 200, 1, 1000),
             max_image_pixels=_environment_int(
                 "OCR_MAX_IMAGE_PIXELS", 40_000_000, 1_000_000, 200_000_000
             ),
