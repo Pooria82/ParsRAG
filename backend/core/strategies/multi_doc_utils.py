@@ -98,10 +98,25 @@ def retrieve_document_nodes(
     minimum_per_file: int,
     document_segments: list[tuple[str, str]] | None = None,
 ) -> list[ExtractedNode]:
-    """Balance normal retrieval or bind explicit question parts to named files."""
+    """Retrieve evidence for a question across the session's documents.
+
+    - Explicit ``@{file}`` segments search each named file for its part.
+    - Questions about all documents (summaries, comparisons) take the same
+      share from every file.
+    - Specific questions search all files together, so the file holding the
+      answer can contribute most of the excerpts, and each other file still
+      contributes its best excerpt. A fixed share per file left a large
+      report three excerpts while short unrelated files took the rest.
+    Identical passages stored in several files (a final report that repeats
+    the phase reports) are kept once.
+    """
     if document_segments:
         targets = document_segments
     elif len(available_files) > 1 and file_filter is None:
+        if not _asks_about_all_documents(query):
+            return _global_with_file_coverage(
+                repo, query, available_files, session_id, total_k
+            )
         targets = [(filename, query) for filename in available_files]
     else:
         return repo.similarity_search(
@@ -116,6 +131,53 @@ def retrieve_document_nodes(
             )
         )
     return nodes
+
+
+def _asks_about_all_documents(query: str) -> bool:
+    """Summaries and comparisons need every document, not the best matches."""
+    lowered = query.lower()
+    return any(indicator in lowered for indicator in _BROAD_INDICATORS)
+
+
+def _global_with_file_coverage(
+    repo: DocumentRepository,
+    query: str,
+    available_files: list[str],
+    session_id: str | None,
+    total_k: int,
+) -> list[ExtractedNode]:
+    """Best excerpts across all files, plus the best of each file not yet present."""
+    nodes = _distinct_passages(
+        repo.similarity_search(query, top_k=total_k, session_id=session_id)
+    )
+    present = {node.metadata.get("filename") for node in nodes}
+    for filename in available_files:
+        if filename not in present:
+            nodes.extend(
+                repo.similarity_search(
+                    query, top_k=1, session_id=session_id, file_filter=[filename]
+                )
+            )
+    return _distinct_passages(nodes)
+
+
+def _passage_key(node: ExtractedNode) -> str:
+    """The excerpt's body without its heading path, ignoring spacing."""
+    lines = node.text.strip().splitlines()
+    body = "\n".join(lines[1:]) if len(lines) > 1 and "›" in lines[0] else node.text
+    return re.sub(r"\s+", "", body)[-400:]
+
+
+def _distinct_passages(nodes: list[ExtractedNode]) -> list[ExtractedNode]:
+    """Drop repeated passages, keeping the higher-scored copy in its place."""
+    best: dict[str, ExtractedNode] = {}
+    for node in nodes:
+        key = _passage_key(node)
+        current = best.get(key)
+        if current is None or (node.score or 0) > (current.score or 0):
+            best[key] = node
+    kept = {id(node) for node in best.values()}
+    return [node for node in nodes if id(node) in kept]
 
 
 def include_tagged_anchors(
