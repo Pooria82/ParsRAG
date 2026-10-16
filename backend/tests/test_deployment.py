@@ -59,6 +59,24 @@ def test_compose_keeps_infrastructure_private_and_persistent() -> None:
     assert "- parsrag_egress" in ollama_service
 
 
+def test_app_can_reach_an_ollama_installed_on_the_host() -> None:
+    """Host Ollama works through .env alone, with no override file."""
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    app = compose.split("\n  app:\n", maxsplit=1)[1].split("\n  qdrant:\n")[0]
+
+    assert 'extra_hosts:\n      - "host.docker.internal:host-gateway"' in app
+    assert 'OLLAMA_BASE_URL: "${OLLAMA_DOCKER_BASE_URL:-http://ollama:11434}"' in app
+    assert 'OLLAMA_INTERNAL_HOST: "${OLLAMA_INTERNAL_HOST:-ollama}"' in app
+    assert 'OLLAMA_ALLOWED_HOSTS: "${OLLAMA_ALLOWED_HOSTS:-}"' in app
+    # The app keeps a route out of the internal-only network to reach the host.
+    assert "- parsrag_egress" in app
+    egress = compose.split("\n  parsrag_egress:\n", maxsplit=1)[1]
+    assert "internal: true" not in egress
+    # Without the local-model profile, nothing waits for the Ollama container.
+    depends_on = app.split("depends_on:", maxsplit=1)[1].split("read_only:")[0]
+    assert "ollama" not in depends_on
+
+
 def test_upload_spool_holds_the_largest_allowed_request() -> None:
     """The default RAM-backed /tmp can hold a full upload request."""
     example = (ROOT / ".env.example").read_text(encoding="utf-8")

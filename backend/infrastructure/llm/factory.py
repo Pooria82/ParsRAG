@@ -3,7 +3,6 @@ import os
 import re
 from threading import RLock
 from typing import Literal
-from urllib.parse import urlparse
 
 import httpx
 import torch
@@ -23,6 +22,7 @@ from backend.infrastructure.llm.config_store import (
 )
 from backend.infrastructure.llm.endpoint_policy import (
     model_api_is_external,
+    require_allowed_ollama_url,
     validate_model_api_url,
 )
 from backend.infrastructure.llm.reasoning import ReasoningFreeOpenAILike
@@ -95,6 +95,16 @@ def ollama_context_length() -> int:
     return _bounded_environment_int("OLLAMA_CONTEXT_LENGTH", 8192, 2048, 131072)
 
 
+def ollama_thinking() -> bool:
+    """Whether Ollama models may reason before answering (``OLLAMA_THINK``).
+
+    Off by default: grounded answers do not need it, and a thinking model
+    (qwen3, qwen3.5, deepseek-r1) can spend the whole answer budget on
+    reasoning and return an empty answer. Models without thinking ignore it.
+    """
+    return os.getenv("OLLAMA_THINK", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def api_context_window() -> int:
     """Context window assumed for OpenAI-compatible models."""
     return _bounded_environment_int("MODEL_CONTEXT_WINDOW", 32768, 2048, 1048576)
@@ -116,6 +126,11 @@ def resolve_embedding_device() -> str:
     return configured
 
 
+def default_ollama_base_url() -> str:
+    """Return the Ollama URL the server was configured with."""
+    return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+
+
 def _environment_configuration() -> ModelConfigurationRequest:
     """Build the initial model configuration from environment variables."""
     provider = (
@@ -127,7 +142,7 @@ def _environment_configuration() -> ModelConfigurationRequest:
         base_url = os.getenv("MODEL_API_BASE_URL") or os.getenv("OPENROUTER_BASE_URL")
         base_url = base_url or "https://openrouter.ai/api/v1"
     else:
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        base_url = default_ollama_base_url()
     return ModelConfigurationRequest(
         provider=provider,
         model_name=os.getenv("LLM_MODEL_NAME", "gemma3:12b"),
@@ -150,29 +165,6 @@ if _configuration.provider is ModelProvider.API:
     )
 
 
-def _is_local_ollama_url(value: str) -> bool:
-    """Checks that Ollama stays on loopback or the Compose service network."""
-    parsed = urlparse(value)
-    allowed_hosts = {
-        "localhost",
-        "127.0.0.1",
-        "::1",
-    }
-    internal_host = os.getenv("OLLAMA_INTERNAL_HOST", "").strip().lower()
-    if internal_host:
-        allowed_hosts.add(internal_host)
-    return (
-        parsed.scheme == "http"
-        and parsed.hostname is not None
-        and parsed.hostname.lower() in allowed_hosts
-        and parsed.username is None
-        and parsed.password is None
-        and parsed.query == ""
-        and parsed.fragment == ""
-        and parsed.path in {"", "/"}
-    )
-
-
 def get_model_configuration() -> ModelConfigurationResponse:
     """Returns the active model settings without returning the API key."""
     with _configuration_lock:
@@ -182,6 +174,7 @@ def get_model_configuration() -> ModelConfigurationResponse:
             base_url=_configuration.base_url,
             api_key_configured=bool(_api_key),
             disclosure_acknowledged=_configuration.disclosure_acknowledged,
+            ollama_base_url=default_ollama_base_url(),
         )
 
 
@@ -279,10 +272,8 @@ def configure_model(
     """Apply a validated model connection for subsequent requests."""
     global _api_key, _configuration, _condense_llm
     base_url = configuration.base_url.rstrip("/")
-    if configuration.provider is ModelProvider.OLLAMA and not _is_local_ollama_url(
-        base_url
-    ):
-        raise ValueError("Ollama must use loopback or the configured internal host.")
+    if configuration.provider is ModelProvider.OLLAMA:
+        require_allowed_ollama_url(base_url)
     if configuration.provider is ModelProvider.API:
         base_url = validate_model_api_url(base_url)
         if (
@@ -325,12 +316,14 @@ def configure_model(
             base_url=base_url,
             request_timeout=llm_request_timeout(),
             context_window=ollama_context_length(),
+            thinking=ollama_thinking(),
         )
         next_condense_llm = Ollama(
             model=configuration.model_name,
             base_url=base_url,
             request_timeout=condense_request_timeout(),
             context_window=ollama_context_length(),
+            thinking=ollama_thinking(),
         )
         configuration = configuration.model_copy(
             update={"api_key": None, "base_url": base_url}
@@ -359,9 +352,13 @@ def _verify_openai_compatible_connection(base_url: str, api_key: str | None) -> 
 
 
 def list_ollama_models(base_url: str) -> list[OllamaModel]:
-    """Lists models installed on the configured Ollama service."""
-    if not _is_local_ollama_url(base_url):
-        raise ValueError("Ollama must use loopback or the configured internal host.")
+    """List models installed on an allowed Ollama service.
+
+    Raises:
+        OllamaURLNotAllowedError: The URL is not an allowed Ollama URL.
+        httpx.HTTPError: Ollama could not be reached or answered with an error.
+    """
+    require_allowed_ollama_url(base_url)
     response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=5.0)
     response.raise_for_status()
     payload = response.json()

@@ -124,10 +124,10 @@ def create_conversation_title(
 
 @router.get("/models/ollama", response_model=list[OllamaModel])
 def read_ollama_models(
-    base_url: str = "http://localhost:11434",
+    base_url: str | None = None,
     use_case: ListOllamaModels = Depends(get_list_ollama_models),  # noqa: B008
 ) -> list[OllamaModel]:
-    """Lists installed models from an Ollama service."""
+    """Lists installed models from an Ollama service (default: the server's)."""
     return use_case.execute(base_url)
 
 

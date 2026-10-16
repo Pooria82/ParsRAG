@@ -14,12 +14,14 @@ from backend.core.domain.exceptions import (
     InvalidInputError,
     ModelConnectionError,
     NotFoundError,
+    OllamaConnectionError,
     PayloadTooLargeError,
     UpstreamServiceError,
 )
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.runtime.query_progress import InMemoryQueryProgress
 from backend.core.runtime.session_locks import SessionLocks
+from backend.infrastructure.llm.endpoint_policy import OllamaURLNotAllowedError
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
 
 
@@ -80,3 +82,62 @@ def test_gateway_hides_client_library_failures() -> None:
         pytest.raises(ModelConnectionError),
     ):
         gateway.list_ollama_models("http://example.com")
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        (OllamaURLNotAllowedError("blocked"), "ollama_url_not_allowed"),
+        (httpx.ConnectError("refused"), "ollama_unreachable"),
+    ],
+)
+def test_gateway_names_why_ollama_could_not_be_used(
+    failure: Exception, code: str
+) -> None:
+    gateway = LlamaIndexModelGateway()
+    ollama = ModelConfigurationRequest(
+        provider=ModelProvider.OLLAMA, model_name="m", base_url="http://localhost:1"
+    )
+
+    with (
+        patch(
+            "backend.infrastructure.llm.factory.configure_model", side_effect=failure
+        ),
+        pytest.raises(OllamaConnectionError) as configured,
+    ):
+        gateway.configure(ollama)
+    with (
+        patch(
+            "backend.infrastructure.llm.factory.list_ollama_models", side_effect=failure
+        ),
+        pytest.raises(OllamaConnectionError) as listed,
+    ):
+        gateway.list_ollama_models("http://localhost:1")
+
+    assert configured.value.code == listed.value.code == code
+
+
+def test_gateway_keeps_api_failures_generic() -> None:
+    api = ModelConfigurationRequest(
+        provider=ModelProvider.API, model_name="m", base_url="https://api.example/v1"
+    )
+    with (
+        patch(
+            "backend.infrastructure.llm.factory.configure_model",
+            side_effect=httpx.ConnectError("refused"),
+        ),
+        pytest.raises(ModelConnectionError) as raised,
+    ):
+        LlamaIndexModelGateway().configure(api)
+    assert not isinstance(raised.value, OllamaConnectionError)
+
+
+def test_gateway_lists_the_server_ollama_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    with patch(
+        "backend.infrastructure.llm.factory.list_ollama_models", return_value=[]
+    ) as listed:
+        LlamaIndexModelGateway().list_ollama_models(None)
+    listed.assert_called_once_with("http://host.docker.internal:11434")

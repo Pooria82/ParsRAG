@@ -1,6 +1,10 @@
 """Use case: verify and activate a new model connection."""
 
-from backend.core.domain.exceptions import InvalidInputError, ModelConnectionError
+from backend.core.domain.exceptions import (
+    InvalidInputError,
+    ModelConnectionError,
+    OllamaConnectionError,
+)
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import ModelConfigurationResponse
 from backend.core.port.model_gateway import ModelGateway
@@ -25,5 +29,6 @@ class ConfigureModel:
             return self._gateway.configure(configuration)
         except ModelConnectionError as exc:
             raise InvalidInputError(
-                "The model connection could not be verified or saved."
+                "The model connection could not be verified or saved.",
+                code=exc.code if isinstance(exc, OllamaConnectionError) else None,
             ) from exc

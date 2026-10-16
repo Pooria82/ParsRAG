@@ -26,7 +26,8 @@ services:
       LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
       LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
       OLLAMA_BASE_URL: "${OLLAMA_DOCKER_BASE_URL:-http://ollama:11434}"
-      OLLAMA_INTERNAL_HOST: ollama
+      OLLAMA_INTERNAL_HOST: "${OLLAMA_INTERNAL_HOST:-ollama}"
+      OLLAMA_ALLOWED_HOSTS: "${OLLAMA_ALLOWED_HOSTS:-}"
       MODEL_API_BASE_URL: "${MODEL_API_BASE_URL:-https://openrouter.ai/api/v1}"
       MODEL_API_KEY: "${MODEL_API_KEY:-}"
       MODEL_API_DISCLOSURE_ACKNOWLEDGED: "${MODEL_API_DISCLOSURE_ACKNOWLEDGED:-0}"
@@ -58,6 +59,7 @@ services:
       HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
       HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-}"
       OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-8192}"
+      OLLAMA_THINK: "${OLLAMA_THINK:-0}"
       MODEL_CONTEXT_WINDOW: "${MODEL_CONTEXT_WINDOW:-32768}"
       LLM_REQUEST_TIMEOUT_SECONDS: "${LLM_REQUEST_TIMEOUT_SECONDS:-120}"
       CONDENSE_TIMEOUT_SECONDS: "${CONDENSE_TIMEOUT_SECONDS:-30}"
@@ -68,6 +70,11 @@ services:
       - model_cache:/home/parsrag/.cache
       - app_config:/var/lib/parsrag
     mem_limit: "${PARSRAG_APP_MEMORY_LIMIT:-6g}"
+    # Lets the app reach an Ollama installed on the host itself
+    # (OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434). Docker Desktop
+    # already provides this name; on Linux, host-gateway maps it to the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       qdrant:
         condition: service_healthy

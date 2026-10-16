@@ -13,6 +13,8 @@ class ModelConfigurationResponse(BaseModel):
     base_url: str
     api_key_configured: bool
     disclosure_acknowledged: bool = False
+    # The server's own Ollama URL, offered when switching from an API to Ollama.
+    ollama_base_url: str | None = None
 
 
 class QuestionSuggestionResponse(BaseModel):

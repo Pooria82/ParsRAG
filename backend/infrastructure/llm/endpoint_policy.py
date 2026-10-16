@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 from urllib.parse import urlparse
 
@@ -69,3 +70,63 @@ def model_api_is_external(value: str) -> bool:
         not (address.is_private or address.is_loopback)
         for address in _resolved_addresses(hostname, urlparse(value).port)
     )
+
+
+# Ollama hosts accepted without configuration: loopback for native runs, the
+# Compose service, and the Docker host (Docker Desktop, or ``host-gateway`` on
+# Linux), so an Ollama already installed on the machine can be used.
+DEFAULT_OLLAMA_HOSTS = frozenset(
+    {"localhost", "127.0.0.1", "::1", "ollama", "host.docker.internal"}
+)
+
+
+class OllamaURLNotAllowedError(ValueError):
+    """An Ollama URL points outside the allowed hosts or carries extra parts."""
+
+
+def allowed_ollama_hosts() -> frozenset[str]:
+    """Return the default Ollama hosts plus the operator's additions.
+
+    ``OLLAMA_ALLOWED_HOSTS`` adds comma-separated host names or addresses;
+    ``OLLAMA_INTERNAL_HOST`` (one host) is still read for compatibility.
+    """
+    configured = ",".join(
+        (os.getenv("OLLAMA_INTERNAL_HOST", ""), os.getenv("OLLAMA_ALLOWED_HOSTS", ""))
+    )
+    extra = {host.strip().strip("[]").lower() for host in configured.split(",")}
+    return DEFAULT_OLLAMA_HOSTS | {host for host in extra if host}
+
+
+def is_allowed_ollama_url(value: str) -> bool:
+    """Whether ``value`` is a plain ``http://host[:port]`` URL on an allowed host."""
+    parsed = urlparse(value.strip())
+    try:
+        parsed.port  # noqa: B018 - raises ValueError for an invalid port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname is not None
+        and parsed.hostname.lower() in allowed_ollama_hosts()
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.params == ""
+        and parsed.query == ""
+        and parsed.fragment == ""
+        and parsed.path in {"", "/"}
+    )
+
+
+def require_allowed_ollama_url(value: str) -> None:
+    """Reject Ollama URLs that are not allowed.
+
+    Raises:
+        OllamaURLNotAllowedError: The URL is not ``http://`` on an allowed host,
+            or it has credentials, a path, a query, or a fragment.
+    """
+    if not is_allowed_ollama_url(value):
+        raise OllamaURLNotAllowedError(
+            "Ollama must use http:// on localhost, ollama, host.docker.internal, "
+            "or a host listed in OLLAMA_ALLOWED_HOSTS, without credentials, path, "
+            "or query."
+        )

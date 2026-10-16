@@ -7,6 +7,18 @@ and this project uses Semantic Versioning.
 
 ### Added
 
+- The app can use the Ollama installed on the computer (Windows, macOS,
+  Linux) with its existing models and GPU. Set
+  `OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434` in `.env` and
+  start without the `local-model` profile. No override file is needed, and the
+  app container needs no GPU. The README's "Complete run" section covers
+  each system, GPU memory, and troubleshooting.
+- `OLLAMA_ALLOWED_HOSTS` adds hosts that Ollama URLs may use.
+  `OLLAMA_INTERNAL_HOST` is still read.
+- Settings explains Ollama failures ("address not allowed", "did not answer")
+  in Persian and English. When an API is active, it offers the server's own
+  Ollama URL.
+
 - Images inside Word and PowerPoint files are cited by number: text read
   from an image is its own excerpt with the image's caption, shown as
   "paragraph 120 · image 7" or "slide 25 · image 9", and answers say when a
@@ -32,6 +44,10 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- Thinking models on Ollama (such as `qwen3.5`) no longer return empty
+  answers. They could spend the whole answer budget on reasoning, so Ollama
+  is now asked not to think unless `OLLAMA_THINK=1`. On a 6 GB GPU with
+  `qwen3.5:4b`, an empty reply after 59 s became a cited answer in 7 s.
 - Reasoning that some APIs put inside answers (`<thought>...</thought>` from
   Google AI Studio's Gemma 4, `<think>...</think>` elsewhere) is removed from
   answers, streams, conversation titles, and suggested questions.

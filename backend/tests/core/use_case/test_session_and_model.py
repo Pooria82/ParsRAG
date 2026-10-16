@@ -12,6 +12,7 @@ from backend.core.domain.exceptions import (
     InvalidInputError,
     ModelConnectionError,
     NotFoundError,
+    OllamaConnectionError,
     UpstreamServiceError,
 )
 from backend.core.domain.upload_policy import UploadPolicy
@@ -67,7 +68,7 @@ class FakeGateway:
             raise ModelConnectionError("unreachable")
         return CONFIGURATION
 
-    def list_ollama_models(self, base_url: str) -> list[OllamaModel]:
+    def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
         """List one model or fail."""
         if self.fail:
             raise ModelConnectionError("unreachable")
@@ -218,3 +219,49 @@ def test_capabilities_reflect_policy_and_ocr(monkeypatch: pytest.MonkeyPatch) ->
     assert capabilities.max_batch_size_bytes == 9
     assert capabilities.ocr_enabled is True
     assert ".pdf" in capabilities.supported_extensions
+
+
+class OllamaFailingGateway(FakeGateway):
+    """Gateway whose Ollama service is refused for a named reason."""
+
+    def __init__(self, code: str) -> None:
+        """Remember the failure code to raise."""
+        super().__init__()
+        self.code = code
+
+    def configure(
+        self, configuration: ModelConfigurationRequest
+    ) -> ModelConfigurationResponse:
+        """Refuse the Ollama service."""
+        raise OllamaConnectionError("refused", self.code)
+
+    def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
+        """Refuse the Ollama service."""
+        raise OllamaConnectionError("refused", self.code)
+
+
+@pytest.mark.parametrize("code", ["ollama_url_not_allowed", "ollama_unreachable"])
+def test_ollama_failures_keep_their_reason_for_the_browser(code: str) -> None:
+    request = ModelConfigurationRequest(
+        provider=ModelProvider.OLLAMA,
+        model_name="qwen2.5:7b",
+        base_url="http://host.docker.internal:11434",
+    )
+    with pytest.raises(InvalidInputError) as configured:
+        ConfigureModel(OllamaFailingGateway(code)).execute(request)
+    with pytest.raises(UpstreamServiceError) as listed:
+        ListOllamaModels(OllamaFailingGateway(code)).execute()
+
+    assert configured.value.code == listed.value.code == code
+
+
+def test_generic_model_failures_keep_generic_codes() -> None:
+    request = ModelConfigurationRequest(
+        provider=ModelProvider.API, model_name="m", base_url="https://api.example/v1"
+    )
+    with pytest.raises(InvalidInputError) as configured:
+        ConfigureModel(FakeGateway(fail=True)).execute(request)
+    with pytest.raises(UpstreamServiceError) as listed:
+        ListOllamaModels(FakeGateway(fail=True)).execute()
+    assert configured.value.code == "invalid_request"
+    assert listed.value.code == "upstream_unavailable"
