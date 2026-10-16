@@ -13,6 +13,8 @@ export interface ModelConfiguration {
   base_url: string;
   api_key_configured: boolean;
   disclosure_acknowledged: boolean;
+  /** The server's own Ollama URL, offered when switching from an API. */
+  ollama_base_url?: string | null;
 }
 
 export interface OllamaModel { name: string; size?: number | null }

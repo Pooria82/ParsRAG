@@ -47,6 +47,11 @@ const COMMON: Messages = {
   untrusted_origin: { fa: 'سرویس به نشانی‌ای که این صفحه از آن باز شده اعتماد ندارد. نشانی را به PARSRAG_ALLOWED_ORIGINS بیفزایید یا برنامه را از نشانی خود سرویس باز کنید.', en: 'The service does not trust the address this page was opened from. Add it to PARSRAG_ALLOWED_ORIGINS or open the app from the service’s own address.' },
 };
 
+const MODEL_SETTINGS: Messages = {
+  ollama_url_not_allowed: { fa: 'این آدرس Ollama مجاز نیست. از http:// با localhost، ollama یا host.docker.internal استفاده کنید، یا میزبان را به OLLAMA_ALLOWED_HOSTS بیفزایید (بدون نام کاربری، مسیر یا پارامتر).', en: 'This Ollama address is not allowed. Use http:// with localhost, ollama, or host.docker.internal, or add the host to OLLAMA_ALLOWED_HOSTS (no user name, path, or query).' },
+  ollama_unreachable: { fa: 'Ollama در این آدرس پاسخ نداد. مطمئن شوید Ollama اجرا می‌شود. اگر روی همین رایانه نصب است و برنامه در Docker است، آدرس http://host.docker.internal:11434 را به کار ببرید؛ در لینوکس، OLLAMA_HOST را طوری تنظیم کنید که Ollama به شبکهٔ Docker هم گوش دهد.', en: 'Ollama did not answer at this address. Make sure Ollama is running. If it is installed on this computer and the app runs in Docker, use http://host.docker.internal:11434; on Linux, set OLLAMA_HOST so Ollama also listens on the Docker network.' },
+};
+
 const NOTICES: Messages = {
   ocr_page_limit: { fa: 'فقط صفحه‌های اسکن‌شدهٔ اول خوانده شد (سقف OCR).', en: 'Only the first scanned pages were read (OCR limit).' },
   ocr_image_limit: { fa: 'متن برخی تصویرها خوانده نشد (سقف OCR تصویر).', en: 'Some images were not read (OCR image limit).' },
@@ -64,6 +69,11 @@ export function uploadErrorMessage(code: string | undefined, language: Language)
 export function queryErrorMessage(code: string | undefined, language: Language): string | undefined {
   const entry = code ? QUERY[code] ?? COMMON[code] : undefined;
   return entry?.[language];
+}
+
+/** Translate a model-settings error code, or undefined when unknown. */
+export function modelSettingsErrorMessage(code: string | undefined, language: Language): string | undefined {
+  return code ? MODEL_SETTINGS[code]?.[language] : undefined;
 }
 
 /** Translate a partial-indexing notice code. */

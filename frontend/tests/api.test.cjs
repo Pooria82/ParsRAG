@@ -1,7 +1,7 @@
 const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { ApiError, ParsRagApiClient, errorFromBody } = require('./.compiled/services/api.js');
-const { noticeMessage, queryErrorMessage, uploadErrorMessage } = require('./.compiled/i18n/errors.js');
+const { modelSettingsErrorMessage, noticeMessage, queryErrorMessage, uploadErrorMessage } = require('./.compiled/i18n/errors.js');
 
 const originalFetch = global.fetch;
 const originalXhr = global.XMLHttpRequest;
@@ -147,4 +147,23 @@ test('requests a generated conversation title after the first prompt', async () 
   assert.equal(title, 'ساختار رمزنگاری فیستل');
   assert.equal(request.url, '/conversations/title');
   assert.deepEqual(JSON.parse(request.init.body), { prompt: 'فیستل چیست؟', language: 'fa' });
+});
+
+test('Ollama settings errors explain the reason in both languages', async () => {
+  for (const code of ['ollama_url_not_allowed', 'ollama_unreachable']) {
+    assert.ok(modelSettingsErrorMessage(code, 'fa'));
+    assert.ok(modelSettingsErrorMessage(code, 'en'));
+  }
+  assert.match(modelSettingsErrorMessage('ollama_url_not_allowed', 'en'), /host\.docker\.internal/);
+  assert.match(modelSettingsErrorMessage('ollama_unreachable', 'en'), /OLLAMA_HOST/);
+  assert.equal(modelSettingsErrorMessage('invalid_request', 'fa'), undefined);
+  assert.equal(modelSettingsErrorMessage(undefined, 'fa'), undefined);
+
+  global.fetch = async () => new Response(JSON.stringify({ detail: 'Could not connect to Ollama.', code: 'ollama_unreachable' }), {
+    status: 502, headers: { 'Content-Type': 'application/json' },
+  });
+  const client = new ParsRagApiClient('');
+  await assert.rejects(client.ollamaModels('http://host.docker.internal:11434'), error => error instanceof ApiError && error.code === 'ollama_unreachable');
+  global.fetch = async () => new Response(JSON.stringify({ detail: 'x', code: 'ollama_url_not_allowed' }), { status: 400 });
+  await assert.rejects(client.configureModel({ provider: 'ollama', model_name: 'm', base_url: 'http://evil.example' }), error => error.code === 'ollama_url_not_allowed');
 });

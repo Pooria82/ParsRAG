@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CircleHelp, Database, Download, FileUp, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
 import { translations } from '../i18n/translations';
-import { isLocalEndpoint, MODES } from '../core/state';
+import { DEFAULT_SETTINGS, isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
 import { ChoiceMenu } from './ui/ChoiceMenu';
-import { ParsRagApiClient } from '../services/api';
+import { ApiError, ParsRagApiClient } from '../services/api';
+import { modelSettingsErrorMessage } from '../i18n/errors';
 import { isApplePlatform, SHORTCUTS, shortcutLabel } from '../core/shortcuts';
 
 interface SettingsModalProps {
@@ -58,7 +59,11 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     const controller = new AbortController(); setModelStatus('idle'); setModelError(null);
     void modelApi.modelConfiguration(controller.signal).then(config => {
       setProvider(config.provider);
-      if (config.provider === 'api') { setApiModelName(config.model_name); setApiModelUrl(config.base_url); }
+      if (config.provider === 'api') {
+        setApiModelName(config.model_name); setApiModelUrl(config.base_url);
+        // Offer the server's own Ollama (for example the host's, from Docker) instead of the built-in default.
+        if (config.ollama_base_url && settings.ollamaBaseUrl === DEFAULT_SETTINGS.ollamaBaseUrl) setOllamaModelUrl(config.ollama_base_url);
+      }
       else { setOllamaModelName(config.model_name); setOllamaModelUrl(config.base_url); }
       setKeyConfigured(config.api_key_configured);
       setApiDisclosureAccepted(config.disclosure_acknowledged);
@@ -68,13 +73,14 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     }).catch(() => { /* Keep editable defaults when an older or offline service cannot expose configuration. */ });
     return () => controller.abort();
   }, [open, activeTab, modelApi, guided]);
+  const settingsError = (error: unknown) => modelSettingsErrorMessage(error instanceof ApiError ? error.code : undefined, settings.language);
   const loadOllamaModels = async () => {
     setModelStatus('loading'); setModelError(null);
     try {
       const installed = await modelApi.ollamaModels(modelUrl);
       setModels(installed); if (installed.length && !installed.some(model => model.name === ollamaModelName)) setOllamaModelName(installed[0].name);
       setModelStatus('idle');
-    } catch { setModelStatus('error'); setModelError(t.ollamaConnectionError); }
+    } catch (error) { setModelStatus('error'); setModelError(settingsError(error) ?? t.ollamaConnectionError); }
   };
   const tabs = [{ id: 'general', label: t.tabGeneral, Icon: Sun }, { id: 'rag', label: t.tabRAG, Icon: SlidersHorizontal }, { id: 'connection', label: t.tabModel, Icon: Database }] as const;
   return <Dialog open={open} guided={guided} onClose={onClose} title={t.settingsTitle} subtitle={t.settingsSubtitle} closeLabel={t.close} className="settings-dialog">
@@ -145,7 +151,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
             onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
               ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
               : { ollamaModelName: config.model_name, ollamaBaseUrl: config.base_url }) });
-          }).catch(() => { setModelStatus('error'); setModelError(t.modelSaveError); });
+          }).catch((error: unknown) => { setModelStatus('error'); setModelError(settingsError(error) ?? t.modelSaveError); });
         }}>
           <div className="setting-field" data-tour="settings-provider"><label>{t.modelProviderLabel}</label><div className="segmented-control">
             <label><input type="radio" name="provider" checked={activeProvider === 'api'} onChange={() => { setProvider('api'); setModelStatus('idle'); setModelError(null); }} /><span>{t.modelProviderApi}</span></label>
