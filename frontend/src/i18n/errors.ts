@@ -33,6 +33,7 @@ const QUERY: Messages = {
   model_not_found: { fa: 'مدل انتخاب‌شده روی سرویس پیدا نشد. نام مدل را در تنظیمات بررسی کنید.', en: 'The selected model was not found. Check the model name in Settings.' },
   model_unavailable: { fa: 'سرویس مدل در دسترس نیست. اتصال یا اجرای Ollama را بررسی کنید.', en: 'The model service is unreachable. Check the connection or that Ollama is running.' },
   model_rejected: { fa: 'سرویس مدل درخواست را نپذیرفت.', en: 'The model service rejected the request.' },
+  model_quota: { fa: 'اعتبار حساب سرویس مدل (API) تمام شده است. حساب را شارژ کنید یا در تنظیمات مدل دیگری انتخاب کنید.', en: 'The model service account is out of credit. Top it up or choose another model in Settings.' },
   invalid_request: { fa: 'درخواست معتبر نیست؛ اشاره به سندها را بررسی کنید.', en: 'The request is invalid; check the document mentions.' },
   stream_interrupted: { fa: 'ارتباط در میانهٔ پاسخ قطع شد. دوباره تلاش کنید.', en: 'The connection dropped in the middle of the answer. Try again.' },
 };

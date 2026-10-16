@@ -96,7 +96,7 @@ def test_example_environment_contains_no_example_secret() -> None:
     assert "OPENROUTER_API_KEY=\n" in example
     assert "sk-or-" not in example
     assert "OCR_MAX_PAGES=30" in example
-    assert "OCR_MAX_IMAGES=30" in example
+    assert "OCR_MAX_IMAGES=200" in example
     assert "PARSRAG_MAX_FILES_PER_SESSION=10" in example
     assert "PARSRAG_MAX_FILE_BYTES=104857600" in example
 

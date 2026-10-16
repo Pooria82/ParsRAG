@@ -331,7 +331,7 @@ load its weights.
 | `OCR_DPI` | `200` | Rasterization DPI for scanned PDF pages |
 | `OCR_ORIENTATION` | `1` | Re-read sideways/upside-down pages (Tesseract orientation detection) and pages skewed 2° or more; `0` disables it |
 | `OCR_MAX_PAGES` | `30` | Scanned PDF pages read with OCR; later scanned pages are skipped and the document shows a notice |
-| `OCR_MAX_IMAGES` | `30` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
+| `OCR_MAX_IMAGES` | `200` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
 

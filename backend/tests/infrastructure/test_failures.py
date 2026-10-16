@@ -29,6 +29,7 @@ def _status_error(status: int) -> openai.APIStatusError:
         (_status_error(429), (503, "model_rate_limited")),
         (_status_error(500), (502, "model_unavailable")),
         (_status_error(400), (502, "model_rejected")),
+        (_status_error(402), (502, "model_quota")),
         (openai.APIConnectionError(request=REQUEST), (502, "model_unavailable")),
         (httpx.ConnectError("refused", request=REQUEST), (502, "model_unavailable")),
         (ResponseError("model 'x' not found", 404), (502, "model_not_found")),

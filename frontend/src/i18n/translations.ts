@@ -43,7 +43,7 @@ export const translations = {
       no_evidence: 'بر اساس اسناد ارائه‌شده، پاسخی برای این پرسش در متن پیدا نشد. اگر می‌خواهید از دانش عمومی مدل هم کمک گرفته شود، حالت «ترکیبی» را انتخاب کنید.',
       partial_evidence: 'برای همهٔ سندهایی که نام بردید شواهد کافی پیدا نشد. پرسش را برای هر سند جدا بپرسید یا نام سند را بررسی کنید.',
     },
-    locationLabels: { page: 'صفحه', slide: 'اسلاید', paragraph: 'بند', section: 'بخش' },
+    locationLabels: { page: 'صفحه', slide: 'اسلاید', paragraph: 'بند', section: 'بخش' }, imageLabel: 'تصویر', tableLabel: 'جدول',
     externalImage: 'تصویر خارجی بارگیری نمی‌شود',
     modeLabel: 'شیوهٔ پاسخ‌گویی',
     ragModes: {
@@ -141,7 +141,7 @@ export const translations = {
       no_evidence: 'The provided documents do not answer this question. Switch to Hybrid mode to let the model add general knowledge.',
       partial_evidence: 'Not every document you mentioned has enough evidence. Ask about each document separately or check the document names.',
     },
-    locationLabels: { page: 'page', slide: 'slide', paragraph: 'paragraph', section: 'section' },
+    locationLabels: { page: 'page', slide: 'slide', paragraph: 'paragraph', section: 'section' }, imageLabel: 'image', tableLabel: 'table',
     externalImage: 'External image not loaded',
     modeLabel: 'Answer mode',
     ragModes: {

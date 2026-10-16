@@ -25,6 +25,7 @@ from backend.core.strategies.multi_doc_utils import (
     order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
+    with_whole_tables,
 )
 from backend.core.strategies.prompt_rules import (
     CITATION_RULES,
@@ -292,6 +293,8 @@ class StrictRAGStrategy(GeneratingStrategy):
             filtered_nodes = include_tagged_anchors(
                 nodes, filtered_nodes, document_segments, self.threshold
             )
+
+        filtered_nodes = with_whole_tables(self.repo, filtered_nodes, session_id)
 
         # 5. Build Grouped Multi-Document Context within the model's window
         answer_language = answer_language_rule(query)

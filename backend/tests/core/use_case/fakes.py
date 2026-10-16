@@ -47,6 +47,17 @@ class InMemoryRepository:
                 return str(node.metadata["filename"])
         return None
 
+    def section_chunks(
+        self, session_id: str, filename: str, key: str, value: int
+    ) -> list[ExtractedNode]:
+        """Return a document's chunks whose metadata number matches."""
+        return [
+            node
+            for node in self.sessions.get(session_id, [])
+            if node.metadata.get("filename") == filename
+            and node.metadata.get(key) == value
+        ]
+
     def delete_session(self, session_id: str) -> None:
         """Drop a session."""
         self.sessions.pop(session_id, None)

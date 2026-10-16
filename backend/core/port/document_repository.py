@@ -58,6 +58,22 @@ class DocumentRepository(Protocol):
         """Return the name of a session document with these exact bytes, if any."""
         ...
 
+    def section_chunks(
+        self, session_id: str, filename: str, key: str, value: int
+    ) -> list[ExtractedNode]:
+        """All chunks of one numbered part of a document, such as table 3.
+
+        Args:
+            session_id: The session holding the document.
+            filename: The document.
+            key: The metadata key that numbers the part ("table").
+            value: The part's number.
+
+        Returns:
+            list[ExtractedNode]: The part's chunks in reading order.
+        """
+        ...
+
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes belonging to the given session.
 

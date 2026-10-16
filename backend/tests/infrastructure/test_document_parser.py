@@ -415,9 +415,48 @@ def test_docx_embedded_image_is_ocred_when_enabled(
 
     sections = parse_document_sections(payload.getvalue(), "image-only.docx")
 
-    assert sections[0].text == "نوشته داخل تصویر ورد"
-    assert sections[0].metadata == {"paragraph": 1}
+    assert sections[0].text == "[تصویر 1]\nنوشته داخل تصویر ورد"
+    assert sections[0].metadata == {"paragraph": 1, "image": 1}
     mock_extract.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_docx_images_are_cited_with_number_caption_and_paragraph(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each picture is its own section: numbered, captioned, placed after its paragraph."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    mock_extract.side_effect = ["متن تصویر اول", "", "متن تصویر سوم"]
+    image = BytesIO()
+    Image.new("RGB", (400, 200), "white").save(image, format="PNG")
+    document = Document()
+    document.add_heading("نتایج آزمون", level=1)
+    document.add_paragraph("پاراگراف پیش از تصویر.")
+    document.add_picture(BytesIO(image.getvalue()))
+    document.add_paragraph("شکل ۳-۱: صفحه اجرای آزمون")
+    document.add_picture(BytesIO(image.getvalue()))
+    document.add_paragraph("متن پایانی بدون شرح.")
+    document.add_picture(BytesIO(image.getvalue()))
+    payload = BytesIO()
+    document.save(payload)
+
+    sections = parse_document_sections(payload.getvalue(), "report.docx")
+
+    images = [s for s in sections if "image" in s.metadata]
+    assert [s.metadata for s in images] == [
+        {"paragraph": 2, "image": 1},
+        {"paragraph": 4, "image": 3},
+    ]
+    assert (
+        images[0].text
+        == "نتایج آزمون\n[تصویر 1] شکل ۳-۱: صفحه اجرای آزمون\nپاراگراف پیش از تصویر.\nمتن تصویر اول"
+    )
+    assert (
+        images[1].text == "نتایج آزمون\n[تصویر 3]\nمتن پایانی بدون شرح.\nمتن تصویر سوم"
+    )
+    text = [s for s in sections if "image" not in s.metadata]
+    assert text[0].metadata == {"paragraph": 2, "paragraph_end": 4}
+    assert "متن تصویر" not in text[0].text
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_image_text")
@@ -437,6 +476,6 @@ def test_pptx_picture_is_ocred_with_slide_metadata(
 
     sections = parse_document_sections(payload.getvalue(), "image-only.pptx")
 
-    assert sections[0].text == "نوشته داخل تصویر پاورپوینت"
-    assert sections[0].metadata == {"slide": 1}
+    assert sections[0].text == "[تصویر 1]\nنوشته داخل تصویر پاورپوینت"
+    assert sections[0].metadata == {"slide": 1, "image": 1}
     mock_extract.assert_called_once()

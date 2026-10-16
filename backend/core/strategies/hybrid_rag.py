@@ -19,6 +19,7 @@ from backend.core.strategies.multi_doc_utils import (
     order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
+    with_whole_tables,
 )
 from backend.core.strategies.prompt_rules import (
     CITATION_RULES,
@@ -245,6 +246,9 @@ class HybridRAGStrategy(GeneratingStrategy):
             else 3,
         )
 
+        final_source_nodes = with_whole_tables(
+            self.repo, final_source_nodes, session_id
+        )
         answer_language = answer_language_rule(query)
         final_source_nodes = order_by_document(
             fit_to_context(
