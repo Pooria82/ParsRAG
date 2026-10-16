@@ -449,9 +449,11 @@ def test_docx_images_are_cited_with_number_caption_and_paragraph(
     ]
     assert (
         images[0].text
-        == "نتایج آزمون\n[تصویر 1] شکل ۳-۱: صفحه اجرای آزمون\nمتن تصویر اول"
+        == "نتایج آزمون\n[تصویر 1] شکل ۳-۱: صفحه اجرای آزمون\nپاراگراف پیش از تصویر.\nمتن تصویر اول"
     )
-    assert images[1].text == "نتایج آزمون\n[تصویر 3]\nمتن تصویر سوم"
+    assert (
+        images[1].text == "نتایج آزمون\n[تصویر 3]\nمتن پایانی بدون شرح.\nمتن تصویر سوم"
+    )
     text = [s for s in sections if "image" not in s.metadata]
     assert text[0].metadata == {"paragraph": 2, "paragraph_end": 4}
     assert "متن تصویر" not in text[0].text

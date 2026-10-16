@@ -215,10 +215,30 @@ def image_label(number: int) -> str:
     return f"[تصویر {number}]"
 
 
-def _image_section_text(number: int, caption: str, recognized: str) -> str:
-    """An image's own searchable text: its label, its caption, then what OCR read."""
+_MAX_IMAGE_CONTEXT_CHARS = 300
+
+
+def _image_section_text(
+    number: int, caption: str, recognized: str, context: str = ""
+) -> str:
+    """An image's own searchable text: label, caption, the text leading to it, OCR.
+
+    Reports describe a screenshot in the sentence before it ("to create a
+    prompt, open ..."); OCR alone is short and noisy, so without that context
+    the right image was not retrieved, or a near-identical one was cited.
+    """
     head = f"{image_label(number)} {caption}".strip()
-    return f"{head}\n{recognized}"
+    lead = _tail(context, _MAX_IMAGE_CONTEXT_CHARS)
+    return "\n".join(part for part in (head, lead, recognized) if part)
+
+
+def _tail(text: str, limit: int) -> str:
+    """The end of ``text``, at most ``limit`` characters, cut at a word boundary."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[-limit:]
+    return "…" + cut[cut.find(" ") + 1 :] if " " in cut else "…" + cut
 
 
 def _docx_heading_level(paragraph: Paragraph) -> int | None:
@@ -251,7 +271,8 @@ class _DocxSectionBuilder:
         self.last = 0
         self.previous_text = ""
         # Images waiting for a caption in the paragraph that follows them.
-        self.pending: list[tuple[int, int, str, str]] = []
+        # (number, paragraph, caption, leading context, OCR text) per image.
+        self.pending: list[tuple[int, int, str, str, str]] = []
 
     def _path(self) -> str:
         return " › ".join(self.headings[level] for level in sorted(self.headings))
@@ -306,21 +327,23 @@ class _DocxSectionBuilder:
             else:
                 self.paragraph(text, number)
         anchor = number if text else max(1, number - 1)
-        above = text if is_caption else self.previous_text
+        above = text if text else self.previous_text
         for image_number, recognized in images:
             if recognized.strip():
-                caption = above if _is_caption(above) else ""
-                self.pending.append((image_number, anchor, caption, recognized.strip()))
+                caption, context = (above, "") if _is_caption(above) else ("", above)
+                self.pending.append(
+                    (image_number, anchor, caption, context, recognized.strip())
+                )
         if text:
             self.previous_text = text
         return bool(text)
 
     def _release_images(self, caption_below: str) -> None:
         """Emit waiting image sections, using a caption found below them."""
-        for image_number, anchor, caption, recognized in self.pending:
+        for image_number, anchor, caption, context, recognized in self.pending:
             metadata = {"paragraph": anchor, "image": image_number}
             body = _image_section_text(
-                image_number, caption or caption_below, recognized
+                image_number, caption or caption_below, recognized, context
             )
             self.sections.append(ParsedSection(self._with_path(body), metadata))
         self.pending = []
@@ -395,9 +418,11 @@ def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
             sections.append(ParsedSection(text, {"slide": slide_index}))
         # Each picture is its own section under the slide's title, so answers
         # can cite "slide N, image M" for text that only appears in the picture.
-        title = next((part.splitlines()[0] for part in parts if part.strip()), "")
+        slide_text = "\n".join(part for part in parts if part.strip())
+        title, _, rest = slide_text.partition("\n")
+        context = " ".join(rest.replace("\u2039#\u203a", " ").split())
         for number, recognized in images:
-            body = _image_section_text(number, title, recognized)
+            body = _image_section_text(number, title, recognized, context)
             sections.append(
                 ParsedSection(body, {"slide": slide_index, "image": number})
             )
