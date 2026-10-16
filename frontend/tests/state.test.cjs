@@ -177,3 +177,16 @@ test('synchronizes real server documents, preserving choices and partial-upload 
   assert.deepEqual(mergeRemoteDocuments(docs, []), [{ name: 'retry.pdf', status: 'error' }]);
   assert.equal(mergeRemoteDocuments(docs, {}), docs);
 });
+
+test('image and table excerpts are cited with their number', () => {
+  const { sourceLocation } = require('./.compiled/core/state.js');
+  const { sourceLocationLabel } = require('./.compiled/components/SourceList.js');
+  const image = sourceLocation({ paragraph: 487, image: 15 });
+  assert.deepEqual(image, { kind: 'paragraph', start: 487, image: 15 });
+  assert.equal(sourceLocationLabel({ n: 1, filename: 'a.docx', text: '', location: image }, 'fa'), 'بند ۴۸۷ · تصویر ۱۵');
+  const slide = sourceLocation({ slide: 59, image: 23 });
+  assert.equal(sourceLocationLabel({ n: 1, filename: 'a.pptx', text: '', location: slide }, 'en'), 'slide 59 · image 23');
+  const table = sourceLocation({ paragraph: 823, table: 6 });
+  assert.equal(sourceLocationLabel({ n: 1, filename: 'a.docx', text: '', location: table }, 'en'), 'paragraph 823 · table 6');
+  assert.equal(sourceLocation({ paragraph: 4, paragraph_end: 9 }).image, undefined);
+});
