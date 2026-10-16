@@ -175,18 +175,20 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
     builder = _DocxSectionBuilder()
     paragraph = 0
     ocr_images = 0
+    image_number = 0
     for section_index, child in enumerate(
         document.element.body.iterchildren(), start=1
     ):
         if isinstance(child, CT_P):
             paragraph_object = Paragraph(child, document)
-            images: list[str] = []
+            images: list[tuple[int, str]] = []
             if settings.enabled:
                 for image in _docx_paragraph_images(paragraph_object, document):
+                    image_number += 1
                     recognized, ocr_images = _extract_embedded_image(
                         image, settings, ocr_images, notices
                     )
-                    images.append(recognized)
+                    images.append((image_number, recognized))
             if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
         elif isinstance(child, CT_Tbl):
@@ -202,6 +204,22 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
 _MAX_SECTION_WORDS = 180
 _MAX_HEADING_WORDS = 25
 _HEADING_STYLE = re.compile(r"^(?:heading|title|عنوان)\s*(\d*)$", re.IGNORECASE)
+# Figure captions ("شکل ۳-۲: ...", "Figure 4. ...") sit just above or below their image.
+_CAPTION = re.compile(
+    r"^\s*(?:شکل|تصویر|نمودار|figure|fig\.)\s*[\d۰-۹(]", re.IGNORECASE
+)
+_MAX_CAPTION_WORDS = 40
+
+
+def image_label(number: int) -> str:
+    """The marker that starts an image's OCR text, so answers can cite the image."""
+    return f"[تصویر {number}]"
+
+
+def _image_section_text(number: int, caption: str, recognized: str) -> str:
+    """An image's own searchable text: its label, its caption, then what OCR read."""
+    head = f"{image_label(number)} {caption}".strip()
+    return f"{head}\n{recognized}"
 
 
 def _docx_heading_level(paragraph: Paragraph) -> int | None:
@@ -217,7 +235,13 @@ def _docx_heading_level(paragraph: Paragraph) -> int | None:
 
 
 class _DocxSectionBuilder:
-    """Group body paragraphs under their headings into chunk-sized sections."""
+    """Group body paragraphs under their headings into chunk-sized sections.
+
+    Each embedded image with OCR text becomes its own section, labeled with
+    its number in the document and its caption, so an answer can cite the
+    image itself rather than the paragraphs around it. Paragraph numbers count
+    paragraphs with text only, so they do not shift with OCR results.
+    """
 
     def __init__(self) -> None:
         self.sections: list[ParsedSection] = []
@@ -226,6 +250,9 @@ class _DocxSectionBuilder:
         self.words = 0
         self.first = 0
         self.last = 0
+        self.previous_text = ""
+        # Images waiting for a caption in the paragraph that follows them.
+        self.pending: list[tuple[int, int, str, str]] = []
 
     def _path(self) -> str:
         return " › ".join(self.headings[level] for level in sorted(self.headings))
@@ -262,21 +289,42 @@ class _DocxSectionBuilder:
         self.words += words
         self.last = number
 
-    def add(self, paragraph: Paragraph, images: list[str], number: int) -> bool:
-        """Add one Word paragraph and its OCR'd images; return whether it had text."""
+    def add(
+        self, paragraph: Paragraph, images: list[tuple[int, str]], number: int
+    ) -> bool:
+        """Add one Word paragraph and its OCR'd images; return whether it had text.
+
+        ``number`` is the paragraph's number if it has text; an image in an
+        otherwise empty paragraph is placed after the previous paragraph.
+        """
         text = paragraph.text.strip()
-        recognized = "\n\n".join(image for image in images if image).strip()
-        if not text and not recognized:
-            return False
-        level = _docx_heading_level(paragraph) if text else None
-        if level is not None and len(text.split()) <= _MAX_HEADING_WORDS:
-            self.heading(level, text)
-            if recognized:
-                self.paragraph(recognized, number)
-        else:
-            body = "\n\n".join(part for part in (text, recognized) if part)
-            self.paragraph(body, number)
-        return True
+        is_caption = bool(text) and _is_caption(text)
+        self._release_images(text if is_caption else "")
+        if text:
+            level = _docx_heading_level(paragraph)
+            if level is not None and len(text.split()) <= _MAX_HEADING_WORDS:
+                self.heading(level, text)
+            else:
+                self.paragraph(text, number)
+        anchor = number if text else max(1, number - 1)
+        above = text if is_caption else self.previous_text
+        for image_number, recognized in images:
+            if recognized.strip():
+                caption = above if _is_caption(above) else ""
+                self.pending.append((image_number, anchor, caption, recognized.strip()))
+        if text:
+            self.previous_text = text
+        return bool(text)
+
+    def _release_images(self, caption_below: str) -> None:
+        """Emit waiting image sections, using a caption found below them."""
+        for image_number, anchor, caption, recognized in self.pending:
+            metadata = {"paragraph": anchor, "image": image_number}
+            body = _image_section_text(
+                image_number, caption or caption_below, recognized
+            )
+            self.sections.append(ParsedSection(self._with_path(body), metadata))
+        self.pending = []
 
     def table(self, text: str, position: int) -> None:
         self.flush()
@@ -286,10 +334,16 @@ class _DocxSectionBuilder:
 
     def finish(self) -> list[ParsedSection]:
         self.flush()
+        self._release_images("")
         if not self.sections and self.headings:
             # A document of headings only still has searchable text.
             self.sections.append(ParsedSection(self._path(), {"paragraph": 1}))
         return self.sections
+
+
+def _is_caption(text: str) -> bool:
+    """Whether a paragraph reads like a figure caption."""
+    return bool(_CAPTION.match(text)) and len(text.split()) <= _MAX_CAPTION_WORDS
 
 
 def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
@@ -303,21 +357,32 @@ def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
     settings = OCRSettings.from_environment()
     sections: list[ParsedSection] = []
     ocr_images = 0
+    image_number = 0
     for slide_index, slide in enumerate(presentation.slides, start=1):
         parts: list[str] = []
+        images: list[tuple[int, str]] = []
         for shape in slide.shapes:
             if getattr(shape, "has_table", False):
                 parts.append(_format_pptx_table(shape.table))
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and settings.enabled:
+                image_number += 1
                 text, ocr_images = _extract_embedded_image(
                     shape.image.blob, settings, ocr_images, notices
                 )
-                if text:
-                    parts.append(text)
+                if text.strip():
+                    images.append((image_number, text.strip()))
             elif hasattr(shape, "text") and shape.text and shape.text.strip():
                 parts.append(shape.text.strip())
         if text := "\n\n".join(part for part in parts if part).strip():
             sections.append(ParsedSection(text, {"slide": slide_index}))
+        # Each picture is its own section under the slide's title, so answers
+        # can cite "slide N, image M" for text that only appears in the picture.
+        title = next((part.splitlines()[0] for part in parts if part.strip()), "")
+        for number, recognized in images:
+            body = _image_section_text(number, title, recognized)
+            sections.append(
+                ParsedSection(body, {"slide": slide_index, "image": number})
+            )
     return sections
 
 

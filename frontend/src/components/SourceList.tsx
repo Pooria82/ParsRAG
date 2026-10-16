@@ -20,7 +20,8 @@ export function sourceLocationLabel(source: SourcePassage, language: Language): 
   const t = translations[language];
   const start = location.start.toLocaleString(language);
   const end = location.end && location.end !== location.start ? `–${location.end.toLocaleString(language)}` : '';
-  return `${t.locationLabels[location.kind]} ${start}${end}`;
+  const image = location.image ? ` · ${t.imageLabel} ${location.image.toLocaleString(language)}` : '';
+  return `${t.locationLabels[location.kind]} ${start}${end}${image}`;
 }
 
 const STOPWORDS = new Set(['این', 'آن', 'که', 'است', 'برای', 'از', 'با', 'در', 'به', 'را', 'چه', 'چیست', 'چطور', 'چگونه', 'کدام', 'هست', 'بود', 'what', 'which', 'how', 'the', 'and', 'for', 'with', 'does', 'this', 'that']);

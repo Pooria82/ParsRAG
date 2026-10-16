@@ -25,6 +25,7 @@ CITATION RULES:
 - Every context excerpt starts with a number in square brackets, such as [2]. Right after each sentence or paragraph that uses an excerpt, cite it with that number: [2], or [1][3] for several. Write the digits inside the brackets in ASCII (1, 2, 3) even in a Persian answer.
 - Cite only numbers that appear in the context. Never invent a number, a file name, or a page; do not write file names or page numbers as citations.
 - A page-boundary excerpt joins the end of one page to the start of the next. Read both parts together.
+- An excerpt whose header includes `image: N` is text read from image N of that document. When you use it, say that the information appears in that image ("در تصویر N" / "in image N").
 - If the user asks about a specific document, focus on that document and name it when relevant."""
 
 _PERSIAN_WORD = re.compile(r"[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]+")
