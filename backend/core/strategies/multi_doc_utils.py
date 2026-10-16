@@ -185,9 +185,12 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
 
 def _location_tag(node: ExtractedNode) -> str:
     """Formats reliable parser metadata for model-visible inline citations."""
-    image = node.metadata.get("image")
     tag = _position_tag(node)
-    return f"{tag}, image: {image}" if isinstance(image, int) else tag
+    for key in ("table", "image"):
+        value = node.metadata.get(key)
+        if isinstance(value, int):
+            tag += f", {key}: {value}"
+    return tag
 
 
 def _position_tag(node: ExtractedNode) -> str:

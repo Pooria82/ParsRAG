@@ -28,7 +28,7 @@ export interface IngestionCapabilities {
 export interface AppCapabilities { ingestion: IngestionCapabilities }
 
 /** Where a cited passage is: a page, slide, paragraph, or section, and an embedded image when the text was read from one. */
-export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number; image?: number }
+export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number; image?: number; table?: number }
 
 export interface Citation {
   filename: string;

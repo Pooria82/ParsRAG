@@ -176,9 +176,8 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
     paragraph = 0
     ocr_images = 0
     image_number = 0
-    for section_index, child in enumerate(
-        document.element.body.iterchildren(), start=1
-    ):
+    table_number = 0
+    for child in document.element.body.iterchildren():
         if isinstance(child, CT_P):
             paragraph_object = Paragraph(child, document)
             images: list[tuple[int, str]] = []
@@ -192,9 +191,10 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
             if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
         elif isinstance(child, CT_Tbl):
+            table_number += 1
             value = _format_docx_table(Table(child, document)).strip()
             if value:
-                builder.table(value, section_index)
+                builder.table(value, table_number, max(1, paragraph))
     return builder.finish()
 
 
@@ -326,10 +326,21 @@ class _DocxSectionBuilder:
             self.sections.append(ParsedSection(self._with_path(body), metadata))
         self.pending = []
 
-    def table(self, text: str, position: int) -> None:
+    def table(self, text: str, number: int, after_paragraph: int) -> None:
+        """Add one table, cited by its number and the paragraph it follows.
+
+        A body-element index (the old ``section``) cannot be found in Word;
+        "paragraph 120 · table 3" can.
+        """
         self.flush()
+        self._release_images("")
+        caption = self.previous_text if _is_table_caption(self.previous_text) else ""
+        head = f"[جدول {number}] {caption}".strip()
         self.sections.append(
-            ParsedSection(self._with_path(text), {"section": position})
+            ParsedSection(
+                self._with_path(f"{head}\n{text}"),
+                {"paragraph": after_paragraph, "table": number},
+            )
         )
 
     def finish(self) -> list[ParsedSection]:
@@ -344,6 +355,14 @@ class _DocxSectionBuilder:
 def _is_caption(text: str) -> bool:
     """Whether a paragraph reads like a figure caption."""
     return bool(_CAPTION.match(text)) and len(text.split()) <= _MAX_CAPTION_WORDS
+
+
+_TABLE_CAPTION = re.compile(r"^\s*(?:جدول|table)\s*[\d۰-۹(]", re.IGNORECASE)
+
+
+def _is_table_caption(text: str) -> bool:
+    """Whether a paragraph reads like a table caption ("جدول ۳-۶: ...")."""
+    return bool(_TABLE_CAPTION.match(text)) and len(text.split()) <= _MAX_CAPTION_WORDS
 
 
 def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:

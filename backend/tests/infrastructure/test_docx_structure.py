@@ -64,8 +64,33 @@ def test_tables_carry_their_heading_path() -> None:
 
     sections = parse_document_sections(_docx(build), "costs.docx")
 
-    assert sections[0].text.startswith("هزینه‌ها\n| مورد | مبلغ |")
-    assert "section" in sections[0].metadata
+    assert sections[0].text.startswith("هزینه‌ها\n[جدول 1]\n| مورد | مبلغ |")
+    assert sections[0].metadata == {"paragraph": 1, "table": 1}
+
+
+def test_tables_are_cited_by_number_caption_and_preceding_paragraph() -> None:
+    """A table is cited as "paragraph N · table M", with its caption above it."""
+
+    def build(document: DocxDocument) -> None:
+        document.add_paragraph("مقدمه")
+        document.add_paragraph("جدول ۳-۶: ابزارهای متن‌باز")
+        first = document.add_table(rows=1, cols=2)
+        first.cell(0, 0).text, first.cell(0, 1).text = "PyAutoGUI", "10.9k"
+        document.add_paragraph("توضیح میانی")
+        second = document.add_table(rows=1, cols=1)
+        second.cell(0, 0).text = "بدون شرح"
+
+    sections = parse_document_sections(_docx(build), "tools.docx")
+
+    tables = [s for s in sections if "table" in s.metadata]
+    assert [s.metadata for s in tables] == [
+        {"paragraph": 2, "table": 1},
+        {"paragraph": 3, "table": 2},
+    ]
+    assert tables[0].text.startswith(
+        "[جدول 1] جدول ۳-۶: ابزارهای متن‌باز\n| PyAutoGUI |"
+    )
+    assert tables[1].text.startswith("[جدول 2]\n") and "بدون شرح" in tables[1].text
 
 
 def test_documents_without_headings_still_group_short_lines() -> None:

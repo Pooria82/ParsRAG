@@ -102,7 +102,8 @@ function parseLocation(value: unknown): SourceLocation | undefined {
   if (start === undefined) return undefined;
   const end = finite(value.end);
   const image = finite(value.image);
-  return { kind: value.kind as SourceLocation['kind'], start, ...(end !== undefined && end > start ? { end } : {}), ...(image !== undefined ? { image } : {}) };
+  const table = finite(value.table);
+  return { kind: value.kind as SourceLocation['kind'], start, ...(end !== undefined && end > start ? { end } : {}), ...(image !== undefined ? { image } : {}), ...(table !== undefined ? { table } : {}) };
 }
 
 function parseSources(value: unknown): SourcePassage[] | undefined {
@@ -118,8 +119,9 @@ function parseSources(value: unknown): SourcePassage[] | undefined {
 /** Map server chunk metadata to one citable location. */
 export function sourceLocation(metadata: Record<string, unknown>): SourceLocation | undefined {
   const image = finite(metadata.image);
+  const table = finite(metadata.table);
   const range = (kind: SourceLocation['kind'], start: number | undefined, end: number | undefined): SourceLocation | undefined =>
-    start === undefined ? undefined : { kind, start, ...(end !== undefined && end > start ? { end } : {}), ...(image !== undefined ? { image } : {}) };
+    start === undefined ? undefined : { kind, start, ...(end !== undefined && end > start ? { end } : {}), ...(image !== undefined ? { image } : {}), ...(table !== undefined ? { table } : {}) };
   return range('page', finite(metadata.page), finite(metadata.page_end))
     ?? range('slide', finite(metadata.slide), undefined)
     ?? range('paragraph', finite(metadata.paragraph_start ?? metadata.paragraph), finite(metadata.paragraph_end))
