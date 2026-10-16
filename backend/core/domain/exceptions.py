@@ -48,6 +48,19 @@ class ModelConnectionError(ParsRAGError):
     code = "model_unavailable"
 
 
+class OllamaConnectionError(ModelConnectionError):
+    """An Ollama service is disallowed or unreachable; ``code`` says which.
+
+    ``ollama_url_not_allowed``: the URL is outside the allowed hosts.
+    ``ollama_unreachable``: nothing answered at the URL.
+    """
+
+    def __init__(self, detail: str, code: str) -> None:
+        """Store the message and the specific reason."""
+        super().__init__(detail)
+        self.code = code
+
+
 class DocumentError(ValueError):
     """A document cannot be read; ``code`` names the reason for clients."""
 

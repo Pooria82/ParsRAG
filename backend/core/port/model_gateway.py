@@ -23,7 +23,7 @@ class ModelGateway(Protocol):
         """Verify, persist, and activate a model connection."""
         ...
 
-    def list_ollama_models(self, base_url: str) -> list[OllamaModel]:
+    def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
         """List models installed on a local Ollama service."""
         ...
 

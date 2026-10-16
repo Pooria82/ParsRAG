@@ -4,10 +4,16 @@ import pytest
 
 from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
+from backend.infrastructure.llm.endpoint_policy import (
+    OllamaURLNotAllowedError,
+    allowed_ollama_hosts,
+    is_allowed_ollama_url,
+)
 from backend.infrastructure.llm.factory import (
     condensing_llm,
     configure_model,
     generate_conversation_title,
+    get_model_configuration,
     list_ollama_models,
     resolve_embedding_device,
 )
@@ -211,36 +217,132 @@ def test_list_ollama_models_returns_installed_models(mock_get: MagicMock) -> Non
     mock_get.return_value.raise_for_status.assert_called_once()
 
 
-def test_ollama_rejects_non_local_service() -> None:
-    with pytest.raises(ValueError, match="loopback"):
-        list_ollama_models("https://remote.example")
-
-
-@patch("backend.infrastructure.llm.factory.httpx.get")
-def test_ollama_accepts_explicit_compose_service(
-    mock_get: MagicMock, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:11434",
+        "http://127.0.0.1:11434/",
+        "http://[::1]:11434",
+        "http://ollama:11434",
+        "http://host.docker.internal:11434",
+        "http://HOST.DOCKER.INTERNAL:11434",
+    ],
+)
+def test_ollama_accepts_loopback_compose_and_docker_host(
+    url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The exact configured Docker hostname is accepted without allowing arbitrary hosts."""
-    monkeypatch.setenv("OLLAMA_INTERNAL_HOST", "ollama")
-    mock_get.return_value.json.return_value = {"models": []}
-
-    assert list_ollama_models("http://ollama:11434") == []
-    with pytest.raises(ValueError, match="configured internal host"):
-        list_ollama_models("http://ollama.example:11434")
+    """The host's own Ollama is reachable from Docker without extra settings."""
+    monkeypatch.delenv("OLLAMA_INTERNAL_HOST", raising=False)
+    monkeypatch.delenv("OLLAMA_ALLOWED_HOSTS", raising=False)
+    assert is_allowed_ollama_url(url)
 
 
 @pytest.mark.parametrize(
     "url",
     [
+        "https://remote.example",
+        "http://remote.example:11434",
+        "https://host.docker.internal:11434",
+        "http://ollama.example:11434",
         "http://user@localhost:11434",
+        "http://user:secret@host.docker.internal:11434",
         "http://localhost:11434/api/tags",
         "http://localhost:11434?redirect=remote",
+        "http://localhost:11434#fragment",
+        "http://localhost:not-a-port",
+        "ftp://localhost:11434",
+        "http://192.168.1.10:11434",
     ],
 )
-def test_ollama_rejects_ambiguous_local_urls(url: str) -> None:
-    """Credentials, paths, and query strings cannot disguise an Ollama target."""
-    with pytest.raises(ValueError, match="loopback"):
+def test_ollama_rejects_other_hosts_schemes_credentials_and_paths(
+    url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Arbitrary hosts, HTTPS, credentials, and paths cannot disguise a target."""
+    monkeypatch.delenv("OLLAMA_INTERNAL_HOST", raising=False)
+    monkeypatch.delenv("OLLAMA_ALLOWED_HOSTS", raising=False)
+    assert not is_allowed_ollama_url(url)
+    with pytest.raises(OllamaURLNotAllowedError, match="OLLAMA_ALLOWED_HOSTS"):
         list_ollama_models(url)
+
+
+def test_allowed_hosts_are_extended_by_the_operator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Comma-separated additions and the legacy single host are both honored."""
+    monkeypatch.setenv("OLLAMA_ALLOWED_HOSTS", " gpu-box , 172.17.0.1,, [fd00::1] ")
+    monkeypatch.setenv("OLLAMA_INTERNAL_HOST", "Legacy-Ollama")
+
+    hosts = allowed_ollama_hosts()
+
+    assert {"gpu-box", "172.17.0.1", "fd00::1", "legacy-ollama"} <= hosts
+    assert "" not in hosts
+    assert is_allowed_ollama_url("http://gpu-box:11434")
+    assert is_allowed_ollama_url("http://172.17.0.1:11434")
+    assert is_allowed_ollama_url("http://[fd00::1]:11434")
+    assert is_allowed_ollama_url("http://legacy-ollama:11434")
+    assert not is_allowed_ollama_url("http://gpu-box.example:11434")
+
+
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_list_ollama_models_reads_the_docker_host(mock_get: MagicMock) -> None:
+    mock_get.return_value.json.return_value = {"models": [{"name": "qwen2.5:7b"}]}
+
+    models = list_ollama_models("http://host.docker.internal:11434/")
+
+    assert [model.name for model in models] == ["qwen2.5:7b"]
+    assert mock_get.call_args.args[0] == "http://host.docker.internal:11434/api/tags"
+
+
+@patch("backend.infrastructure.llm.factory.save_model_configuration")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+@patch("backend.infrastructure.llm.factory.Ollama")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_configuring_the_docker_host_ollama_is_verified_and_saved(
+    mock_settings: MagicMock,
+    mock_ollama: MagicMock,
+    mock_get: MagicMock,
+    mock_save: MagicMock,
+) -> None:
+    mock_get.return_value.json.return_value = {"models": [{"name": "qwen2.5:7b"}]}
+
+    result = configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.OLLAMA,
+            model_name="qwen2.5:7b",
+            base_url="http://host.docker.internal:11434/",
+        )
+    )
+
+    assert result.base_url == "http://host.docker.internal:11434"
+    assert (
+        mock_ollama.call_args.kwargs["base_url"] == "http://host.docker.internal:11434"
+    )
+    assert mock_save.call_args.args[0].base_url == "http://host.docker.internal:11434"
+
+
+@patch("backend.infrastructure.llm.factory.save_model_configuration")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_disallowed_ollama_url_is_never_saved(
+    mock_settings: MagicMock, mock_save: MagicMock
+) -> None:
+    with pytest.raises(OllamaURLNotAllowedError):
+        configure_model(
+            ModelConfigurationRequest(
+                provider=ModelProvider.OLLAMA,
+                model_name="m",
+                base_url="http://attacker.example:11434",
+            )
+        )
+    mock_save.assert_not_called()
+
+
+def test_configuration_reports_the_server_ollama_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434/")
+    assert get_model_configuration().ollama_base_url == (
+        "http://host.docker.internal:11434"
+    )
 
 
 @patch("backend.infrastructure.llm.factory.Ollama")
