@@ -159,7 +159,7 @@ sequenceDiagram
     UC->>GW: configure(request)
     GW->>F: configure_model
     alt Ollama
-        F->>F: loopback or internal host only
+        F->>EP: plain http on loopback, ollama, host.docker.internal, or OLLAMA_ALLOWED_HOSTS
         F->>F: GET /api/tags
     else OpenAI-compatible API
         F->>EP: validate URL, block unsafe targets, HTTPS for public

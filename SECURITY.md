@@ -28,6 +28,27 @@ web page points its own domain at 127.0.0.1 to read documents or replace the
 model endpoint. Browser requests that change state must also come from the
 application's own origin or from `PARSRAG_ALLOWED_ORIGINS`.
 
+### Local model endpoints
+
+The app accepts an Ollama URL only as plain `http://host:port`, without
+credentials, path, query, or fragment, on one of these hosts:
+- loopback
+- the `ollama` Compose service
+- `host.docker.internal` (Ollama installed on the Docker host)
+- hosts the operator lists in `OLLAMA_ALLOWED_HOSTS`
+
+The browser cannot widen this list, so a page cannot point the app at an
+arbitrary internal service through the Ollama setting.
+
+Ollama itself has no authentication. On Docker Desktop (Windows, macOS), the
+host's Ollama stays on `127.0.0.1` and is reached through Docker's forwarding.
+On Linux, the containers can reach it only if it listens on another address:
+- Prefer the Docker bridge address (for example `OLLAMA_HOST=172.17.0.1:11434`).
+- `OLLAMA_HOST=0.0.0.0` exposes Ollama to every network the computer is on.
+  Anyone who reaches the port can run the models and use the GPU. If you use
+  it, restrict port 11434 with a firewall to Docker's subnets and use it only
+  on a trusted private network.
+
 ## Documented transitive advisory
 
 `llama-index-core` requires NLTK. ParsRAG pins NLTK 3.10.3 but does not call the

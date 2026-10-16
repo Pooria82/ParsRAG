@@ -76,8 +76,8 @@ flowchart LR
 | `ReuseDocument` | Target valid and different from the source | `InvalidInputError` | 400 |
 | | Source document exists and copies at least one chunk | `NotFoundError` | 404 |
 | | Target lacks the filename and has room | `ConflictError` / `InvalidInputError` | 409 / 400 |
-| `ConfigureModel` | Ollama on loopback or the internal host; API URLs safe; external APIs acknowledged; endpoint verified | `InvalidInputError` | 400 |
-| `ListOllamaModels` | Ollama reachable at an allowed URL | `UpstreamServiceError` | 502 |
+| `ConfigureModel` | Ollama is plain `http://host:port` on loopback, `ollama`, `host.docker.internal`, or `OLLAMA_ALLOWED_HOSTS`; API URLs safe; external APIs acknowledged; endpoint verified | `InvalidInputError` (`ollama_url_not_allowed`, `ollama_unreachable`, or `invalid_request`) | 400 |
+| `ListOllamaModels` | Ollama reachable at an allowed URL (default: the server's `OLLAMA_BASE_URL`) | `UpstreamServiceError` (`ollama_url_not_allowed`, `ollama_unreachable`, or `upstream_unavailable`) | 502 |
 | `ReadQueryProgress` | Stage exists and is younger than 5 minutes | `NotFoundError` | 404 |
 
 ## Testing

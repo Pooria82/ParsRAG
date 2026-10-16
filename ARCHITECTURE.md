@@ -28,7 +28,7 @@ flowchart LR
     subgraph Workstation
         ParsRAG[ParsRAG app<br>React + FastAPI]
         Qdrant[(Qdrant<br>vectors)]
-        Ollama[Ollama<br>local LLM]
+        Ollama[Ollama<br>container or host install]
         ParsRAG --> Qdrant
         ParsRAG --> Ollama
     end
@@ -47,6 +47,19 @@ See [ADR 07](.context/07_Runtime_Trust_and_Data_Boundaries.md).
 | `app` | Multi-stage build from `Dockerfile` | Serves the React build and the FastAPI API on port 8000 | Model settings and embedding cache volumes |
 | `qdrant` | `qdrant/qdrant` | Vector store with session-scoped payload filters | Private named volume |
 | `ollama` | `ollama/ollama` | Local generation (optional when an API model is used) | Model weights volume |
+
+Instead of the `ollama` container, the app can use an Ollama installed on the
+host. Set `OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434`; Compose
+maps that name to the host with `host-gateway`. The host's models and GPU are
+then used directly, and the app container needs no GPU. Ollama URLs are limited
+to these hosts:
+- loopback
+- `ollama`
+- `host.docker.internal`
+- `OLLAMA_ALLOWED_HOSTS`
+
+Each URL must be plain `http://host:port`. Failures are reported as
+`ollama_url_not_allowed` or `ollama_unreachable`.
 
 Compose overlays add NVIDIA (`compose.gpu.yaml`, `compose.gpu-low-vram.yaml`)
 and Linux AMD (`compose.amd.yaml`) acceleration. The port binds to loopback by
