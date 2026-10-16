@@ -161,6 +161,42 @@ def _global_with_file_coverage(
     return _distinct_passages(nodes)
 
 
+# A table split into more chunks than this is completed only up to it; the
+# context budget trims further if needed.
+_MAX_TABLE_CHUNKS = 12
+
+
+def with_whole_tables(
+    repo: DocumentRepository, nodes: list[ExtractedNode], session_id: str | None
+) -> list[ExtractedNode]:
+    """Complete each retrieved table with its other chunks, right after it.
+
+    Tables are split into 512-token chunks, so a question about the largest
+    value in a table saw only some of its rows and picked the largest of
+    those. Added chunks take the score of the chunk that brought them.
+    """
+    if not session_id:
+        return nodes
+    result: list[ExtractedNode] = []
+    present = {node.text for node in nodes}
+    completed: set[tuple[str, int]] = set()
+    for node in nodes:
+        result.append(node)
+        table = node.metadata.get("table")
+        filename = node.metadata.get("filename")
+        if not isinstance(table, int) or not filename:
+            continue
+        if (str(filename), table) in completed:
+            continue
+        completed.add((str(filename), table))
+        siblings = repo.section_chunks(session_id, str(filename), "table", table)
+        for sibling in list(siblings)[:_MAX_TABLE_CHUNKS]:
+            if sibling.text not in present:
+                present.add(sibling.text)
+                result.append(sibling.model_copy(update={"score": node.score}))
+    return result
+
+
 def _passage_key(node: ExtractedNode) -> str:
     """The excerpt's body without its heading path, ignoring spacing."""
     lines = node.text.strip().splitlines()

@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from contextlib import suppress
 from typing import Any, cast
@@ -42,6 +43,17 @@ def fuse_rankings(
             nodes.setdefault(point_id, node)
     ordered = sorted(scores, key=lambda point_id: scores[point_id], reverse=True)
     return [nodes[point_id] for point_id in ordered[:limit]]
+
+
+_ROW = re.compile(r"سطر\s*(\d+)")
+
+
+def _reading_order(node: ExtractedNode) -> tuple[int, int]:
+    """Order a table's chunks: the Markdown grid first, then row records by row."""
+    if "| :---" in node.text:
+        return (0, 0)
+    row = _ROW.search(node.text)
+    return (1, int(row.group(1)) if row else 0)
 
 
 class QdrantRepository(DocumentRepository):
@@ -360,6 +372,18 @@ class QdrantRepository(DocumentRepository):
                 break
             offset = cast(int | str | uuid.UUID, next_offset)
         return SessionCorpus(ids=ids, texts=texts, payloads=payloads)
+
+    def section_chunks(
+        self, session_id: str, filename: str, key: str, value: int
+    ) -> list[ExtractedNode]:
+        """All chunks of one table (or other numbered part), from the keyword cache."""
+        corpus = self._keywords.get(session_id, lambda: self._load_corpus(session_id))
+        nodes = [
+            self._node({"text": text, **payload}, None)
+            for text, payload in zip(corpus.texts, corpus.payloads, strict=True)
+            if payload.get("filename") == filename and payload.get(key) == value
+        ]
+        return sorted(nodes, key=_reading_order)
 
     def get_session_files(self, session_id: str) -> list[str]:
         """Returns the list of distinct filenames indexed in the given session.
