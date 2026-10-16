@@ -154,10 +154,17 @@ class ReasoningFreeOpenAILike(OpenAILike):  # type: ignore[misc]
         for attempt in range(self.status_retries + 1):
             try:
                 return call()
-            except (openai.InternalServerError, openai.RateLimitError):
+            except openai.RateLimitError:
                 if attempt == self.status_retries:
                     raise
-                # Failures come in short bursts: wait 2, 4, 8, then 16 seconds.
+                # Free-tier quotas are counted per minute (Google AI Studio:
+                # 16,000 input tokens a minute for Gemma), so a short wait
+                # only repeats the error: wait 15, 30, 45, then 60 seconds.
+                time.sleep(min(60.0, 15.0 * (attempt + 1)))
+            except openai.InternalServerError:
+                if attempt == self.status_retries:
+                    raise
+                # Server errors come in short bursts: wait 2, 4, 8, then 16 s.
                 time.sleep(min(16.0, 2.0 * 2**attempt))
         raise AssertionError("unreachable")
 

@@ -207,12 +207,17 @@ LLM_MODEL_NAME=gemma-4-26b-a4b-it
 MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 MODEL_API_KEY=your-ai-studio-key
 MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
+# The free tier allows 16,000 input tokens a minute for Gemma; keep each
+# prompt well below that.
+MODEL_CONTEXT_WINDOW=12000
 ```
 
 The `models/` prefix that this endpoint requires is added automatically, and the
 model's reasoning (`<thought>...</thought>`) is removed from answers. Free tiers
 fail some requests with HTTP 500 or 429; ParsRAG retries those up to
-`MODEL_API_MAX_RETRIES` times (default 4). Prompts sent on a free tier may be
+`MODEL_API_MAX_RETRIES` times (default 4), waiting up to a minute for rate
+limits. Answers stay slower than on a paid tier: with the token limit, about one
+question a minute fits. Prompts sent on a free tier may be
 used by the provider; avoid it for confidential documents.
 
 ```powershell
