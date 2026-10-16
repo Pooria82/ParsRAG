@@ -233,6 +233,10 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
     ]
     if exact:
         return exact
+    # Partial names must be distinctive: ordinary words such as «اول» (first)
+    # appear in names like «گزارش اول_ فاز اول و دوم» and in many questions, so
+    # one shared word restricted a question to the wrong file.
+    words = set(re.findall(r"[\w‌]+", query))
     matched: list[str] = []
     for filename in available_files:
         parts = {
@@ -240,7 +244,8 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
             for part in _clean_filename_stem(filename).split()
             if len(part) >= 3 and part.lower() not in _GENERIC_FILENAME_WORDS
         }
-        if any(part in query for part in parts):
+        hits = len(parts & words)
+        if hits >= 2 or (len(parts) == 1 and hits == 1 and len(next(iter(parts))) >= 4):
             matched.append(filename)
     return matched
 
