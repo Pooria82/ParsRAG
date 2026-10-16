@@ -120,8 +120,11 @@ def test_docx_complex_table_parsing() -> None:
         in text
     )
 
-    # Callout box verification
-    assert "> [کادر محتوا]:" in text
+    # A one-cell callout box stays with the paragraph before it
+    assert "> [کادر محتوا]:" not in text
+    assert (
+        "پاراگراف میانی بین دو جدول.\nتوجه: این یک کادر هشدار یا کد نمونه است." in text
+    )
     assert "توجه: این یک کادر هشدار یا کد نمونه است." in text
 
 

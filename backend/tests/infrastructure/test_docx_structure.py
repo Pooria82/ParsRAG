@@ -68,6 +68,25 @@ def test_tables_carry_their_heading_path() -> None:
     assert sections[0].metadata == {"paragraph": 1, "table": 1}
 
 
+def test_one_cell_boxes_stay_with_the_sentence_that_introduces_them() -> None:
+    """A command in a one-cell box is indexed with the text that leads to it."""
+
+    def build(document: DocxDocument) -> None:
+        document.add_paragraph("مدل محلی را با دستور زیر اجرا کنید:")
+        box = document.add_table(rows=1, cols=1)
+        box.cell(0, 0).text = "ollama run qwen:2.5-coder-1.5b"
+        document.add_paragraph("سپس افزونه را باز کنید.")
+
+    sections = parse_document_sections(_docx(build), "setup.docx")
+
+    assert len(sections) == 1
+    assert sections[0].text == (
+        "مدل محلی را با دستور زیر اجرا کنید:\nollama run qwen:2.5-coder-1.5b\n"
+        "سپس افزونه را باز کنید."
+    )
+    assert sections[0].metadata == {"paragraph": 1, "paragraph_end": 2}
+
+
 def test_tables_are_cited_by_number_caption_and_preceding_paragraph() -> None:
     """A table is cited as "paragraph N · table M", with its caption above it."""
 
@@ -77,8 +96,8 @@ def test_tables_are_cited_by_number_caption_and_preceding_paragraph() -> None:
         first = document.add_table(rows=1, cols=2)
         first.cell(0, 0).text, first.cell(0, 1).text = "PyAutoGUI", "10.9k"
         document.add_paragraph("توضیح میانی")
-        second = document.add_table(rows=1, cols=1)
-        second.cell(0, 0).text = "بدون شرح"
+        second = document.add_table(rows=1, cols=2)
+        second.cell(0, 0).text, second.cell(0, 1).text = "بدون شرح", "۲"
 
     sections = parse_document_sections(_docx(build), "tools.docx")
 

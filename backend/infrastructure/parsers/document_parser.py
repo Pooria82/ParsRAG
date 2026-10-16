@@ -191,10 +191,9 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
             if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
         elif isinstance(child, CT_Tbl):
-            table_number += 1
-            value = _format_docx_table(Table(child, document)).strip()
-            if value:
-                builder.table(value, table_number, max(1, paragraph))
+            table_number = _add_docx_table(
+                builder, Table(child, document), table_number, max(1, paragraph)
+            )
     return builder.finish()
 
 
@@ -591,6 +590,33 @@ def _format_table_grid(grid_rows: list[list[str]]) -> str:
         table_md += "\n" + "\n".join(record_lines)
 
     return table_md
+
+
+def _add_docx_table(
+    builder: "_DocxSectionBuilder", table: Table, numbered: int, paragraph: int
+) -> int:
+    """Add a table after ``paragraph``; return the count of numbered tables.
+
+    A one-cell table is a text box (often a command or code) that belongs
+    with the sentence introducing it, not a table of its own.
+    """
+    box = _single_cell_text(table)
+    if box is not None:
+        if box:
+            builder.paragraph(box, paragraph)
+        return numbered
+    value = _format_docx_table(table).strip()
+    if value:
+        builder.table(value, numbered + 1, paragraph)
+    return numbered + 1
+
+
+def _single_cell_text(table: Table) -> str | None:
+    """The text of a table with exactly one cell, or None for a real table."""
+    cells = {cell._tc: cell for row in table.rows for cell in row.cells}
+    if len(cells) != 1:
+        return None
+    return str(next(iter(cells.values())).text).strip()
 
 
 def _format_docx_table(table: Table) -> str:
