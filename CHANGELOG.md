@@ -5,11 +5,32 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Images inside Word and PowerPoint files are cited by number: text read
+  from an image is its own excerpt with the image's caption, shown as
+  "paragraph 120 · image 7" or "slide 25 · image 9", and answers say when a
+  fact comes from an image.
+- Word tables are cited by number and the paragraph they follow
+  ("paragraph 120 · table 3") instead of an internal element index.
+
+### Improved
+
+- OCR reads screenshots better: a second, sparse-text pass adds text that
+  page layout analysis skipped (status panels, dark UI themes).
+- Up to 200 images per Word or PowerPoint file are read (was 30).
+- With several documents, specific questions search all files together, so
+  the file that holds the answer can provide most excerpts; each other file
+  still contributes its best match, and passages repeated across files are
+  kept once.
+
 ### Fixed
 
 - English questions get English answers in Hybrid and open-chat modes; they
   were often answered in Persian. Every prompt now names the answer language,
   detected from the question.
+- The service retries startup when Qdrant is briefly unavailable instead of
+  staying not ready until restarted.
 
 ## [1.0.0] - 2026-10-08
 
