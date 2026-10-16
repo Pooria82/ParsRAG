@@ -4,7 +4,8 @@ import logging
 import os
 import shutil
 import tempfile
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Thread
@@ -34,20 +35,43 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def _initialize_runtime() -> None:
-    """Initialize heavyweight model and storage adapters in a background thread."""
-    try:
-        from backend.api.dependencies import _shared_document_repository, reranker
+# Seconds to wait before each retry of a failed start. A busy or still-starting
+# Qdrant can time out once; without a retry the service stayed "not ready"
+# until it was restarted.
+_INIT_RETRY_DELAYS = (5, 10, 20, 40, 60)
 
-        setup_llm_and_embeddings()
-        reranker.warm_up()
-        repository = _shared_document_repository()
-        if not repository.is_ready():
-            raise RuntimeError("Qdrant is unavailable")
-        runtime_state.mark_ready()
-    except Exception:
-        runtime_state.mark_failed()
-        logger.exception("Runtime initialization failed")
+
+def _initialize_runtime(
+    delays: tuple[float, ...] = _INIT_RETRY_DELAYS,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Initialize heavyweight model and storage adapters in a background thread.
+
+    Transient failures are retried with growing delays while readiness stays
+    "preparing"; only the last failure marks the runtime as failed.
+    """
+    for attempt in range(len(delays) + 1):
+        try:
+            from backend.api.dependencies import _shared_document_repository, reranker
+
+            setup_llm_and_embeddings()
+            reranker.warm_up()
+            repository = _shared_document_repository()
+            if not repository.is_ready():
+                raise RuntimeError("Qdrant is unavailable")
+            runtime_state.mark_ready()
+            return
+        except Exception:
+            if attempt == len(delays):
+                runtime_state.mark_failed()
+                logger.exception("Runtime initialization failed")
+                return
+            logger.warning(
+                "Runtime initialization failed; retrying in %s s",
+                delays[attempt],
+                exc_info=True,
+            )
+            sleep(delays[attempt])
 
 
 def _max_request_bytes() -> int:
