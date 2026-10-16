@@ -95,6 +95,16 @@ def ollama_context_length() -> int:
     return _bounded_environment_int("OLLAMA_CONTEXT_LENGTH", 8192, 2048, 131072)
 
 
+def ollama_thinking() -> bool:
+    """Whether Ollama models may reason before answering (``OLLAMA_THINK``).
+
+    Off by default: grounded answers do not need it, and a thinking model
+    (qwen3, qwen3.5, deepseek-r1) can spend the whole answer budget on
+    reasoning and return an empty answer. Models without thinking ignore it.
+    """
+    return os.getenv("OLLAMA_THINK", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def api_context_window() -> int:
     """Context window assumed for OpenAI-compatible models."""
     return _bounded_environment_int("MODEL_CONTEXT_WINDOW", 32768, 2048, 1048576)
@@ -306,12 +316,14 @@ def configure_model(
             base_url=base_url,
             request_timeout=llm_request_timeout(),
             context_window=ollama_context_length(),
+            thinking=ollama_thinking(),
         )
         next_condense_llm = Ollama(
             model=configuration.model_name,
             base_url=base_url,
             request_timeout=condense_request_timeout(),
             context_window=ollama_context_length(),
+            thinking=ollama_thinking(),
         )
         configuration = configuration.model_copy(
             update={"api_key": None, "base_url": base_url}

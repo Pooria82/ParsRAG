@@ -88,6 +88,7 @@ def test_configure_local_model_updates_active_runtime(
     mock_settings: MagicMock, mock_ollama: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("OLLAMA_CONTEXT_LENGTH", raising=False)
+    monkeypatch.delenv("OLLAMA_THINK", raising=False)
     response = configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.OLLAMA,
@@ -103,6 +104,7 @@ def test_configure_local_model_updates_active_runtime(
         "base_url": "http://localhost:11434",
         "request_timeout": 120.0,
         "context_window": 8192,
+        "thinking": False,
     }
     assert condense_call.kwargs["request_timeout"] == 30.0
     assert mock_settings.llm is mock_ollama.return_value
@@ -399,3 +401,36 @@ def test_generated_conversation_title_is_bounded_and_sanitized(
     assert "untrusted topic text" in prompt
     assert '"فیستل چیست؟"' in prompt
     assert mock_settings.llm.complete.call_args.kwargs == {"max_tokens": 1024}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(None, False), ("0", False), ("1", True)]
+)
+@patch("backend.infrastructure.llm.factory.Ollama")
+@patch("backend.infrastructure.llm.factory.Settings")
+def test_ollama_thinking_is_off_unless_enabled(
+    mock_settings: MagicMock,
+    mock_ollama: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    value: str | None,
+    expected: bool,
+) -> None:
+    """Thinking models would otherwise spend the answer budget on reasoning."""
+    if value is None:
+        monkeypatch.delenv("OLLAMA_THINK", raising=False)
+    else:
+        monkeypatch.setenv("OLLAMA_THINK", value)
+
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.OLLAMA,
+            model_name="qwen3.5:4b",
+            base_url="http://host.docker.internal:11434",
+        ),
+        verify=False,
+        persist=False,
+    )
+
+    answer_call, condense_call = mock_ollama.call_args_list
+    assert answer_call.kwargs["thinking"] is expected
+    assert condense_call.kwargs["thinking"] is expected
