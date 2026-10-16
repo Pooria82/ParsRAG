@@ -32,6 +32,13 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- Reasoning that some APIs put inside answers (`<thought>...</thought>` from
+  Google AI Studio's Gemma 4, `<think>...</think>` elsewhere) is removed from
+  answers, streams, conversation titles, and suggested questions.
+- Transient API failures (HTTP 5xx and 429) are retried up to
+  `MODEL_API_MAX_RETRIES` times (default 4) with growing delays; Google AI
+  Studio's free tier fails about one Gemma request in three.
+- Google AI Studio model ids get the `models/` prefix its endpoint requires.
 - English questions get English answers in Hybrid and open-chat modes; they
   were often answered in Persian. Every prompt now names the answer language,
   detected from the question.

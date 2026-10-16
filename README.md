@@ -198,6 +198,23 @@ Set the disclosure flag to `1` only after accepting that an external API receive
 prompts and retrieved document excerpts. The Settings screen records the same
 acknowledgement when configuring an API interactively.
 
+Google AI Studio's free tier works through its OpenAI-compatible endpoint
+(the key comes from aistudio.google.com):
+
+```dotenv
+LLM_PROVIDER=api
+LLM_MODEL_NAME=gemma-4-26b-a4b-it
+MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+MODEL_API_KEY=your-ai-studio-key
+MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
+```
+
+The `models/` prefix that this endpoint requires is added automatically, and the
+model's reasoning (`<thought>...</thought>`) is removed from answers. Free tiers
+fail some requests with HTTP 500 or 429; ParsRAG retries those up to
+`MODEL_API_MAX_RETRIES` times (default 4). Prompts sent on a free tier may be
+used by the provider; avoid it for confidential documents.
+
 ```powershell
 docker compose up -d --build
 ```

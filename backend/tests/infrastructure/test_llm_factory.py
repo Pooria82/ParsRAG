@@ -51,7 +51,7 @@ def test_ollama_receives_the_configured_context_length(
     assert mock_ollama.call_args_list[0].kwargs["request_timeout"] == 90.0
 
 
-@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
 @patch("backend.infrastructure.llm.factory.Settings")
 def test_api_requests_stay_within_the_browser_timeout(
     mock_settings: MagicMock, mock_openai: MagicMock
@@ -104,7 +104,7 @@ def test_configure_local_model_updates_active_runtime(
     assert response.provider is ModelProvider.OLLAMA
 
 
-@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
 @patch("backend.infrastructure.llm.factory.Settings")
 def test_configure_api_model_keeps_secret_out_of_response(
     mock_settings: MagicMock, mock_openai: MagicMock
@@ -125,7 +125,7 @@ def test_configure_api_model_keeps_secret_out_of_response(
 
 
 @patch("backend.infrastructure.llm.factory.Settings")
-@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
 @patch("backend.infrastructure.llm.factory.httpx.get")
 def test_private_api_without_key_is_verified_through_models_endpoint(
     mock_get: MagicMock,
@@ -244,7 +244,7 @@ def test_ollama_rejects_ambiguous_local_urls(url: str) -> None:
 
 
 @patch("backend.infrastructure.llm.factory.Ollama")
-@patch("backend.infrastructure.llm.factory.OpenAILike")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
 @patch("backend.infrastructure.llm.factory.Settings")
 def test_switching_to_ollama_does_not_forget_existing_api_key(
     mock_settings: MagicMock, mock_openai: MagicMock, mock_ollama: MagicMock
@@ -296,4 +296,4 @@ def test_generated_conversation_title_is_bounded_and_sanitized(
     prompt = mock_settings.llm.complete.call_args.args[0]
     assert "untrusted topic text" in prompt
     assert '"فیستل چیست؟"' in prompt
-    assert mock_settings.llm.complete.call_args.kwargs == {"max_tokens": 32}
+    assert mock_settings.llm.complete.call_args.kwargs == {"max_tokens": 1024}

@@ -195,6 +195,23 @@ API خصوصی سازگار با OpenAI می‌تواند بدون کلید با
 `MODEL_API_DISCLOSURE_ACKNOWLEDGED` را `1` بگذارید. در تنظیمات برنامه نیز همین
 تأیید هنگام انتخاب API ثبت می‌شود.
 
+سطح رایگان Google AI Studio از راه نشانی سازگار با OpenAI آن کار می‌کند (کلید را از
+aistudio.google.com بگیرید):
+
+```dotenv
+LLM_PROVIDER=api
+LLM_MODEL_NAME=gemma-4-26b-a4b-it
+MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+MODEL_API_KEY=your-ai-studio-key
+MODEL_API_DISCLOSURE_ACKNOWLEDGED=1
+```
+
+پیشوند `models/` که این سرویس لازم دارد خودکار اضافه می‌شود و استدلال مدل
+(`<thought>...</thought>`) از پاسخ حذف می‌شود. سطح‌های رایگان گاهی با خطای ۵۰۰ یا ۴۲۹
+پاسخ نمی‌دهند؛ پارس‌رگ این درخواست‌ها را تا `MODEL_API_MAX_RETRIES` بار (پیش‌فرض ۴)
+دوباره می‌فرستد. سرویس‌دهنده ممکن است از پرسش‌های سطح رایگان استفاده کند؛ برای اسناد
+محرمانه از آن استفاده نکنید.
+
 ```powershell
 docker compose up -d --build
 ```
