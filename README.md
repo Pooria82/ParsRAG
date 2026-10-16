@@ -303,6 +303,155 @@ the newer ROCm runtime is validated on AMD hardware. Check GPU and driver
 compatibility before deployment; unsupported hardware falls back poorly and
 should use the CPU profile or an API provider.
 
+### Complete run: system Ollama + API + GPU
+
+If Ollama is already installed on the computer (Windows, macOS, or Linux), the
+app container can use it directly:
+
+- Models you already pulled are reused; nothing is downloaded again.
+- Generation runs on the host's GPU through Ollama's own driver support: CUDA
+  on NVIDIA, Metal on Apple Silicon, ROCm on supported AMD cards under Linux.
+- The app container needs no GPU.
+- Settings can still switch between this Ollama and any OpenAI-compatible API
+  without a restart.
+
+The containerized Ollama (`--profile local-model`) keeps working as described
+above; use one or the other.
+
+1. In `.env`, point the app at the host and pick a model that `ollama list`
+   shows:
+
+   ```dotenv
+   LLM_PROVIDER=ollama
+   LLM_MODEL_NAME=qwen3.5:4b
+   OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434
+   # Optional: an API to switch to in Settings (Google AI Studio example)
+   MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+   MODEL_API_KEY=your-ai-studio-key
+   ```
+
+2. Make Ollama reachable from Docker (see the per-system steps below).
+
+3. Start without the `local-model` profile:
+
+   ```powershell
+   docker compose up -d --build
+   ```
+
+4. Ask a question, and while it is answering run `ollama ps` on the host. The
+   `PROCESSOR` column should say `100% GPU`:
+
+   ```text
+   NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+   qwen3.5:4b    d8b0f5e9760c    3.1 GB    100% GPU     4096       4 minutes from now
+   ```
+
+**Windows and macOS (Docker Desktop).** Nothing else is needed. Docker Desktop
+forwards `host.docker.internal` to the host's loopback, so Ollama's default
+`127.0.0.1:11434` works and Ollama stays closed to the network. Docker cannot
+pass a Mac's GPU to a container, so on a Mac this host mode is the way to
+generate on the GPU.
+
+**Linux (Docker Engine).** Compose maps `host.docker.internal` to the Docker
+bridge gateway (`host-gateway`, usually `172.17.0.1`). Ollama listens only on
+`127.0.0.1` by default, so containers cannot reach it. Make the Ollama service
+listen on the bridge address:
+
+```bash
+ip -4 addr show docker0          # note the address, usually 172.17.0.1
+sudo systemctl edit ollama.service
+```
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=172.17.0.1:11434"
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+curl http://172.17.0.1:11434/api/tags
+OLLAMA_HOST=172.17.0.1:11434 ollama ps
+```
+
+With a bridge-only address, the `ollama` command on the host needs the same
+`OLLAMA_HOST`. `OLLAMA_HOST=0.0.0.0:11434` also works, but it opens Ollama to
+every network the computer is on. Ollama has no authentication, so anyone who
+reaches the port can use your models and GPU. If you use `0.0.0.0`, allow the
+port only from Docker's networks and never on a public network. With `ufw`:
+
+```bash
+sudo ufw allow from 172.16.0.0/12 to any port 11434 proto tcp
+sudo ufw deny 11434/tcp
+```
+
+A host firewall that drops traffic from Docker networks also shows up as
+"Ollama did not answer"; allow port 11434 from the Docker subnets as above.
+
+**Existing models.** Ollama keeps models where `OLLAMA_MODELS` points. The
+defaults are:
+- Windows: `%USERPROFILE%\.ollama\models`
+- macOS: `~/.ollama/models`
+- Linux service: `/usr/share/ollama/.ollama/models`
+
+If you moved them (for example `OLLAMA_MODELS=E:\.ollama\models` on Windows),
+keep that variable set for the Ollama service. ParsRAG never pulls models in
+this mode: `ollama-init` belongs to the `local-model` profile.
+
+**GPU memory.**
+- The app passes `OLLAMA_CONTEXT_LENGTH` (default `8192`) to Ollama with every
+  request, so the host's Ollama allocates only that context.
+- Measured on a 6 GB RTX 3060 Laptop GPU, with the desktop using about 1.6 GB:
+  - `qwen3.5:4b` (3.3 GB) runs at `100% GPU` with `OLLAMA_CONTEXT_LENGTH=4096`
+    and answers in seconds.
+  - `qwen2.5:7b` (4.7 GB) stays at about `82%` GPU, even with a 2048-token
+    context. It works, but more slowly.
+- On such cards:
+  - Use a 3–4B model.
+  - Set `OLLAMA_CONTEXT_LENGTH=4096`.
+  - Keep embeddings on the CPU. The base image already does this, so add no
+    GPU overlay.
+- `compose.gpu-low-vram.yaml` tunes the Ollama container. In host mode, the
+  base file already is the low-VRAM setup.
+- On NVIDIA hosts with spare VRAM, adding `-f compose.gpu.yaml` moves
+  embeddings to the GPU too. Its `ollama` settings apply only with the
+  profile.
+
+**Thinking models.** ParsRAG asks Ollama not to "think" before answering
+(`OLLAMA_THINK=0`). Otherwise models such as `qwen3`, `qwen3.5`, or
+`deepseek-r1` can spend the whole answer budget on reasoning and return an
+empty answer. Set `OLLAMA_THINK=1` only together with a larger
+`OLLAMA_CONTEXT_LENGTH`.
+
+**Switching models.** In Settings → Model:
+- Choose *Local Ollama*. The address defaults to the server's
+  `http://host.docker.internal:11434`. *Find installed models* lists the
+  host's models.
+- Or choose *OpenAI-compatible API*.
+
+Changes apply to the next question without a restart.
+
+**Allowed Ollama addresses.** Ollama URLs must be plain `http://host:port` on:
+- `localhost`, `127.0.0.1`, or `::1`
+- `ollama`
+- `host.docker.internal`
+- a host you list in `OLLAMA_ALLOWED_HOSTS` (comma-separated, for example a
+  GPU server on your LAN)
+
+Credentials, paths, query strings, and HTTPS URLs are rejected. Use the
+OpenAI-compatible API option for anything else.
+
+**Troubleshooting**
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Settings: "Ollama did not answer at this address" | Ollama is not running, or on Linux it does not listen on the Docker bridge or a firewall blocks it (see above). Test from the app container: `docker compose exec app python -c "import httpx; print(httpx.get('http://host.docker.internal:11434/api/tags').status_code)"` |
+| Settings: "This Ollama address is not allowed" | Use `http://` with one of the allowed hosts, or add the host to `OLLAMA_ALLOWED_HOSTS` |
+| The app still uses the old model or URL after editing `.env` | A connection saved in Settings takes precedence over `.env`; choose the host Ollama again in Settings |
+| "The selected model was not found" | `LLM_MODEL_NAME` must match a name in `ollama list` |
+| `ollama ps` shows `CPU` or a CPU/GPU split | Update the GPU driver, use a smaller model, or lower `OLLAMA_CONTEXT_LENGTH` |
+| Ollama was off when the app started | The app still becomes ready; questions report that the model service is unreachable until Ollama starts, then work without a restart |
+
 Open `http://127.0.0.1:8000` or the port configured by `PARSRAG_PORT`.
 
 The API answers only to `localhost`, `127.0.0.1`, and `::1`. If you bind the
@@ -334,6 +483,7 @@ removes local vector data, persisted model settings, caches, and Ollama weights.
 | `OLLAMA_NUM_PARALLEL` | `1` | Limits parallel Ollama generations |
 | `OLLAMA_KEEP_ALIVE` | `5m` | Duration model weights remain loaded |
 | `OLLAMA_CONTEXT_LENGTH` | `8192` | Context requested from Ollama (`num_ctx`); retrieved chunks are trimmed to fit. Low-VRAM overlay uses `2048` |
+| `OLLAMA_THINK` | `0` | Let thinking models reason before answering; needs a larger context |
 | `MODEL_CONTEXT_WINDOW` | `32768` | Context assumed for API models when fitting retrieved chunks |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | `120` | One answer request; API requests are retried once |
 | `CONDENSE_TIMEOUT_SECONDS` | `30` | Follow-up rewrite; on timeout the question is used as asked |
@@ -364,11 +514,11 @@ load its weights.
 
 The CPU Docker Compose configuration is the portable baseline on all three
 systems. Start with `docker compose up -d --build`; add
-`--profile local-model` for the containerized Ollama service. On macOS, use
-the CPU container profile or run Ollama natively and configure its reachable
-endpoint in the app. Docker Desktop does not expose a Mac GPU to the Linux
-Ollama container, so the NVIDIA/AMD GPU overlays are for supported Windows
-and Linux hosts only. A private or external OpenAI-compatible API also works
+`--profile local-model` for the containerized Ollama service. To use an Ollama
+already installed on the computer (its models and GPU, including Apple
+Silicon), see [Complete run: system Ollama + API + GPU](#complete-run-system-ollama--api--gpu).
+Docker Desktop does not expose a Mac GPU to the Linux Ollama container, so the
+NVIDIA/AMD GPU overlays are for supported Windows and Linux hosts only. A private or external OpenAI-compatible API also works
 on machines without a local model. See the [Docker GPU guidance](https://docs.docker.com/guides/rag-ollama/).
 
 CI runs backend and frontend checks on Windows, macOS, and Linux; the Docker
