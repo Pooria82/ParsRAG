@@ -10,7 +10,8 @@ and this project uses Semantic Versioning.
 - Images inside Word and PowerPoint files are cited by number: text read
   from an image is its own excerpt with the image's caption, shown as
   "paragraph 120 · image 7" or "slide 25 · image 9", and answers say when a
-  fact comes from an image.
+  fact comes from an image. Each image excerpt also carries the text that
+  introduces it (the end of the paragraph before it, or the slide's text).
 - Word tables are cited by number and the paragraph they follow
   ("paragraph 120 · table 3") instead of an internal element index.
 
@@ -36,6 +37,8 @@ and this project uses Semantic Versioning.
   staying not ready until restarted.
 - A question is no longer limited to one file just because it shares an
   ordinary word with the file name (such as «اول» or «تست»).
+- An API provider that is out of credit (HTTP 402) is reported as such, with
+  a hint to top up the account or choose another model.
 
 ## [1.0.0] - 2026-10-08
 
