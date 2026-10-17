@@ -31,14 +31,17 @@ branches, cited sources, and deletion lifecycle.
 
 ## Interface preview
 
-The conversation and source names below are synthetic examples captured from the
-running application. No private documents or API credentials appear in these images.
+The conversation, documents, and numbers below are synthetic examples captured
+from the running application. No private documents or API credentials appear in
+these images. Regenerate them with `npm run screenshots` in `frontend`.
 
 <p align="center"><a href="docs/screenshots/home-en-light.png"><img src="docs/screenshots/home-en-light.png" width="900" alt="ParsRAG English welcome screen in light mode"></a></p>
 
-| Model connection | Grounded answer and sources | Dark workspace |
-| --- | --- | --- |
-| [![English model connection settings](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) | [![English sample answer with file and location citations](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
+| Grounded answer: table and image sources | Installed Ollama models |
+| --- | --- |
+| [![English answer citing a table and the image it was read from](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English model settings listing the installed Ollama models](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) |
+| **Documents & speed settings** | **Dark workspace** |
+| [![English Documents and speed settings with a value changed in the app](docs/screenshots/settings-en-light.png)](docs/screenshots/settings-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
 
 ## Highlights
 
@@ -50,14 +53,18 @@ running application. No private documents or API credentials appear in these ima
   layers, standalone images, and images embedded in Word or PowerPoint files,
   with Persian and English Tesseract data.
 - **Traceable sources:** unique filenames plus page ranges, slides, paragraphs,
-  or section locations when the parser can determine them.
+  tables, or image numbers. Table excerpts render as tables, and a source read
+  from a picture shows the picture itself.
 - **Local lifecycle:** Qdrant data is isolated by conversation; users can remove
   one document, deselect all documents, reuse an indexed document in another
   conversation without uploading it again, or delete an entire session.
 - **Precise prompts:** mention one or several uploaded files with `@` to bind
   parts of a question to those sources; use `/` for quick prompt and mode actions.
-- **Adaptive compute:** CPU is the portable default; optional Compose overlays
-  accelerate both embeddings and Ollama on NVIDIA or supported AMD hosts.
+- **Adaptive compute:** use the Ollama installed on the computer, with its
+  models and GPU, or Ollama inside Docker on CPU, NVIDIA, or supported AMD
+  hosts; images are read in parallel while indexing.
+- **Settings without restarts:** model, retrieval, OCR, upload, and indexing
+  settings change in the app; each shows its `.env` value and can be reset.
 - **Resource controls:** bounded uploads, OCR dimensions, parser archives,
   concurrency, embedding batches, Qdrant upserts, and container memory.
 - **Polished bilingual UI:** RTL/LTR content direction, four color palettes,
