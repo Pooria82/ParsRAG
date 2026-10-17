@@ -47,6 +47,11 @@ and this project uses Semantic Versioning.
 
 ### Improved
 
+- Questions that ask several things ("… with which key, and which fields …")
+  are also searched part by part. Each part keeps its best excerpts, and the
+  model is asked to answer every part. In the acceptance set, 5 of the 6
+  answers that missed a part became complete, with no regressions among the
+  questions that were already right.
 - Indexing is faster with the same results:
   - Pictures in Word and PowerPoint are read several at a time
     (`OCR_WORKERS`). The 96-image final report parsed in 33 s instead of

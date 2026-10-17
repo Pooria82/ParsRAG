@@ -159,6 +159,14 @@ segments, each retrieved from its own document. Otherwise an explicit file
 filter or filenames named in the question narrow the search. Broad questions
 spread retrieval across files so one large document cannot crowd out the rest.
 
+**Questions that ask several things.** A question with two clauses joined by
+"و"/"and", each with its own question word ("which key opens Edit mode, and
+which fields did the example add?"), is also searched part by part. Clauses
+without their own question word ("unit and system tests") are not split. Each
+part keeps its best excerpts (three in documents-only mode) even when filtering
+or reranking against the whole question would drop them. The prompt asks the
+model to answer every part, and to say which part the documents do not cover.
+
 **Search.** Every search fuses two rankings with reciprocal-rank fusion:
 vector similarity (meaning) and BM25 keyword matching over the session's
 chunks (exact terms such as tool names, identifiers, and numbers, after

@@ -3,6 +3,7 @@ import re
 
 from backend.core.domain.documents import ExtractedNode
 from backend.core.port.document_repository import DocumentRepository
+from backend.core.service.question_parts import question_parts
 
 _BROAD_INDICATORS = (
     "هر سه",
@@ -133,6 +134,62 @@ def retrieve_document_nodes(
     return nodes
 
 
+def retrieve_question_parts(
+    repo: DocumentRepository,
+    query: str,
+    available_files: list[str],
+    file_filter: list[str] | None,
+    session_id: str | None,
+    per_part: int,
+) -> list[list[ExtractedNode]]:
+    """Search each part of a question that asks several things on its own.
+
+    Returns one result list per part, or nothing for a single question. The
+    whole question is still searched by the caller; this adds evidence for a
+    part whose answer sits far from the rest.
+    """
+    parts = question_parts(query)
+    if len(parts) < 2:
+        return []
+    return [
+        retrieve_document_nodes(
+            repo, part, available_files, file_filter, session_id, per_part, 1
+        )
+        for part in parts
+    ]
+
+
+def with_part_evidence(
+    nodes: list[ExtractedNode],
+    part_results: list[list[ExtractedNode]],
+    *,
+    per_part: int = 2,
+    minimum_score: float = 0.0,
+) -> list[ExtractedNode]:
+    """Make sure each part of the question keeps its best excerpts.
+
+    Filtering and reranking judge excerpts against the whole question, which
+    can push out the only passage that answers its second half.
+    """
+    result = list(nodes)
+    present = {_passage_key(node) for node in result}
+    for found in part_results:
+        added = 0
+        for node in found:
+            if added == per_part:
+                break
+            if (node.score or 0.0) < minimum_score:
+                continue
+            key = _passage_key(node)
+            if key in present:
+                added += 1
+                continue
+            present.add(key)
+            result.append(node)
+            added += 1
+    return result
+
+
 def _asks_about_all_documents(query: str) -> bool:
     """Summaries and comparisons need every document, not the best matches."""
     lowered = query.lower()
@@ -147,7 +204,7 @@ def _global_with_file_coverage(
     total_k: int,
 ) -> list[ExtractedNode]:
     """Best excerpts across all files, plus the best of each file not yet present."""
-    nodes = _distinct_passages(
+    nodes = distinct_passages(
         repo.similarity_search(query, top_k=total_k, session_id=session_id)
     )
     present = {node.metadata.get("filename") for node in nodes}
@@ -158,7 +215,7 @@ def _global_with_file_coverage(
                     query, top_k=1, session_id=session_id, file_filter=[filename]
                 )
             )
-    return _distinct_passages(nodes)
+    return distinct_passages(nodes)
 
 
 # A table split into more chunks than this is completed only up to it; the
@@ -204,7 +261,7 @@ def _passage_key(node: ExtractedNode) -> str:
     return re.sub(r"\s+", "", body)[-400:]
 
 
-def _distinct_passages(nodes: list[ExtractedNode]) -> list[ExtractedNode]:
+def distinct_passages(nodes: list[ExtractedNode]) -> list[ExtractedNode]:
     """Drop repeated passages, keeping the higher-scored copy in its place."""
     best: dict[str, ExtractedNode] = {}
     for node in nodes:
