@@ -1,6 +1,9 @@
 import io
 import json
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from html.parser import HTMLParser
 from typing import Any, Protocol
 
@@ -10,6 +13,7 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
+from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
@@ -123,13 +127,14 @@ def parse_document_file(file_bytes: bytes, filename: str) -> ParsedDocument:
     """
     lower_name = filename.lower()
     notices: list[str] = []
+    blobs: dict[int, bytes] = {}
     settings = OCRSettings.from_environment()
     if lower_name.endswith(".pdf"):
         sections = _parse_pdf_sections(file_bytes, notices)
     elif lower_name.endswith(".docx"):
-        sections = _parse_docx_sections(file_bytes, notices)
+        sections = _parse_docx_sections(file_bytes, notices, blobs)
     elif lower_name.endswith(".pptx"):
-        sections = _parse_pptx_sections(file_bytes, notices)
+        sections = _parse_pptx_sections(file_bytes, notices, blobs)
     elif lower_name.endswith(IMAGE_EXTENSIONS):
         sections = _parse_image_sections(file_bytes)
     elif lower_name.endswith(TEXT_EXTENSIONS):
@@ -152,7 +157,62 @@ def parse_document_file(file_bytes: bytes, filename: str) -> ParsedDocument:
                 "OCR found no readable text in the document.", "no_readable_text"
             )
         raise EmptyDocumentError("The document contains no text.")
-    return ParsedDocument(sections, tuple(dict.fromkeys(notices)))
+    return ParsedDocument(
+        sections, tuple(dict.fromkeys(notices)), _section_previews(sections, blobs)
+    )
+
+
+# Longest side of an image preview shown next to its source excerpt.
+_PREVIEW_MAX_SIDE = 1280
+_PREVIEW_QUALITY = 80
+
+
+def source_image_previews_enabled() -> bool:
+    """Whether cited images are kept as previews (``SOURCE_IMAGE_PREVIEWS``)."""
+    return os.getenv("SOURCE_IMAGE_PREVIEWS", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def image_preview(blob: bytes) -> bytes | None:
+    """A WebP copy of an image, at most 1280 px on its longest side.
+
+    Returns None for data Pillow cannot read, so a broken picture never
+    blocks indexing.
+    """
+    try:
+        with Image.open(io.BytesIO(blob)) as image:
+            image.load()
+            mode = "RGBA" if image.mode in {"RGBA", "LA", "P"} else "RGB"
+            picture = image.convert(mode)
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None
+    picture.thumbnail((_PREVIEW_MAX_SIDE, _PREVIEW_MAX_SIDE))
+    output = io.BytesIO()
+    picture.save(output, format="WEBP", quality=_PREVIEW_QUALITY, method=4)
+    return output.getvalue()
+
+
+def _section_previews(
+    sections: list[ParsedSection], blobs: dict[int, bytes]
+) -> dict[int, bytes]:
+    """Previews of the images that became searchable sections."""
+    if not blobs or not source_image_previews_enabled():
+        return {}
+    numbers = {
+        number
+        for section in sections
+        if isinstance(number := section.metadata.get("image"), int)
+    }
+    previews: dict[int, bytes] = {}
+    for number in sorted(numbers & blobs.keys()):
+        preview = image_preview(blobs[number])
+        if preview is not None:
+            previews[number] = preview
+    return previews
 
 
 class LocalDocumentParser:
@@ -163,31 +223,33 @@ class LocalDocumentParser:
         return parse_document_file(file_bytes, filename)
 
 
-def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
-    """Extract traceable paragraphs and tables from DOCX bytes."""
+def _parse_docx_sections(
+    file_bytes: bytes, notices: list[str], blobs: dict[int, bytes] | None = None
+) -> list[ParsedSection]:
+    """Extract traceable paragraphs and tables from DOCX bytes.
+
+    Images are read first and recognized several at a time; ``blobs`` receives
+    each image by its number in the document.
+    """
     try:
         document = Document(io.BytesIO(file_bytes))
     except Exception as exc:
         raise DocumentError(
             "Corrupted or invalid DOCX document.", "corrupt_file"
         ) from exc
-    settings = OCRSettings.from_environment()
+    children = list(document.element.body.iterchildren())
+    readings = _docx_image_readings(children, document, notices, blobs)
     builder = _DocxSectionBuilder()
     paragraph = 0
-    ocr_images = 0
     image_number = 0
     table_number = 0
-    for child in document.element.body.iterchildren():
+    for index, child in enumerate(children):
         if isinstance(child, CT_P):
             paragraph_object = Paragraph(child, document)
             images: list[tuple[int, str]] = []
-            if settings.enabled:
-                for image in _docx_paragraph_images(paragraph_object, document):
-                    image_number += 1
-                    recognized, ocr_images = _extract_embedded_image(
-                        image, settings, ocr_images, notices
-                    )
-                    images.append((image_number, recognized))
+            for recognized in readings.get(index, []):
+                image_number += 1
+                images.append((image_number, recognized))
             if builder.add(paragraph_object, images, paragraph + 1):
                 paragraph += 1
         elif isinstance(child, CT_Tbl):
@@ -195,6 +257,32 @@ def _parse_docx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
                 builder, Table(child, document), table_number, max(1, paragraph)
             )
     return builder.finish()
+
+
+def _docx_image_readings(
+    children: list[Any],
+    document: Any,
+    notices: list[str],
+    blobs: dict[int, bytes] | None,
+) -> dict[int, list[str]]:
+    """OCR text of every Word image, grouped by the body element that holds it."""
+    settings = OCRSettings.from_environment()
+    owners: list[int] = []
+    pictures: list[bytes] = []
+    if settings.enabled:
+        for index, child in enumerate(children):
+            if isinstance(child, CT_P):
+                paragraph = Paragraph(child, document)
+                for image in _docx_paragraph_images(paragraph, document):
+                    owners.append(index)
+                    pictures.append(image)
+    readings: dict[int, list[str]] = {}
+    recognized = recognize_images(pictures, settings, notices)
+    for owner, text in zip(owners, recognized, strict=True):
+        readings.setdefault(owner, []).append(text)
+    if blobs is not None:
+        blobs.update(enumerate(pictures, start=1))
+    return readings
 
 
 # Word paragraphs are often a single line; one chunk per paragraph produced
@@ -387,8 +475,14 @@ def _is_table_caption(text: str) -> bool:
     return bool(_TABLE_CAPTION.match(text)) and len(text.split()) <= _MAX_CAPTION_WORDS
 
 
-def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSection]:
-    """Extract traceable slide content and tables from PPTX bytes."""
+def _parse_pptx_sections(
+    file_bytes: bytes, notices: list[str], blobs: dict[int, bytes] | None = None
+) -> list[ParsedSection]:
+    """Extract traceable slide content and tables from PPTX bytes.
+
+    Pictures are recognized several at a time before the slides are built;
+    ``blobs`` receives each picture by its number in the presentation.
+    """
     try:
         presentation = Presentation(io.BytesIO(file_bytes))
     except Exception as exc:
@@ -396,8 +490,11 @@ def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
             "Corrupted or invalid PPTX document.", "corrupt_file"
         ) from exc
     settings = OCRSettings.from_environment()
+    pictures = _pptx_pictures(presentation) if settings.enabled else []
+    readings = iter(recognize_images(pictures, settings, notices))
+    if blobs is not None:
+        blobs.update(enumerate(pictures, start=1))
     sections: list[ParsedSection] = []
-    ocr_images = 0
     image_number = 0
     for slide_index, slide in enumerate(presentation.slides, start=1):
         parts: list[str] = []
@@ -407,26 +504,42 @@ def _parse_pptx_sections(file_bytes: bytes, notices: list[str]) -> list[ParsedSe
                 parts.append(_format_pptx_table(shape.table))
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and settings.enabled:
                 image_number += 1
-                text, ocr_images = _extract_embedded_image(
-                    shape.image.blob, settings, ocr_images, notices
-                )
+                text = next(readings)
                 if text.strip():
                     images.append((image_number, text.strip()))
             elif hasattr(shape, "text") and shape.text and shape.text.strip():
                 parts.append(shape.text.strip())
-        if text := "\n\n".join(part for part in parts if part).strip():
-            sections.append(ParsedSection(text, {"slide": slide_index}))
-        # Each picture is its own section under the slide's title, so answers
-        # can cite "slide N, image M" for text that only appears in the picture.
-        slide_text = "\n".join(part for part in parts if part.strip())
-        title, _, rest = slide_text.partition("\n")
-        context = " ".join(rest.replace("\u2039#\u203a", " ").split())
-        for number, recognized in images:
-            body = _image_section_text(number, title, recognized, context)
-            sections.append(
-                ParsedSection(body, {"slide": slide_index, "image": number})
-            )
+        sections.extend(_slide_sections(slide_index, parts, images))
     return sections
+
+
+def _slide_sections(
+    slide_index: int, parts: list[str], images: list[tuple[int, str]]
+) -> list[ParsedSection]:
+    """One slide's text section, then one section per recognized picture."""
+    sections: list[ParsedSection] = []
+    if text := "\n\n".join(part for part in parts if part).strip():
+        sections.append(ParsedSection(text, {"slide": slide_index}))
+    # Each picture is its own section under the slide's title, so answers
+    # can cite "slide N, image M" for text that only appears in the picture.
+    slide_text = "\n".join(part for part in parts if part.strip())
+    title, _, rest = slide_text.partition("\n")
+    context = " ".join(rest.replace("\u2039#\u203a", " ").split())
+    for number, recognized in images:
+        body = _image_section_text(number, title, recognized, context)
+        sections.append(ParsedSection(body, {"slide": slide_index, "image": number}))
+    return sections
+
+
+def _pptx_pictures(presentation: Any) -> list[bytes]:
+    """Every picture of a presentation in slide and shape order."""
+    return [
+        shape.image.blob
+        for slide in presentation.slides
+        for shape in slide.shapes
+        if not getattr(shape, "has_table", False)
+        and shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+    ]
 
 
 def _docx_paragraph_images(paragraph: Paragraph, document: Any) -> list[bytes]:
@@ -446,26 +559,50 @@ def _ocr_unavailable(exc: OCRUnavailableError) -> DocumentError:
     return DocumentError(f"OCR is unavailable: {exc}", "ocr_unavailable")
 
 
-def _extract_embedded_image(
-    image: bytes, settings: OCRSettings, processed: int, notices: list[str]
-) -> tuple[str, int]:
-    """OCR one Office image within the image budget; skip it when over budget.
+def ocr_workers() -> int:
+    """Images recognized at the same time (``OCR_WORKERS``; default half the CPUs).
 
-    Text of the rest of the document is still indexed: images past
-    ``OCR_MAX_IMAGES`` or images OCR cannot read only add a notice.
+    Each image is still read by its own Tesseract process with the same
+    settings, so the text is the same as reading them one by one.
     """
-    next_count = processed + 1
-    if next_count > settings.max_images:
-        notices.append(NOTICE_OCR_IMAGE_LIMIT)
-        return "", next_count
+    default = max(1, min(8, (os.cpu_count() or 2) // 2))
     try:
-        return extract_image_text(image, settings), next_count
-    except OCRUnavailableError:
-        notices.append(NOTICE_OCR_UNAVAILABLE)
-        return "", next_count
-    except (OCRError, ValueError):
-        notices.append(NOTICE_OCR_PARTIAL)
-        return "", next_count
+        value = int(os.getenv("OCR_WORKERS", "") or default)
+    except ValueError:
+        return default
+    return min(16, max(1, value))
+
+
+def recognize_images(
+    images: list[bytes], settings: OCRSettings, notices: list[str]
+) -> list[str]:
+    """OCR Office images in document order; one text per image ("" if skipped).
+
+    Images past ``OCR_MAX_IMAGES`` or images OCR cannot read only add a
+    notice, so the rest of the document is still indexed.
+    """
+    within_budget = images[: settings.max_images]
+    workers = min(ocr_workers(), len(within_budget))
+    # Parallel Tesseract processes each use one thread instead of competing.
+    active = replace(settings, single_thread=True) if workers > 1 else settings
+
+    def read(image: bytes) -> tuple[str, str | None]:
+        try:
+            return extract_image_text(image, active), None
+        except OCRUnavailableError:
+            return "", NOTICE_OCR_UNAVAILABLE
+        except (OCRError, ValueError):
+            return "", NOTICE_OCR_PARTIAL
+
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(read, within_budget))
+    else:
+        results = [read(image) for image in within_budget]
+    notices.extend(notice for _, notice in results if notice)
+    if len(images) > len(within_budget):
+        notices.append(NOTICE_OCR_IMAGE_LIMIT)
+    return [text for text, _ in results] + [""] * (len(images) - len(within_budget))
 
 
 def _parse_image_sections(file_bytes: bytes) -> list[ParsedSection]:

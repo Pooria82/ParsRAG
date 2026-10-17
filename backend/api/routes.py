@@ -8,7 +8,7 @@ are mapped centrally by ``backend.api.errors``.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
@@ -23,6 +23,7 @@ from backend.api.dependencies import (
     get_list_session_files,
     get_read_model_configuration,
     get_read_query_progress,
+    get_read_source_image,
     get_reuse_document,
     get_suggest_questions,
     require_runtime_ready,
@@ -62,6 +63,7 @@ from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
 from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
+from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
@@ -188,6 +190,21 @@ def get_session_files(
 ) -> list[str]:
     """Retrieves all distinct filenames indexed for a given session."""
     return use_case.execute(session_id)
+
+
+@router.get("/sessions/{session_id}/images/{image}", response_class=Response)
+def read_source_image(
+    session_id: str,
+    image: int,
+    filename: str,
+    use_case: ReadSourceImage = Depends(get_read_source_image),  # noqa: B008
+) -> Response:
+    """Return the preview of image ``image`` in ``filename`` (WebP)."""
+    return Response(
+        content=use_case.execute(session_id, filename, image),
+        media_type="image/webp",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 
 @router.post(

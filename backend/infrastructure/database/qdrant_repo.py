@@ -1,6 +1,8 @@
+import base64
 import os
 import re
 import uuid
+from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any, cast
 
@@ -20,6 +22,27 @@ from backend.infrastructure.embedding_profile import active_embedding_profile
 
 # Reciprocal-rank fusion constant (Cormack et al.); 60 is the usual default.
 _RRF_K = 60
+
+
+def _image_point_id(session_id: str, filename: str, number: int) -> str:
+    """Stable point id, so one image of one document has exactly one preview."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{session_id}\n{filename}\n{number}"))
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Embed texts in batches of similar length; vectors keep the input order.
+
+    Batches pad every text to the longest one, so sorting by length avoids
+    computing padding. Each vector is the same as embedding the text alone.
+    """
+    order = sorted(range(len(texts)), key=lambda index: len(texts[index]))
+    embedded = Settings.embed_model.get_text_embedding_batch(
+        [texts[index] for index in order]
+    )
+    vectors: list[list[float]] = [[] for _ in texts]
+    for position, index in enumerate(order):
+        vectors[index] = embedded[position]
+    return vectors
 
 
 def keyword_search_enabled() -> bool:
@@ -108,8 +131,35 @@ class QdrantRepository(DocumentRepository):
             )
         return None
 
+    @property
+    def image_collection_name(self) -> str:
+        """Collection holding image previews next to the chunk collection."""
+        return f"{self.collection_name}_images"
+
+    def _ensure_image_collection(self) -> None:
+        """Create the preview collection; its one-number vector is never searched."""
+        if not self.client.collection_exists(self.image_collection_name):
+            self.client.create_collection(
+                collection_name=self.image_collection_name,
+                vectors_config=qmodels.VectorParams(
+                    size=1, distance=qmodels.Distance.DOT
+                ),
+            )
+        for field, schema in (
+            ("session_id", qmodels.PayloadSchemaType.KEYWORD),
+            ("filename", qmodels.PayloadSchemaType.KEYWORD),
+            ("image", qmodels.PayloadSchemaType.INTEGER),
+        ):
+            with suppress(Exception):
+                self.client.create_payload_index(
+                    collection_name=self.image_collection_name,
+                    field_name=field,
+                    field_schema=schema,
+                )
+
     def _ensure_collection_and_indices(self) -> None:
         try:
+            self._ensure_image_collection()
             exists = self.client.collection_exists(self.collection_name)
             if not exists:
                 self.client.create_collection(
@@ -173,11 +223,10 @@ class QdrantRepository(DocumentRepository):
             except ValueError:
                 configured_batch_size = 64
             batch_size = min(512, max(1, configured_batch_size))
+            vectors = embed_texts([node.text for node in nodes])
             for offset in range(0, len(nodes), batch_size):
                 batch = nodes[offset : offset + batch_size]
-                embeddings = Settings.embed_model.get_text_embedding_batch(
-                    [node.text for node in batch]
-                )
+                embeddings = vectors[offset : offset + batch_size]
                 points = []
                 for node, embedding in zip(batch, embeddings, strict=True):
                     payload = node.metadata.copy()
@@ -195,6 +244,94 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to save nodes in Qdrant: {exc}"
             ) from exc
+
+    def save_images(
+        self, session_id: str, filename: str, images: Mapping[int, bytes]
+    ) -> None:
+        """Store image previews; saving the same image again replaces it."""
+        if not images:
+            return
+        points = [
+            qmodels.PointStruct(
+                id=_image_point_id(session_id, filename, number),
+                vector=[1.0],
+                payload={
+                    "session_id": session_id,
+                    "filename": filename,
+                    "image": number,
+                    "data": base64.b64encode(data).decode("ascii"),
+                },
+            )
+            for number, data in images.items()
+        ]
+        try:
+            for offset in range(0, len(points), 32):
+                self.client.upsert(
+                    collection_name=self.image_collection_name,
+                    points=points[offset : offset + 32],
+                )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to save image previews in Qdrant: {exc}"
+            ) from exc
+
+    def get_image(self, session_id: str, filename: str, number: int) -> bytes | None:
+        """Return one image preview, or None when it was not stored."""
+        try:
+            points = self.client.retrieve(
+                collection_name=self.image_collection_name,
+                ids=[_image_point_id(session_id, filename, number)],
+                with_payload=["data", "session_id", "filename"],
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to read an image preview from Qdrant: {exc}"
+            ) from exc
+        for point in points:
+            payload = point.payload or {}
+            if (
+                payload.get("session_id") == session_id
+                and payload.get("filename") == filename
+                and isinstance(payload.get("data"), str)
+            ):
+                return base64.b64decode(payload["data"])
+        return None
+
+    def _delete_images(self, conditions: list[qmodels.Condition]) -> None:
+        """Delete the previews matching ``conditions``."""
+        self.client.delete(
+            collection_name=self.image_collection_name,
+            points_selector=qmodels.FilterSelector(
+                filter=qmodels.Filter(must=conditions)
+            ),
+        )
+
+    def _copy_images(
+        self, source_session_id: str, target_session_id: str, filename: str
+    ) -> None:
+        """Copy a document's previews to another session."""
+        points, _ = self.client.scroll(
+            collection_name=self.image_collection_name,
+            scroll_filter=qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="session_id",
+                        match=qmodels.MatchValue(value=source_session_id),
+                    ),
+                    qmodels.FieldCondition(
+                        key="filename", match=qmodels.MatchValue(value=filename)
+                    ),
+                ]
+            ),
+            limit=10_000,
+            with_payload=True,
+        )
+        images = {
+            int(payload["image"]): base64.b64decode(payload["data"])
+            for point in points
+            if (payload := point.payload or {}).get("data")
+        }
+        self.save_images(target_session_id, filename, images)
 
     def similarity_search(
         self,
@@ -510,6 +647,7 @@ class QdrantRepository(DocumentRepository):
                 if next_offset is None:
                     break
                 offset = cast(int | str | uuid.UUID, next_offset)
+            self._copy_images(source_session_id, target_session_id, filename)
             return copied
         except Exception as exc:
             with suppress(VectorDBConnectionError):
@@ -539,6 +677,13 @@ class QdrantRepository(DocumentRepository):
                     )
                 ),
             )
+            self._delete_images(
+                [
+                    qmodels.FieldCondition(
+                        key="session_id", match=qmodels.MatchValue(value=session_id)
+                    )
+                ]
+            )
         except Exception as exc:
             raise VectorDBConnectionError(
                 f"Failed to delete session nodes in Qdrant: {exc}"
@@ -563,6 +708,16 @@ class QdrantRepository(DocumentRepository):
                         ]
                     )
                 ),
+            )
+            self._delete_images(
+                [
+                    qmodels.FieldCondition(
+                        key="session_id", match=qmodels.MatchValue(value=session_id)
+                    ),
+                    qmodels.FieldCondition(
+                        key="filename", match=qmodels.MatchValue(value=filename)
+                    ),
+                ]
             )
         except Exception as exc:
             raise VectorDBConnectionError(

@@ -163,7 +163,7 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     app.dependency_overrides.clear()
     assert response.status_code == 200
     assert "3 chunks" in response.json()["message"]
-    bridge = repo.save_nodes.call_args_list[1].args[0][-1]
+    bridge = repo.save_nodes.call_args.args[0][-1]
     assert bridge.metadata["page"] == 3
     assert bridge.metadata["page_end"] == 4
     assert "invoice total is\n[page 4] 425 euros" in bridge.text
@@ -506,3 +506,25 @@ def test_generate_conversation_title(mock_generate: MagicMock) -> None:
     assert response.status_code == 200
     assert response.json() == {"title": "ساختار رمزنگاری فیستل"}
     mock_generate.assert_called_once_with("ساختار فیستل چیست؟", "fa")
+
+
+def test_source_image_preview_is_served_as_webp() -> None:
+    from backend.tests.core.use_case.fakes import InMemoryRepository
+
+    repository = InMemoryRepository()
+    repository.save_images("session-1", "گزارش.docx", {3: b"RIFFwebp"})
+    app.dependency_overrides[get_document_repository] = lambda: repository
+    try:
+        found = client.get(
+            "/sessions/session-1/images/3", params={"filename": "گزارش.docx"}
+        )
+        missing = client.get(
+            "/sessions/session-1/images/4", params={"filename": "گزارش.docx"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert found.status_code == 200
+    assert found.headers["content-type"] == "image/webp"
+    assert found.content == b"RIFFwebp"
+    assert missing.status_code == 404

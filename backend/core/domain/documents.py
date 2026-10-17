@@ -1,6 +1,7 @@
 """Document entities shared by ingestion, retrieval, and answer citations."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -24,6 +25,9 @@ class ParsedDocument:
 
     sections: list[ParsedSection]
     notices: tuple[str, ...] = ()
+    # Web-ready previews of images that became sections, by image number,
+    # so a cited image can be shown next to its excerpt.
+    images: Mapping[int, bytes] = field(default_factory=dict)
 
 
 class ExtractedNode(BaseModel):

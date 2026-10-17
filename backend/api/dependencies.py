@@ -37,6 +37,7 @@ from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
 from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
+from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
@@ -138,6 +139,13 @@ def get_list_session_files(
 ) -> ListSessionFiles:
     """Build the session file listing use case."""
     return ListSessionFiles(repo)
+
+
+def get_read_source_image(
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> ReadSourceImage:
+    """Build the image-preview use case."""
+    return ReadSourceImage(repo)
 
 
 def get_reuse_document(
