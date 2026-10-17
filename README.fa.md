@@ -658,6 +658,25 @@ docker compose -f compose.yaml -f compose.gpu.yaml -f compose.gpu-low-vram.yaml 
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config --quiet
 ```
 
+فرمان `pytest` ساده دو آزمون سرتاسری (end-to-end) را رد می‌کند. این دو آزمون مسیر
+کامل بارگذاری تا پاسخ را با پردازش و بردارسازی واقعی و Qdrant درون‌حافظه‌ای اجرا
+می‌کنند و بار اول مدل بردارسازی را دانلود می‌کنند. برای اجرای همهٔ آزمون‌ها بدون
+هیچ آزمون ردشده:
+
+```powershell
+$env:PARSRAG_E2E = "1"; .\.venv\Scripts\python.exe -m pytest
+```
+
+این متغیر تا پایان همان پنجرهٔ PowerShell می‌ماند و با `Remove-Item Env:PARSRAG_E2E`
+پاک می‌شود. برای آزمون روی سرور Qdrant (مثل CI)، یک Qdrant جدا اجرا کنید و
+`QDRANT_HOST` را به آن بدهید. Qdrant استک Compose روی میزبان باز نیست:
+
+```powershell
+docker run -d --rm --name qdrant-e2e -p 127.0.0.1:6333:6333 qdrant/qdrant:v1.19.1
+$env:PARSRAG_E2E = "1"; $env:QDRANT_HOST = "localhost"; .\.venv\Scripts\python.exe -m pytest backend/tests/e2e --no-cov
+docker stop qdrant-e2e
+```
+
 فایل‌های خصوصی تست باید در `testData/` و خروجی آزمایش‌های موقت در `scratch/`
 بمانند. هر دو مسیر در Git نادیده گرفته می‌شوند و نباید کامیت شوند.
 
