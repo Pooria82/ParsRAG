@@ -1,5 +1,6 @@
 """Vector-store port isolating the core from Qdrant and its client library."""
 
+from collections.abc import Mapping
 from typing import Protocol
 
 from backend.core.domain.documents import ExtractedNode
@@ -19,6 +20,16 @@ class DocumentRepository(Protocol):
             nodes (list[ExtractedNode]): The nodes to save.
             session_id: The required session isolation boundary.
         """
+        ...
+
+    def save_images(
+        self, session_id: str, filename: str, images: Mapping[int, bytes]
+    ) -> None:
+        """Keep previews of a document's images, keyed by image number."""
+        ...
+
+    def get_image(self, session_id: str, filename: str, number: int) -> bytes | None:
+        """Return one image preview, or None when the document has none."""
         ...
 
     def similarity_search(

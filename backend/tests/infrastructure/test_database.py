@@ -48,24 +48,23 @@ def test_qdrant_save_nodes_bounds_embedding_and_upsert_batches(
     mock_qdrant_client_cls: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Large documents cannot create one unbounded embedding allocation."""
+    """Upserts stay bounded; the embedding model batches the whole document."""
     monkeypatch.setenv("QDRANT_UPSERT_BATCH_SIZE", "2")
     mock_client = mock_qdrant_client_cls.return_value
     mock_settings.embed_model.get_text_embedding_batch.side_effect = lambda texts: [
         [0.1] * 3 for _ in texts
     ]
     repo = QdrantRepository(collection_name="bounded", vector_size=3)
-    nodes = [ExtractedNode(text=f"chunk-{index}") for index in range(5)]
+    nodes = [ExtractedNode(text="x" * (5 - index)) for index in range(5)]
 
     repo.save_nodes(nodes, session_id="session")
 
     assert [
         len(call.kwargs["points"]) for call in mock_client.upsert.call_args_list
     ] == [2, 2, 1]
-    assert [
-        len(call.args[0])
-        for call in mock_settings.embed_model.get_text_embedding_batch.call_args_list
-    ] == [2, 2, 1]
+    # One call, shortest texts first, so batches need little padding.
+    (texts,) = mock_settings.embed_model.get_text_embedding_batch.call_args.args
+    assert texts == ["x", "xx", "xxx", "xxxx", "xxxxx"]
 
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
@@ -113,9 +112,9 @@ def test_qdrant_delete_session(mock_qdrant_client_cls: MagicMock) -> None:
     repo = QdrantRepository(collection_name="test_collection", vector_size=768)
     repo.delete_session("test_session")
 
-    mock_client.delete.assert_called_once()
-    _, kwargs = mock_client.delete.call_args
-    assert kwargs["collection_name"] == "test_collection"
+    chunks, previews = mock_client.delete.call_args_list
+    assert chunks.kwargs["collection_name"] == "test_collection"
+    assert previews.kwargs["collection_name"] == "test_collection_images"
 
 
 @patch("backend.infrastructure.database.qdrant_repo.QdrantClient")
@@ -128,7 +127,7 @@ def test_qdrant_delete_document_scopes_session_and_filename(
 
     repo.delete_document("session-one", "guide.pdf")
 
-    selector = mock_client.delete.call_args.kwargs["points_selector"]
+    selector = mock_client.delete.call_args_list[0].kwargs["points_selector"]
     assert len(selector.filter.must) == 2
 
 
@@ -211,17 +210,17 @@ def test_document_copy_reuses_vectors_in_bounded_pages(
         },
     )
     client = mock_qdrant_client_cls.return_value
-    client.scroll.side_effect = [([source_point], 77), ([], None)]
+    client.scroll.side_effect = [([source_point], 77), ([], None), ([], None)]
     repo = QdrantRepository(collection_name="test", vector_size=2)
 
     assert repo.copy_document("old", "new", "guide.pdf") == 1
 
-    copied = client.upsert.call_args.kwargs["points"][0]
+    copied = client.upsert.call_args_list[0].kwargs["points"][0]
     assert copied.id != source_point.id
     assert copied.vector == source_point.vector
     assert copied.payload == {**source_point.payload, "session_id": "new"}
     assert client.scroll.call_args_list[1].kwargs["offset"] == 77
-    assert client.upsert.call_args.kwargs["wait"] is True
+    assert client.upsert.call_args_list[0].kwargs["wait"] is True
     mock_settings.embed_model.get_text_embedding_batch.assert_not_called()
 
 
@@ -280,8 +279,11 @@ def test_document_copy_is_searchable_in_target_session() -> None:
     repo = object.__new__(QdrantRepository)
     repo.client = client
     repo.collection_name = "reuse_test"
+    repo._ensure_image_collection()
+    repo.save_images("source", "guide.pdf", {2: b"picture"})
 
     assert repo.copy_document("source", "target", "guide.pdf") == 1
+    assert repo.get_image("target", "guide.pdf", 2) == b"picture"
     assert repo.get_session_files("target") == ["guide.pdf"]
     source, _ = client.scroll(
         collection_name="reuse_test",
@@ -313,3 +315,56 @@ def test_document_copy_is_searchable_in_target_session() -> None:
     repo.delete_session("source")
     assert repo.get_session_files("source") == []
     assert repo.get_session_files("target") == ["guide.pdf"]
+
+
+def _image_repository() -> QdrantRepository:
+    """A repository on Qdrant's local engine with only the preview collection."""
+    repo = object.__new__(QdrantRepository)
+    repo.client = QdrantClient(location=":memory:")
+    repo.collection_name = "previews"
+    repo._ensure_image_collection()
+    return repo
+
+
+def test_image_previews_are_scoped_to_session_and_document() -> None:
+    repo = _image_repository()
+    repo.save_images("s1", "report.docx", {1: b"one", 2: b"two"})
+    repo.save_images("s1", "report.docx", {2: b"two again"})
+
+    assert repo.get_image("s1", "report.docx", 1) == b"one"
+    assert repo.get_image("s1", "report.docx", 2) == b"two again"
+    assert repo.get_image("s2", "report.docx", 1) is None
+    assert repo.get_image("s1", "other.docx", 1) is None
+    assert repo.get_image("s1", "report.docx", 3) is None
+
+
+def test_deleting_a_document_or_session_deletes_its_previews() -> None:
+    repo = _image_repository()
+    repo.collection_name = "previews"
+    repo.client.create_collection(
+        collection_name="previews",
+        vectors_config=qmodels.VectorParams(size=2, distance=qmodels.Distance.COSINE),
+    )
+    repo._keywords.invalidate("s1")
+    repo.save_images("s1", "a.docx", {1: b"a"})
+    repo.save_images("s1", "b.docx", {1: b"b"})
+    repo.save_images("s2", "a.docx", {1: b"other session"})
+
+    repo.delete_document("s1", "a.docx")
+    assert repo.get_image("s1", "a.docx", 1) is None
+    assert repo.get_image("s1", "b.docx", 1) == b"b"
+
+    repo.delete_session("s1")
+    assert repo.get_image("s1", "b.docx", 1) is None
+    assert repo.get_image("s2", "a.docx", 1) == b"other session"
+
+
+def test_embedded_texts_keep_their_order() -> None:
+    """Sorting by length for batching never mixes up which vector is whose."""
+    from backend.infrastructure.database.qdrant_repo import embed_texts
+
+    with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
+        settings.embed_model.get_text_embedding_batch.side_effect = lambda texts: [
+            [float(len(text))] for text in texts
+        ]
+        assert embed_texts(["ccc", "a", "bb", ""]) == [[3.0], [1.0], [2.0], [0.0]]

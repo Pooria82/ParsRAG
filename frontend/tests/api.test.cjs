@@ -167,3 +167,9 @@ test('Ollama settings errors explain the reason in both languages', async () => 
   global.fetch = async () => new Response(JSON.stringify({ detail: 'x', code: 'ollama_url_not_allowed' }), { status: 400 });
   await assert.rejects(client.configureModel({ provider: 'ollama', model_name: 'm', base_url: 'http://evil.example' }), error => error.code === 'ollama_url_not_allowed');
 });
+
+test('cited image previews have a session-scoped address', () => {
+  const client = new ParsRagApiClient('http://localhost:8000/');
+  assert.equal(client.sourceImageUrl('chat 1', 'گزارش نهایی.docx', 15),
+    'http://localhost:8000/sessions/chat%201/images/15?filename=%DA%AF%D8%B2%D8%A7%D8%B1%D8%B4%20%D9%86%D9%87%D8%A7%DB%8C%DB%8C.docx');
+});

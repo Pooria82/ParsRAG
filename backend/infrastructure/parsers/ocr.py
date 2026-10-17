@@ -99,6 +99,8 @@ class OCRSettings:
     max_image_pixels: int = 40_000_000
     min_image_pixels: int = 10_000
     correct_orientation: bool = False
+    # Limit Tesseract to one thread when several images are read in parallel.
+    single_thread: bool = False
 
     @classmethod
     def from_environment(cls) -> "OCRSettings":
@@ -262,6 +264,13 @@ def _png(image: Image.Image) -> bytes:
     return output.getvalue()
 
 
+def _tesseract_environment(settings: OCRSettings) -> dict[str, str] | None:
+    """Process environment for Tesseract; None keeps the parent's."""
+    if not settings.single_thread:
+        return None
+    return {**os.environ, "OMP_THREAD_LIMIT": "1"}
+
+
 def _orientation(image: bytes, settings: OCRSettings) -> int:
     """Clockwise degrees (90/180/270) that make the page upright, or 0.
 
@@ -275,6 +284,7 @@ def _orientation(image: bytes, settings: OCRSettings) -> int:
             capture_output=True,
             check=False,
             timeout=settings.timeout_seconds,
+            env=_tesseract_environment(settings),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return 0
@@ -328,6 +338,7 @@ def _recognize(
             capture_output=True,
             check=False,
             timeout=settings.timeout_seconds,
+            env=_tesseract_environment(settings),
         )
     except FileNotFoundError as exc:
         raise OCRUnavailableError("Tesseract OCR is not installed.") from exc

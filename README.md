@@ -31,14 +31,17 @@ branches, cited sources, and deletion lifecycle.
 
 ## Interface preview
 
-The conversation and source names below are synthetic examples captured from the
-running application. No private documents or API credentials appear in these images.
+The conversation, documents, and numbers below are synthetic examples captured
+from the running application. No private documents or API credentials appear in
+these images. Regenerate them with `npm run screenshots` in `frontend`.
 
 <p align="center"><a href="docs/screenshots/home-en-light.png"><img src="docs/screenshots/home-en-light.png" width="900" alt="ParsRAG English welcome screen in light mode"></a></p>
 
-| Model connection | Grounded answer and sources | Dark workspace |
-| --- | --- | --- |
-| [![English model connection settings](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) | [![English sample answer with file and location citations](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
+| Grounded answer: table and image sources | Installed Ollama models |
+| --- | --- |
+| [![English answer citing a table and the image it was read from](docs/screenshots/sources-en-light.png)](docs/screenshots/sources-en-light.png) | [![English model settings listing the installed Ollama models](docs/screenshots/model-en-light.png)](docs/screenshots/model-en-light.png) |
+| **Documents & speed settings** | **Dark workspace** |
+| [![English Documents and speed settings with a value changed in the app](docs/screenshots/settings-en-light.png)](docs/screenshots/settings-en-light.png) | [![English document chat in dark mode](docs/screenshots/workspace-en-dark.png)](docs/screenshots/workspace-en-dark.png) |
 
 ## Highlights
 
@@ -50,14 +53,18 @@ running application. No private documents or API credentials appear in these ima
   layers, standalone images, and images embedded in Word or PowerPoint files,
   with Persian and English Tesseract data.
 - **Traceable sources:** unique filenames plus page ranges, slides, paragraphs,
-  or section locations when the parser can determine them.
+  tables, or image numbers. Table excerpts render as tables, and a source read
+  from a picture shows the picture itself.
 - **Local lifecycle:** Qdrant data is isolated by conversation; users can remove
   one document, deselect all documents, reuse an indexed document in another
   conversation without uploading it again, or delete an entire session.
 - **Precise prompts:** mention one or several uploaded files with `@` to bind
   parts of a question to those sources; use `/` for quick prompt and mode actions.
-- **Adaptive compute:** CPU is the portable default; optional Compose overlays
-  accelerate both embeddings and Ollama on NVIDIA or supported AMD hosts.
+- **Adaptive compute:** use the Ollama installed on the computer, with its
+  models and GPU, or Ollama inside Docker on CPU, NVIDIA, or supported AMD
+  hosts; images are read in parallel while indexing.
+- **Settings without restarts:** model, retrieval, OCR, upload, and indexing
+  settings change in the app; each shows its `.env` value and can be reset.
 - **Resource controls:** bounded uploads, OCR dimensions, parser archives,
   concurrency, embedding batches, Qdrant upserts, and container memory.
 - **Polished bilingual UI:** RTL/LTR content direction, four color palettes,
@@ -170,15 +177,205 @@ The layered backend design (ports, use cases, and DTOs) is described in
 [ARCHITECTURE.md](ARCHITECTURE.md). Ingestion, vector storage, retrieval, and
 retention are described in [DATA.md](DATA.md).
 
-## Docker quick start
+## Quick start: the complete setup
 
-Requirements: Docker Engine with Compose, enough disk space for images and
-model weights, and 8–16 GB RAM depending on the selected model.
+The recommended setup uses every capability:
+- answers from the Ollama already installed on your computer, on its GPU, with
+  the models you already have;
+- switching to any OpenAI-compatible API (for example Google AI Studio) from
+  Settings;
+- OCR for scans, screenshots, and pictures inside Word and PowerPoint, with
+  each cited image shown next to its source;
+- every behaviour setting adjustable in the app, without a restart.
 
-```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
+Requirements: Docker Desktop (Windows, macOS) or Docker Engine with Compose
+(Linux), [Ollama](https://ollama.com/download), and 8–16 GB RAM.
+
+1. Install Ollama and pull a model. On a GPU with about 6 GB of memory, a
+   3–4B model runs fully on the GPU:
+
+   ```bash
+   ollama pull qwen2.5:7b
+   ```
+
+2. Create the settings file. Its defaults already use the Ollama on this
+   computer; only section 1 (the model) needs attention, so set
+   `LLM_MODEL_NAME` to the model you pulled:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   (`cp .env.example .env` on macOS and Linux.)
+
+3. Linux only: let containers reach Ollama, as described in
+   [Linux](#linux-docker-engine). Windows and macOS need nothing.
+
+4. Start ParsRAG:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. Open `http://127.0.0.1:8000` (or the port in `PARSRAG_PORT`), upload
+   documents, and ask. While an answer is generated, `ollama ps` shows where
+   the model runs; `100% GPU` means the GPU is used fully:
+
+   ```text
+   NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+   qwen3.5:4b    d8b0f5e9760c    3.1 GB    100% GPU     4096       4 minutes from now
+   ```
+
+In the app, **Settings** changes everything else while ParsRAG runs:
+- **Model & connection:** pick an installed Ollama model from the list, or
+  switch to an API by entering its address, model, and key. The Advanced section
+  holds the context sizes, timeouts, and retries.
+- **Answers:** the documents-only evidence threshold, retrieval depth, and
+  keyword search.
+- **Documents & speed:** upload limits, OCR, image previews, and indexing speed
+  (images read at the same time, CPU threads).
+
+Values saved in Settings take precedence over `.env` and survive restarts; each
+shows its `.env` value and can be reset to it. Only settings that need a
+restart or protect the service stay in `.env`: ports, allowed addresses, Qdrant,
+memory limits, the largest upload request, and the embedding model.
+
+Manage the stack:
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose down
 ```
+
+`docker compose down` keeps named volumes. `docker compose down -v` permanently
+removes local vector data, persisted settings, caches, and Ollama weights.
+
+### System Ollama in detail
+
+#### Windows and macOS (Docker Desktop)
+
+Nothing else is needed. Docker Desktop
+forwards `host.docker.internal` to the host's loopback, so Ollama's default
+`127.0.0.1:11434` works and Ollama stays closed to the network. Docker cannot
+pass a Mac's GPU to a container, so on a Mac this host mode is the way to
+generate on the GPU.
+
+#### Linux (Docker Engine)
+
+Compose maps `host.docker.internal` to the Docker
+bridge gateway (`host-gateway`, usually `172.17.0.1`). Ollama listens only on
+`127.0.0.1` by default, so containers cannot reach it. Make the Ollama service
+listen on the bridge address:
+
+```bash
+ip -4 addr show docker0          # note the address, usually 172.17.0.1
+sudo systemctl edit ollama.service
+```
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=172.17.0.1:11434"
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+curl http://172.17.0.1:11434/api/tags
+OLLAMA_HOST=172.17.0.1:11434 ollama ps
+```
+
+With a bridge-only address, the `ollama` command on the host needs the same
+`OLLAMA_HOST`. `OLLAMA_HOST=0.0.0.0:11434` also works, but it opens Ollama to
+every network the computer is on. Ollama has no authentication, so anyone who
+reaches the port can use your models and GPU. If you use `0.0.0.0`, allow the
+port only from Docker's networks and never on a public network. With `ufw`:
+
+```bash
+sudo ufw allow from 172.16.0.0/12 to any port 11434 proto tcp
+sudo ufw deny 11434/tcp
+```
+
+A host firewall that drops traffic from Docker networks also shows up as
+"Ollama did not answer"; allow port 11434 from the Docker subnets as above.
+
+#### Existing models
+
+Ollama keeps models where `OLLAMA_MODELS` points. The
+defaults are:
+- Windows: `%USERPROFILE%\.ollama\models`
+- macOS: `~/.ollama/models`
+- Linux service: `/usr/share/ollama/.ollama/models`
+
+If you moved them (for example `OLLAMA_MODELS=E:\.ollama\models` on Windows),
+keep that variable set for the Ollama service. ParsRAG never pulls models in
+this mode: `ollama-init` belongs to the `local-model` profile.
+
+#### GPU memory
+
+- The app passes `OLLAMA_CONTEXT_LENGTH` (default `8192`) to Ollama with every
+  request, so the host's Ollama allocates only that context.
+- Measured on a 6 GB RTX 3060 Laptop GPU, with the desktop using about 1.6 GB:
+  - `qwen3.5:4b` (3.3 GB) runs at `100% GPU` with `OLLAMA_CONTEXT_LENGTH=4096`
+    and answers in seconds.
+  - `qwen2.5:7b` (4.7 GB) stays at about `82%` GPU, even with a 2048-token
+    context. It works, but more slowly.
+- On such cards:
+  - Use a 3–4B model.
+  - Set `OLLAMA_CONTEXT_LENGTH=4096`.
+  - Keep embeddings on the CPU. The base image already does this, so add no
+    GPU overlay.
+- `compose.gpu-low-vram.yaml` tunes the Ollama container. In host mode, the
+  base file already is the low-VRAM setup.
+- On NVIDIA hosts with spare VRAM, adding `-f compose.gpu.yaml` moves
+  embeddings to the GPU too. Its `ollama` settings apply only with the
+  profile.
+
+#### Thinking models
+
+ParsRAG asks Ollama not to "think" before answering
+(`OLLAMA_THINK=0`). Otherwise models such as `qwen3`, `qwen3.5`, or
+`deepseek-r1` can spend the whole answer budget on reasoning and return an
+empty answer. Set `OLLAMA_THINK=1` only together with a larger
+`OLLAMA_CONTEXT_LENGTH`.
+
+#### Switching models
+
+In Settings → Model:
+- Choose *Local Ollama*. The address defaults to the server's
+  `http://host.docker.internal:11434`. *Find installed models* lists the
+  host's models.
+- Or choose *OpenAI-compatible API*.
+
+Changes apply to the next question without a restart.
+
+#### Allowed Ollama addresses
+
+Ollama URLs must be plain `http://host:port` on:
+- `localhost`, `127.0.0.1`, or `::1`
+- `ollama`
+- `host.docker.internal`
+- a host you list in `OLLAMA_ALLOWED_HOSTS` (comma-separated, for example a
+  GPU server on your LAN)
+
+Credentials, paths, query strings, and HTTPS URLs are rejected. Use the
+OpenAI-compatible API option for anything else.
+
+#### Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Settings: "Ollama did not answer at this address" | Ollama is not running, or on Linux it does not listen on the Docker bridge or a firewall blocks it (see above). Test from the app container: `docker compose exec app python -c "import httpx; print(httpx.get('http://host.docker.internal:11434/api/tags').status_code)"` |
+| Settings: "This Ollama address is not allowed" | Use `http://` with one of the allowed hosts, or add the host to `OLLAMA_ALLOWED_HOSTS` |
+| The app still uses the old model or URL after editing `.env` | A connection saved in Settings takes precedence over `.env`; choose the host Ollama again in Settings |
+| "The selected model was not found" | `LLM_MODEL_NAME` must match a name in `ollama list` |
+| `ollama ps` shows `CPU` or a CPU/GPU split | Update the GPU driver, use a smaller model, or lower `OLLAMA_CONTEXT_LENGTH` |
+| Ollama was off when the app started | The app still becomes ready; questions report that the model service is unreachable until Ollama starts, then work without a restart |
+
+## Other ways to run
+
+Use these when the complete setup does not fit: no Ollama on the host, a model
+API only, or Ollama inside Docker.
 
 ### Use an API model
 
@@ -303,179 +500,25 @@ the newer ROCm runtime is validated on AMD hardware. Check GPU and driver
 compatibility before deployment; unsupported hardware falls back poorly and
 should use the CPU profile or an API provider.
 
-### Complete run: system Ollama + API + GPU
-
-If Ollama is already installed on the computer (Windows, macOS, or Linux), the
-app container can use it directly:
-
-- Models you already pulled are reused; nothing is downloaded again.
-- Generation runs on the host's GPU through Ollama's own driver support: CUDA
-  on NVIDIA, Metal on Apple Silicon, ROCm on supported AMD cards under Linux.
-- The app container needs no GPU.
-- Settings can still switch between this Ollama and any OpenAI-compatible API
-  without a restart.
-
-The containerized Ollama (`--profile local-model`) keeps working as described
-above; use one or the other.
-
-1. In `.env`, point the app at the host and pick a model that `ollama list`
-   shows:
-
-   ```dotenv
-   LLM_PROVIDER=ollama
-   LLM_MODEL_NAME=qwen3.5:4b
-   OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434
-   # Optional: an API to switch to in Settings (Google AI Studio example)
-   MODEL_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-   MODEL_API_KEY=your-ai-studio-key
-   ```
-
-2. Make Ollama reachable from Docker (see the per-system steps below).
-
-3. Start without the `local-model` profile:
-
-   ```powershell
-   docker compose up -d --build
-   ```
-
-4. Ask a question, and while it is answering run `ollama ps` on the host. The
-   `PROCESSOR` column should say `100% GPU`:
-
-   ```text
-   NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL
-   qwen3.5:4b    d8b0f5e9760c    3.1 GB    100% GPU     4096       4 minutes from now
-   ```
-
-**Windows and macOS (Docker Desktop).** Nothing else is needed. Docker Desktop
-forwards `host.docker.internal` to the host's loopback, so Ollama's default
-`127.0.0.1:11434` works and Ollama stays closed to the network. Docker cannot
-pass a Mac's GPU to a container, so on a Mac this host mode is the way to
-generate on the GPU.
-
-**Linux (Docker Engine).** Compose maps `host.docker.internal` to the Docker
-bridge gateway (`host-gateway`, usually `172.17.0.1`). Ollama listens only on
-`127.0.0.1` by default, so containers cannot reach it. Make the Ollama service
-listen on the bridge address:
-
-```bash
-ip -4 addr show docker0          # note the address, usually 172.17.0.1
-sudo systemctl edit ollama.service
-```
-
-```ini
-[Service]
-Environment="OLLAMA_HOST=172.17.0.1:11434"
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart ollama
-curl http://172.17.0.1:11434/api/tags
-OLLAMA_HOST=172.17.0.1:11434 ollama ps
-```
-
-With a bridge-only address, the `ollama` command on the host needs the same
-`OLLAMA_HOST`. `OLLAMA_HOST=0.0.0.0:11434` also works, but it opens Ollama to
-every network the computer is on. Ollama has no authentication, so anyone who
-reaches the port can use your models and GPU. If you use `0.0.0.0`, allow the
-port only from Docker's networks and never on a public network. With `ufw`:
-
-```bash
-sudo ufw allow from 172.16.0.0/12 to any port 11434 proto tcp
-sudo ufw deny 11434/tcp
-```
-
-A host firewall that drops traffic from Docker networks also shows up as
-"Ollama did not answer"; allow port 11434 from the Docker subnets as above.
-
-**Existing models.** Ollama keeps models where `OLLAMA_MODELS` points. The
-defaults are:
-- Windows: `%USERPROFILE%\.ollama\models`
-- macOS: `~/.ollama/models`
-- Linux service: `/usr/share/ollama/.ollama/models`
-
-If you moved them (for example `OLLAMA_MODELS=E:\.ollama\models` on Windows),
-keep that variable set for the Ollama service. ParsRAG never pulls models in
-this mode: `ollama-init` belongs to the `local-model` profile.
-
-**GPU memory.**
-- The app passes `OLLAMA_CONTEXT_LENGTH` (default `8192`) to Ollama with every
-  request, so the host's Ollama allocates only that context.
-- Measured on a 6 GB RTX 3060 Laptop GPU, with the desktop using about 1.6 GB:
-  - `qwen3.5:4b` (3.3 GB) runs at `100% GPU` with `OLLAMA_CONTEXT_LENGTH=4096`
-    and answers in seconds.
-  - `qwen2.5:7b` (4.7 GB) stays at about `82%` GPU, even with a 2048-token
-    context. It works, but more slowly.
-- On such cards:
-  - Use a 3–4B model.
-  - Set `OLLAMA_CONTEXT_LENGTH=4096`.
-  - Keep embeddings on the CPU. The base image already does this, so add no
-    GPU overlay.
-- `compose.gpu-low-vram.yaml` tunes the Ollama container. In host mode, the
-  base file already is the low-VRAM setup.
-- On NVIDIA hosts with spare VRAM, adding `-f compose.gpu.yaml` moves
-  embeddings to the GPU too. Its `ollama` settings apply only with the
-  profile.
-
-**Thinking models.** ParsRAG asks Ollama not to "think" before answering
-(`OLLAMA_THINK=0`). Otherwise models such as `qwen3`, `qwen3.5`, or
-`deepseek-r1` can spend the whole answer budget on reasoning and return an
-empty answer. Set `OLLAMA_THINK=1` only together with a larger
-`OLLAMA_CONTEXT_LENGTH`.
-
-**Switching models.** In Settings → Model:
-- Choose *Local Ollama*. The address defaults to the server's
-  `http://host.docker.internal:11434`. *Find installed models* lists the
-  host's models.
-- Or choose *OpenAI-compatible API*.
-
-Changes apply to the next question without a restart.
-
-**Allowed Ollama addresses.** Ollama URLs must be plain `http://host:port` on:
-- `localhost`, `127.0.0.1`, or `::1`
-- `ollama`
-- `host.docker.internal`
-- a host you list in `OLLAMA_ALLOWED_HOSTS` (comma-separated, for example a
-  GPU server on your LAN)
-
-Credentials, paths, query strings, and HTTPS URLs are rejected. Use the
-OpenAI-compatible API option for anything else.
-
-**Troubleshooting**
-
-| Symptom | Cause and fix |
-| --- | --- |
-| Settings: "Ollama did not answer at this address" | Ollama is not running, or on Linux it does not listen on the Docker bridge or a firewall blocks it (see above). Test from the app container: `docker compose exec app python -c "import httpx; print(httpx.get('http://host.docker.internal:11434/api/tags').status_code)"` |
-| Settings: "This Ollama address is not allowed" | Use `http://` with one of the allowed hosts, or add the host to `OLLAMA_ALLOWED_HOSTS` |
-| The app still uses the old model or URL after editing `.env` | A connection saved in Settings takes precedence over `.env`; choose the host Ollama again in Settings |
-| "The selected model was not found" | `LLM_MODEL_NAME` must match a name in `ollama list` |
-| `ollama ps` shows `CPU` or a CPU/GPU split | Update the GPU driver, use a smaller model, or lower `OLLAMA_CONTEXT_LENGTH` |
-| Ollama was off when the app started | The app still becomes ready; questions report that the model service is unreachable until Ollama starts, then work without a restart |
-
-Open `http://127.0.0.1:8000` or the port configured by `PARSRAG_PORT`.
+### Open the app to other devices
 
 The API answers only to `localhost`, `127.0.0.1`, and `::1`. If you bind the
 app to another interface with `PARSRAG_BIND_HOST`, list the names or addresses
 you will open it with in `PARSRAG_ALLOWED_HOSTS` (comma-separated); other host
 names receive `400 Host is not trusted`.
 
-```powershell
-docker compose ps
-docker compose logs -f app
-docker compose down
-```
-
-`docker compose down` keeps named volumes. `docker compose down -v` permanently
-removes local vector data, persisted model settings, caches, and Ollama weights.
-
 ## Performance and memory tuning
+
+The settings marked ⚙ can also be changed in **Settings** while ParsRAG runs;
+the rest apply from `.env` after a restart.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `PARSRAG_APP_MEMORY_LIMIT` | `6g` | App container memory ceiling |
 | `QDRANT_MEMORY_LIMIT` | `2g` | Qdrant memory ceiling |
 | `OLLAMA_MEMORY_LIMIT` | `12g` | Ollama memory ceiling |
-| `PARSRAG_CPU_THREADS` | `4` | PyTorch/OpenMP CPU threads |
+| `PARSRAG_CPU_THREADS` ⚙ | `4` | PyTorch/OpenMP CPU threads; up to the physical cores speeds up indexing |
+| `OCR_WORKERS` ⚙ | the CPU cores (max 8) | Images read at the same time while indexing; the text is the same as one by one |
 | `EMBED_DEVICE` | `auto` | Embedding device; GPU overlay sets `cuda` |
 | `EMBED_BATCH_SIZE` | `8` | Embedding batch; GPU overlay defaults to `32` |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | Bounded vector insertion batch |
@@ -494,6 +537,9 @@ load its weights.
 
 ## Upload and OCR configuration
 
+All of these except `OCR_MAX_IMAGE_PIXELS` and `PARSRAG_MAX_REQUEST_BYTES` can
+also be changed in **Settings → Documents & speed**.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Total documents in one conversation |
@@ -509,6 +555,7 @@ load its weights.
 | `OCR_MAX_IMAGES` | `200` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
+| `SOURCE_IMAGE_PREVIEWS` | `1` | Keep a WebP copy (at most 1280 px) of each image read with OCR, shown next to its source excerpt |
 
 ## Windows, macOS, and Linux
 
@@ -516,7 +563,7 @@ The CPU Docker Compose configuration is the portable baseline on all three
 systems. Start with `docker compose up -d --build`; add
 `--profile local-model` for the containerized Ollama service. To use an Ollama
 already installed on the computer (its models and GPU, including Apple
-Silicon), see [Complete run: system Ollama + API + GPU](#complete-run-system-ollama--api--gpu).
+Silicon), see [Quick start: the complete setup](#quick-start-the-complete-setup).
 Docker Desktop does not expose a Mac GPU to the Linux Ollama container, so the
 NVIDIA/AMD GPU overlays are for supported Windows and Linux hosts only. A private or external OpenAI-compatible API also works
 on machines without a local model. See the [Docker GPU guidance](https://docs.docker.com/guides/rag-ollama/).
@@ -531,6 +578,10 @@ especially OCR language packs and GPU access.
 Requirements: Python 3.12, Node.js 22, Qdrant, and either Ollama or an
 OpenAI-compatible endpoint. Install Tesseract with `fas` and `eng` language data
 when OCR is required.
+
+Copy `.env.example` to `.env` and remove the `#` from the lines under
+"Running without Docker" at its end (Qdrant address, Ollama URL, settings
+file, and `OCR_ENABLED=1`); Compose sets these itself.
 
 ```powershell
 py -3.12 -m venv .venv

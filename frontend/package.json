@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
-    "test:pwa": "npm run build && playwright test --config=playwright.pwa.config.ts"
+    "test:pwa": "npm run build && playwright test --config=playwright.pwa.config.ts",
+    "screenshots": "npm run build && node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "katex": "^0.19.0",

@@ -166,6 +166,7 @@ class IngestDocuments:
                 chunks = self._index_sections(
                     document.sections, item.filename, session_id, digest
                 )
+                self._repository.save_images(session_id, item.filename, document.images)
                 total_chunks += chunks
                 ingested.append(
                     IngestedFile(
@@ -248,21 +249,24 @@ class IngestDocuments:
         identity: dict[str, str] = {"filename": filename}
         if digest:
             identity["content_sha256"] = digest
-        stored = 0
         previous: ParsedSection | None = None
         sections = [
             ParsedSection(normalize_persian(section.text), section.metadata)
             for section in sections
         ]
+        # The whole document is saved at once, so it is embedded in full
+        # batches instead of one small batch per section.
+        nodes: list[ExtractedNode] = []
         for section in sections:
-            nodes = self._chunker.chunk(section.text, {**identity, **section.metadata})
+            nodes.extend(
+                self._chunker.chunk(section.text, {**identity, **section.metadata})
+            )
             bridge = self._page_bridge(previous, section, filename)
             if bridge is not None:
                 nodes.append(bridge)
-            self._repository.save_nodes(nodes, session_id=session_id)
-            stored += len(nodes)
             previous = section
-        return stored
+        self._repository.save_nodes(nodes, session_id=session_id)
+        return len(nodes)
 
     def _page_bridge(
         self, previous: ParsedSection | None, current: ParsedSection, filename: str
