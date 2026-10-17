@@ -32,6 +32,8 @@ load_dotenv()
 _configuration_lock = RLock()
 _api_key = os.getenv("MODEL_API_KEY") or os.getenv("OPENROUTER_API_KEY") or None
 _condense_llm: LLM | None = None
+# Set once the embedding model is loaded, so later changes can resize batches.
+_embedding_device: str | None = None
 
 
 def _environment_disclosure_acknowledged() -> bool:
@@ -380,18 +382,58 @@ def setup_llm_and_embeddings() -> None:
     configure_model(_configuration, verify=False, persist=False)
 
     # Embeddings use a bounded batch size and move to CUDA when the GPU image is used.
+    global _embedding_device
+    apply_cpu_threads()
     profile = active_embedding_profile()
-    device = resolve_embedding_device()
-    default_batch_size = 32 if device == "cuda" else 8
-    embed_batch_size = _bounded_environment_int(
-        "EMBED_BATCH_SIZE", default_batch_size, 1, 128
-    )
+    _embedding_device = resolve_embedding_device()
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=profile.model_name,
         query_instruction=profile.query_prefix or None,
         text_instruction=profile.passage_prefix or None,
-        device=device,
-        embed_batch_size=embed_batch_size,
+        device=_embedding_device,
+        embed_batch_size=embedding_batch_size(_embedding_device),
         cache_folder=os.getenv("EMBED_CACHE_DIR") or None,
         show_progress_bar=False,
     )
+
+
+def embedding_batch_size(device: str) -> int:
+    """Texts embedded per forward pass (``EMBED_BATCH_SIZE``; 32 on GPU, else 8)."""
+    default = 32 if device == "cuda" else 8
+    return _bounded_environment_int("EMBED_BATCH_SIZE", default, 1, 128)
+
+
+def apply_cpu_threads() -> None:
+    """Use ``PARSRAG_CPU_THREADS`` threads for embeddings and reranking, if set."""
+    raw = os.getenv("PARSRAG_CPU_THREADS", "").strip()
+    if raw.isdigit() and 1 <= int(raw) <= 64:
+        torch.set_num_threads(int(raw))
+
+
+# Settings that change how the model clients are built.
+_MODEL_SETTINGS = frozenset(
+    {
+        "OLLAMA_CONTEXT_LENGTH",
+        "OLLAMA_THINK",
+        "MODEL_CONTEXT_WINDOW",
+        "MODEL_API_MAX_RETRIES",
+        "LLM_REQUEST_TIMEOUT_SECONDS",
+        "CONDENSE_TIMEOUT_SECONDS",
+    }
+)
+
+
+def apply_runtime_settings(changed: set[str]) -> None:
+    """Rebuild what was built once from settings that just changed.
+
+    Everything else reads its settings per request, so the change applies to
+    the next question or upload without a restart.
+    """
+    if changed & _MODEL_SETTINGS:
+        with _configuration_lock:
+            current = _configuration
+        configure_model(current, verify=False, persist=False)
+    if "PARSRAG_CPU_THREADS" in changed:
+        apply_cpu_threads()
+    if "EMBED_BATCH_SIZE" in changed and _embedding_device is not None:
+        Settings.embed_model.embed_batch_size = embedding_batch_size(_embedding_device)

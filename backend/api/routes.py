@@ -23,9 +23,11 @@ from backend.api.dependencies import (
     get_list_session_files,
     get_read_model_configuration,
     get_read_query_progress,
+    get_read_runtime_settings,
     get_read_source_image,
     get_reuse_document,
     get_suggest_questions,
+    get_update_runtime_settings,
     require_runtime_ready,
 )
 from backend.api.streaming import event_stream
@@ -37,6 +39,7 @@ from backend.core.dto.input.model import (
     QuestionSuggestionRequest,
 )
 from backend.core.dto.input.query import QueryRequest
+from backend.core.dto.input.runtime_settings import RuntimeSettingsUpdate
 from backend.core.dto.output.capabilities import AppCapabilitiesResponse
 from backend.core.dto.output.common import MessageResponse, StatusResponse
 from backend.core.dto.output.documents import ReusedDocumentResponse
@@ -48,6 +51,7 @@ from backend.core.dto.output.model import (
     QuestionSuggestionResponse,
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
+from backend.core.dto.output.runtime_settings import RuntimeSettingsResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
@@ -67,6 +71,10 @@ from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.runtime_settings import (
+    ReadRuntimeSettings,
+    UpdateRuntimeSettings,
+)
 
 router = APIRouter()
 
@@ -95,6 +103,31 @@ def read_capabilities(
 ) -> AppCapabilitiesResponse:
     """Return the active ingestion contract for runtime-synchronized clients."""
     return use_case.execute()
+
+
+@router.get("/settings/runtime", response_model=RuntimeSettingsResponse)
+def read_runtime_settings(
+    use_case: ReadRuntimeSettings = Depends(get_read_runtime_settings),  # noqa: B008
+) -> RuntimeSettingsResponse:
+    """Settings that apply without a restart, with their ``.env`` values."""
+    return use_case.execute()
+
+
+@router.put("/settings/runtime", response_model=RuntimeSettingsResponse)
+def update_runtime_settings(
+    request: RuntimeSettingsUpdate,
+    use_case: UpdateRuntimeSettings = Depends(get_update_runtime_settings),  # noqa: B008
+) -> RuntimeSettingsResponse:
+    """Change settings for the next requests; null restores the ``.env`` value."""
+    return use_case.execute(request)
+
+
+@router.delete("/settings/runtime", response_model=RuntimeSettingsResponse)
+def reset_runtime_settings(
+    use_case: UpdateRuntimeSettings = Depends(get_update_runtime_settings),  # noqa: B008
+) -> RuntimeSettingsResponse:
+    """Return every runtime setting to its ``.env`` value."""
+    return use_case.reset()
 
 
 @router.get("/models/configuration", response_model=ModelConfigurationResponse)
