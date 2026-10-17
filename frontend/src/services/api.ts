@@ -82,6 +82,11 @@ export class ParsRagApiClient {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
+  /** Address of the stored preview of image `image` in `filename`. */
+  sourceImageUrl(sessionId: string, filename: string, image: number): string {
+    return this.url(`/sessions/${encodeURIComponent(sessionId)}/images/${image}?filename=${encodeURIComponent(filename)}`);
+  }
+
   private url(path: string): string {
     return `${this.baseUrl}${path}`;
   }
