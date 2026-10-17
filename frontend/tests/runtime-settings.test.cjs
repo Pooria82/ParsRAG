@@ -55,3 +55,14 @@ test('every server setting has a Persian and English label and hint', () => {
     }
   }
 });
+
+test('automatic fields show the value in use and start from it when switched off', () => {
+  const { automaticText, manualStart } = require('./.compiled/components/ServerSettings.js');
+  assert.equal(automaticText({ automatic_value: '4' }, 'en'), '4');
+  assert.equal(automaticText({ automatic_value: '8-30' }, 'en'), '8–30 (per question)');
+  assert.equal(automaticText({ automatic_value: '8-30' }, 'fa'), '8–30 (بسته به هر پرسش)');
+  assert.equal(automaticText({ automatic_value: null }, 'en'), 'Automatic');
+  assert.equal(manualStart({ key: 'OCR_WORKERS', automatic_value: '10', env_value: '', minimum: 1 }), '10');
+  assert.equal(manualStart({ key: 'STRICT_RAG_TOP_K', automatic_value: '8-30', env_value: '', minimum: 1 }), '15');
+  assert.equal(manualStart({ key: 'STRICT_RAG_TOP_K', automatic_value: '8-30', env_value: '12', minimum: 1 }), '12');
+});

@@ -167,3 +167,4 @@
 .setting-origin{display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--secondary)}.setting-reset{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--accent);cursor:pointer}.setting-reset:hover{background:var(--surface-soft)}
 .advanced-settings{margin-top:22px;border:1px solid var(--line);border-radius:10px;padding:10px 14px}.advanced-settings>summary{cursor:pointer;font-size:13px;font-weight:500;padding:4px 0}.advanced-settings .server-settings-group:first-child{border-top:0;margin-top:4px;padding-top:4px}.advanced-settings .server-settings-group h3{display:none}
 .server-settings>.server-settings-group:first-child{border-top:0;margin-top:0;padding-top:0}
+.server-setting-input .text-input:disabled{background:var(--surface-soft);color:var(--secondary);cursor:not-allowed;opacity:1}

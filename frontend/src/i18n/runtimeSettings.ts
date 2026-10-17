@@ -123,7 +123,7 @@ export const GROUP_TEXT: Record<RuntimeSettingGroup, Text> = {
 
 export const RUNTIME_TEXT = {
   fa: {
-    automatic: 'خودکار', on: 'روشن', off: 'خاموش', fromEnv: 'مقدار ⁦.env⁩:', resetOne: 'بازگشت به مقدار ⁦.env⁩',
+    automatic: 'خودکار', perQuestion: 'بسته به هر پرسش', on: 'روشن', off: 'خاموش', fromEnv: 'مقدار ⁦.env⁩:', resetOne: 'بازگشت به مقدار ⁦.env⁩',
     save: 'ذخیره', saving: 'در حال ذخیره…', saved: 'ذخیره شد و از درخواست بعدی اعمال می‌شود.', resetAll: 'بازگشت همه به ⁦.env⁩',
     loadError: 'تنظیمات سرور خوانده نشد.', saveError: 'تنظیمات ذخیره نشد.', invalid: 'یک مقدار معتبر نیست یا خارج از محدوده است.',
     ceiling: 'حجم بارگذاری از سقف سرور بیشتر است؛ ابتدا PARSRAG_MAX_REQUEST_BYTES را در ⁦.env⁩ بالا ببرید.',
@@ -131,7 +131,7 @@ export const RUNTIME_TEXT = {
     overridden: 'در برنامه تغییر کرده',
   },
   en: {
-    automatic: 'Automatic', on: 'On', off: 'Off', fromEnv: '⁦.env⁩ value:', resetOne: 'Back to the ⁦.env⁩ value',
+    automatic: 'Automatic', perQuestion: 'per question', on: 'On', off: 'Off', fromEnv: '⁦.env⁩ value:', resetOne: 'Back to the ⁦.env⁩ value',
     save: 'Save', saving: 'Saving…', saved: 'Saved; applies from the next request.', resetAll: 'Reset all to ⁦.env⁩',
     loadError: 'Could not read the server settings.', saveError: 'The settings were not saved.', invalid: 'A value is invalid or out of range.',
     ceiling: 'The upload size exceeds the server ceiling; raise PARSRAG_MAX_REQUEST_BYTES in ⁦.env⁩ first.',

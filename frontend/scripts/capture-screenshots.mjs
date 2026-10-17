@@ -68,9 +68,9 @@ const SETTINGS = [
   ['LLM_REQUEST_TIMEOUT_SECONDS', 'model', 'int', '120', '120', 10, 600],
   ['CONDENSE_TIMEOUT_SECONDS', 'model', 'int', '30', '30', 5, 120],
   ['STRICT_RAG_THRESHOLD', 'retrieval', 'float', '0.75', '0.75', 0, 1],
-  ['STRICT_RAG_TOP_K', 'retrieval', 'int', '', '', 1, 50, true],
+  ['STRICT_RAG_TOP_K', 'retrieval', 'int', '', '', 1, 50, true, '8-30'],
   ['HYBRID_RETRIEVE_TOP_K', 'retrieval', 'int', '25', '25', 1, 50],
-  ['HYBRID_RERANK_TOP_K', 'retrieval', 'int', '', '', 1, 50, true],
+  ['HYBRID_RERANK_TOP_K', 'retrieval', 'int', '', '', 1, 50, true, '8-30'],
   ['KEYWORD_SEARCH', 'retrieval', 'bool', '1', '1'],
   ['PARSRAG_MAX_FILES_PER_SESSION', 'documents', 'int', '10', '10', 1, 50],
   ['PARSRAG_MAX_FILE_BYTES', 'documents', 'bytes', String(100 * MB), String(100 * MB), MB, 1024 * MB],
@@ -84,12 +84,12 @@ const SETTINGS = [
   ['OCR_TIMEOUT_SECONDS', 'documents', 'int', '45', '45', 1, 300],
   ['OCR_MIN_IMAGE_PIXELS', 'documents', 'int', '10000', '10000', 1, 1000000],
   ['SOURCE_IMAGE_PREVIEWS', 'documents', 'bool', '1', '1'],
-  ['OCR_WORKERS', 'performance', 'int', '', '', 1, 16, true],
-  ['EMBED_BATCH_SIZE', 'performance', 'int', '8', '8', 1, 128, true],
-  ['PARSRAG_CPU_THREADS', 'performance', 'int', '8', '4', 1, 64, true],
+  ['OCR_WORKERS', 'performance', 'int', '', '', 1, 16, true, '10'],
+  ['EMBED_BATCH_SIZE', 'performance', 'int', '8', '8', 1, 128, true, '8'],
+  ['PARSRAG_CPU_THREADS', 'performance', 'int', '8', '4', 1, 64, true, '4'],
   ['QDRANT_UPSERT_BATCH_SIZE', 'performance', 'int', '64', '64', 1, 512],
-].map(([key, group, kind, value, env_value, minimum = null, maximum = null, automatic = false]) => ({
-  key, group, kind, value, env_value, overridden: value !== env_value, minimum, maximum, automatic,
+].map(([key, group, kind, value, env_value, minimum = null, maximum = null, automatic = false, automatic_value = null]) => ({
+  key, group, kind, value, env_value, overridden: value !== env_value, minimum, maximum, automatic, automatic_value,
 }));
 
 function session(language) {

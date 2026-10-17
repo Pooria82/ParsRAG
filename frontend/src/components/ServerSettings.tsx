@@ -14,6 +14,21 @@ export function displayValue(setting: Pick<RuntimeSetting, 'kind'>, value: strin
   return value;
 }
 
+/** The automatic value as shown in its disabled field. */
+export function automaticText(setting: Pick<RuntimeSetting, 'automatic_value'>, language: Language): string {
+  const t = RUNTIME_TEXT[language];
+  const value = setting.automatic_value ?? '';
+  const range = /^(\d+)-(\d+)$/.exec(value);
+  if (range) return `${range[1]}–${range[2]} (${t.perQuestion})`;
+  return value || t.automatic;
+}
+
+/** Where a number starts when "Automatic" is switched off: the value it had. */
+export function manualStart(setting: Pick<RuntimeSetting, 'key' | 'automatic_value' | 'env_value' | 'minimum'>): string {
+  if (setting.automatic_value && /^\d+$/.test(setting.automatic_value)) return setting.automatic_value;
+  return setting.env_value || MANUAL_START[setting.key] || String(setting.minimum ?? 1);
+}
+
 /** A field's text as the environment string the server expects. */
 export function storedValue(setting: Pick<RuntimeSetting, 'kind'>, shown: string): string {
   if (setting.kind === 'bytes' && shown.trim()) return String(Math.round(Number(shown) * MEBIBYTE));
@@ -116,13 +131,13 @@ function SettingField({ setting, language, value, disabled, onChange, onReset }:
     <label htmlFor={id}>{label}{setting.overridden && <span className="setting-badge">{t.overridden}</span>}</label>
     <div className="server-setting-input">
       <input id={id} className="text-input" dir="ltr" disabled={disabled || automatic}
-        type={numeric ? 'number' : 'text'} inputMode={numeric ? (setting.kind === 'float' ? 'decimal' : 'numeric') : undefined}
+        type={numeric && !automatic ? 'number' : 'text'} inputMode={numeric ? (setting.kind === 'float' ? 'decimal' : 'numeric') : undefined}
         min={minimum !== undefined ? minimum / scale : undefined} max={maximum !== undefined ? maximum / scale : undefined}
         step={setting.kind === 'float' ? 0.05 : 1}
-        value={automatic ? '' : displayValue(setting, value)} placeholder={automatic ? t.automatic : undefined}
+        value={automatic ? automaticText(setting, language) : displayValue(setting, value)} readOnly={automatic}
         onChange={event => onChange(storedValue(setting, event.target.value))} />
       {setting.automatic && <label className="automatic-choice"><input type="checkbox" checked={automatic} disabled={disabled}
-        onChange={event => onChange(event.target.checked ? '' : (setting.env_value || MANUAL_START[setting.key] || String(minimum ?? 1)))} />{t.automatic}</label>}
+        onChange={event => onChange(event.target.checked ? '' : manualStart(setting))} />{t.automatic}</label>}
     </div>
     {footer}
   </div>;

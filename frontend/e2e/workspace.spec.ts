@@ -516,3 +516,35 @@ test('answers render leaked math tags, table excerpts, and the cited image', asy
   await expect(sources.locator('.source-image img')).toBeVisible();
   expect(decodeURIComponent(imageRequested)).toContain('/sessions/report/images/15?filename=گزارش نهایی.docx');
 });
+
+test('automatic settings show the value in use and unlock when switched off', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'en', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+  });
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/settings/runtime', route => route.fulfill({ json: { upload_ceiling_bytes: 524288000, settings: [
+    { key: 'OCR_WORKERS', group: 'performance', kind: 'int', value: '', env_value: '', overridden: false, minimum: 1, maximum: 16, automatic: true, automatic_value: '10' },
+    { key: 'STRICT_RAG_TOP_K', group: 'retrieval', kind: 'int', value: '', env_value: '', overridden: false, minimum: 1, maximum: 50, automatic: true, automatic_value: '8-30' },
+  ] } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Documents & speed' }).click();
+
+  const workers = page.locator('#runtime-OCR_WORKERS');
+  const automatic = page.locator('.server-setting', { has: workers }).getByRole('checkbox', { name: 'Automatic' });
+  await expect(workers).toBeDisabled();
+  await expect(workers).toHaveValue('10');
+  await automatic.uncheck();
+  await expect(workers).toBeEnabled();
+  await expect(workers).toHaveValue('10');
+  await workers.fill('6');
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+  await automatic.check();
+  await expect(workers).toBeDisabled();
+  await expect(workers).toHaveValue('10');
+
+  await page.getByRole('tab', { name: 'Answers' }).click();
+  await expect(page.locator('#runtime-STRICT_RAG_TOP_K')).toHaveValue('8–30 (per question)');
+  await expect(page.locator('#runtime-STRICT_RAG_TOP_K')).toBeDisabled();
+});

@@ -21,6 +21,8 @@ export interface RuntimeSetting {
   minimum?: number | null;
   maximum?: number | null;
   automatic: boolean;
+  /** What automatic resolves to on the server, such as "8" or "8-30" (per question). */
+  automatic_value?: string | null;
 }
 
 export interface RuntimeSettings {
