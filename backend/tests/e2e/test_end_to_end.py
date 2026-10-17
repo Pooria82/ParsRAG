@@ -1,7 +1,8 @@
 """Upload to cited answer through the real pipeline.
 
-Runs only with ``PARSRAG_E2E=1`` and a reachable Qdrant (``QDRANT_HOST`` /
-``QDRANT_PORT``). Parsing, Persian normalization, chunking, the e5
+Runs only with ``PARSRAG_E2E=1`` (the e5 model is downloaded once). Qdrant
+runs in memory unless ``QDRANT_HOST`` / ``QDRANT_PORT`` name a server, as in
+CI. Parsing, Persian normalization, chunking, the e5
 embedding model, Qdrant storage and search, reranking, prompt building, and
 SSE streaming are all real. Only the language model is a deterministic stand-in
 that cites the first excerpt it is given, so the test checks what retrieval put
@@ -31,8 +32,11 @@ from llama_index.core.llms import (
 )
 from llama_index.core.llms.callbacks import llm_completion_callback
 
+from backend.core.domain.exceptions import VectorDBConnectionError
+
 pytestmark = pytest.mark.skipif(
-    os.getenv("PARSRAG_E2E") != "1", reason="set PARSRAG_E2E=1 with Qdrant running"
+    os.getenv("PARSRAG_E2E") != "1",
+    reason="set PARSRAG_E2E=1 to run the upload-to-answer pipeline",
 )
 
 _FIRST_EXCERPT = re.compile(r"^\[1\][^\n]*\n(?P<text>[^\n]+)", re.MULTILINE)
@@ -127,23 +131,46 @@ class CitingLLM(CustomLLM):
 def client() -> Iterator[TestClient]:
     """Run the app on a throwaway Qdrant collection with real embeddings."""
     collection = f"parsrag_e2e_{uuid.uuid4().hex[:10]}"
+    # Restored afterwards, so later tests see the environment they expect.
+    saved = {
+        name: os.environ.get(name)
+        for name in ("QDRANT_COLLECTION", "KEYWORD_SEARCH", "QDRANT_HOST")
+    }
     os.environ["QDRANT_COLLECTION"] = collection
     os.environ["KEYWORD_SEARCH"] = "1"
+    # Without a configured server, Qdrant's in-process engine is used.
+    os.environ.setdefault("QDRANT_HOST", ":memory:")
     from backend.api import dependencies
     from backend.infrastructure.llm import factory
 
-    factory.setup_llm_and_embeddings()
-    Settings.llm = CitingLLM()
-    factory._condense_llm = CitingLLM()
-    dependencies._shared_document_repository.cache_clear()
-    from backend.main import app
+    try:
+        factory.setup_llm_and_embeddings()
+        Settings.llm = CitingLLM()
+        factory._condense_llm = CitingLLM()
+        dependencies._shared_document_repository.cache_clear()
+        try:
+            dependencies._shared_document_repository()
+        except VectorDBConnectionError:
+            host = os.environ["QDRANT_HOST"]
+            pytest.fail(
+                f"Qdrant at {host}:{os.getenv('QDRANT_PORT', '6333')} is not reachable. "
+                "Unset QDRANT_HOST to use an in-memory Qdrant, or start one with "
+                "`docker run -d --rm -p 127.0.0.1:6333:6333 qdrant/qdrant:v1.19.1`.",
+                pytrace=False,
+            )
+        from backend.main import app
 
-    with TestClient(app) as test_client:
-        yield test_client
-    repository = dependencies._shared_document_repository()
-    repository.client.delete_collection(collection)  # type: ignore[attr-defined]
-    dependencies._shared_document_repository.cache_clear()
-    os.environ.pop("QDRANT_COLLECTION", None)
+        with TestClient(app) as test_client:
+            yield test_client
+        repository = dependencies._shared_document_repository()
+        repository.client.delete_collection(collection)  # type: ignore[attr-defined]
+    finally:
+        dependencies._shared_document_repository.cache_clear()
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def _persian_pdf() -> bytes:

@@ -73,7 +73,11 @@ def test_qdrant_similarity_search_failure_raises_vectordb_error() -> None:
 
 
 def test_parsrag_domain_exception_handler_sterile_response() -> None:
-    """Tests that domain-level ParsRAG exceptions return a sterile HTTP 500 response."""
+    """A failing vector store answers 503 with a coded message and no internals.
+
+    The model is a stand-in, so the request reaches the repository whether or
+    not another test configured real models first.
+    """
     mock_repo = MagicMock(spec=QdrantRepository)
     mock_repo.similarity_search.side_effect = VectorDBConnectionError(
         "Internal DB Credentials/Secret at 10.0.0.1"
@@ -83,11 +87,20 @@ def test_parsrag_domain_exception_handler_sterile_response() -> None:
     client = TestClient(app, raise_server_exceptions=False)
 
     try:
-        response = client.post(
-            "/query",
-            json={"prompt": "تست خطا", "mode": "strict", "session_id": "session-123"},
-        )
-        assert response.status_code == 500
+        with (
+            patch("backend.core.strategies.strict_rag.Settings"),
+            patch("backend.api.dependencies.condensing_llm"),
+        ):
+            response = client.post(
+                "/query",
+                json={
+                    "prompt": "تست خطا",
+                    "mode": "strict",
+                    "session_id": "session-123",
+                },
+            )
+        assert response.status_code == 503
+        assert response.json()["code"] == "vector_store_unavailable"
         # Verify zero leak of internal secrets or python tracebacks
         assert "Internal DB Credentials" not in response.text
         assert "Traceback" not in response.text
