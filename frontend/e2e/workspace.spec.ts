@@ -468,3 +468,51 @@ test('all workspace palettes keep readable body and primary-button contrast', as
     expect(sample.button, `${sample.theme}/${sample.palette} primary button`).toBeGreaterThanOrEqual(4.5);
   }
 });
+
+test('answers render leaked math tags, table excerpts, and the cited image', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => {
+    localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: 'fa', theme: 'light' }));
+    localStorage.setItem('parsrag_tour_v1', 'done');
+    localStorage.setItem('parsrag_sessions_v1', JSON.stringify([{
+      id: 'report', title: 'گزارش', createdAt: 1, updatedAt: 1, ragMode: 'strict', draft: '',
+      documents: [{ name: 'گزارش نهایی.docx', status: 'indexed' }],
+      messages: [
+        { id: 'user-1', role: 'user', content: 'در آخرین ردیف جدول ۳-۱ مقدار n و t چقدر است؟', timestamp: 1 },
+        { id: 'answer-1', role: 'assistant', timestamp: 2, grounding: 'documents',
+          content: '- تعداد تجمعی خرابی‌ها: **45** [extract_itex]n = 45[/extract_itex] [1]\n- تعداد تجمعی ساعات آزمون: **360** [extract_itex]t = 360[/extract_itex] [2]',
+          sources: [
+            { n: 1, filename: 'گزارش نهایی.docx', cited: true, location: { kind: 'paragraph', start: 1790, table: 51 },
+              text: '[جدول 51] جدول ۳-۱\n| تاریخ | n | t |\n| :--- | :--- | :--- |\n| 03/24 | 44 | 352 |\n| 03/25 | 45 | 360 |' },
+            { n: 2, filename: 'گزارش نهایی.docx', cited: true, location: { kind: 'paragraph', start: 487, image: 15 },
+              text: '[تصویر 15] شکل ۳-۵: اجرای آزمون‌ها\nتعداد کل تست‌ها 10' },
+          ] },
+      ],
+    }]));
+    localStorage.setItem('parsrag_active_session_id_v1', 'report');
+  });
+  // A 1x1 PNG stands in for the stored WebP preview.
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  let imageRequested = '';
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/report/files', route => route.fulfill({ json: ['گزارش نهایی.docx'] }));
+  await page.route('**/sessions/report/images/**', route => {
+    imageRequested = route.request().url();
+    return route.fulfill({ body: pixel, contentType: 'image/png' });
+  });
+  await page.goto('/');
+
+  const answer = page.locator('.progressive-markdown').last();
+  await expect(answer.locator('.katex').first()).toBeVisible();
+  await expect(answer).not.toContainText('extract_itex');
+
+  const sources = page.locator('[data-tour="sources"]').last();
+  await sources.locator('.source-card').first().locator('summary').click();
+  const table = sources.locator('.source-table table').first();
+  await expect(table.locator('th')).toHaveText(['تاریخ', 'n', 't']);
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+
+  await sources.locator('.source-card').nth(1).locator('summary').click();
+  await expect(sources.locator('.source-image img')).toBeVisible();
+  expect(decodeURIComponent(imageRequested)).toContain('/sessions/report/images/15?filename=گزارش نهایی.docx');
+});

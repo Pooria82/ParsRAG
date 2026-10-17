@@ -37,3 +37,8 @@ test('escaped pipes stay inside a cell and a single pipe line stays prose', () =
   assert.deepEqual(splitExcerpt('| a \\| b | c |\n| d | e |')[0].rows[0], ['a | b', 'c']);
   assert.deepEqual(splitExcerpt('متن | ادامه\n| فقط یک خط |'), [{ kind: 'text', text: 'متن | ادامه\n| فقط یک خط |' }]);
 });
+
+test('source previews summarize table rows without pipes or rules', () => {
+  const { excerptPreview } = require('./.compiled/components/SourceList.js');
+  assert.equal(excerptPreview('[جدول 51] جدول ۳-۱\n| تاریخ | n | t |\n| :--- | :--- | :--- |\n| 03/24 | 44 | 352 |'), '[جدول 51] جدول ۳-۱ · تاریخ · n · t · 03/24 · 44 · 352');
+});

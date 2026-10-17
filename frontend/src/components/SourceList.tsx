@@ -44,8 +44,12 @@ export function highlightParts(text: string, terms: string[]): Array<{ text: str
   return text.split(pattern).filter(Boolean).map(part => ({ text: part, mark: terms.includes(part.toLocaleLowerCase()) }));
 }
 
-function excerptPreview(text: string): string {
-  const line = text.replace(/\[page \d+\]\s*/g, '').replace(/\s+/g, ' ').trim();
+/** One-line summary of an excerpt; table pipes and rules become separators. */
+export function excerptPreview(text: string): string {
+  const line = text.replace(/\[page \d+\]\s*/g, '').split('\n')
+    .filter(row => !/^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(row))
+    .map(row => row.trim().startsWith('|') ? row.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim()).filter(Boolean).join(' · ') : row)
+    .join(' · ').replace(/\s+/g, ' ').trim();
   return line.length > 110 ? `${line.slice(0, 110).replace(/\s+\S*$/, '')}…` : line;
 }
 

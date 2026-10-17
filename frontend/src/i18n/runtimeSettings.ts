@@ -58,7 +58,7 @@ export const SETTING_TEXT: Record<string, { label: Text; hint: Text }> = {
   },
   PARSRAG_MAX_BATCH_BYTES: {
     label: { fa: 'بیشترین حجم هر بارگذاری (مگابایت)', en: 'Largest upload batch (MB)' },
-    hint: { fa: 'سقف سرور (PARSRAG_MAX_REQUEST_BYTES) فقط از ‎.env‎ تغییر می‌کند.', en: 'The server ceiling (PARSRAG_MAX_REQUEST_BYTES) changes only in .env.' },
+    hint: { fa: 'سقف سرور (PARSRAG_MAX_REQUEST_BYTES) فقط از ‎.env‎ تغییر می‌کند.', en: 'The server ceiling (PARSRAG_MAX_REQUEST_BYTES) changes only in ‎.env‎.' },
   },
   OCR_ENABLED: {
     label: { fa: 'خواندن متن تصویرها و اسکن‌ها (OCR)', en: 'Read images and scans (OCR)' },
@@ -131,11 +131,11 @@ export const RUNTIME_TEXT = {
     overridden: 'در برنامه تغییر کرده',
   },
   en: {
-    automatic: 'Automatic', on: 'On', off: 'Off', fromEnv: '.env value:', resetOne: 'Back to the .env value',
-    save: 'Save', saving: 'Saving…', saved: 'Saved; applies from the next request.', resetAll: 'Reset all to .env',
+    automatic: 'Automatic', on: 'On', off: 'Off', fromEnv: '‎.env‎ value:', resetOne: 'Back to the ‎.env‎ value',
+    save: 'Save', saving: 'Saving…', saved: 'Saved; applies from the next request.', resetAll: 'Reset all to ‎.env‎',
     loadError: 'Could not read the server settings.', saveError: 'The settings were not saved.', invalid: 'A value is invalid or out of range.',
-    ceiling: 'The upload size exceeds the server ceiling; raise PARSRAG_MAX_REQUEST_BYTES in .env first.',
-    envOnly: 'Ports, allowed addresses, Qdrant, memory limits, and the embedding model change only in .env, with a restart.',
+    ceiling: 'The upload size exceeds the server ceiling; raise PARSRAG_MAX_REQUEST_BYTES in ‎.env‎ first.',
+    envOnly: 'Ports, allowed addresses, Qdrant, memory limits, and the embedding model change only in ‎.env‎, with a restart.',
     overridden: 'Changed in the app',
   },
 } satisfies Record<Language, Record<string, string>>;

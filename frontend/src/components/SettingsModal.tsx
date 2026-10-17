@@ -105,7 +105,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     if (!open || guided || activeTab !== 'connection' || activeProvider !== 'ollama' || !ollamaModelUrl.trim()) return;
     void loadOllamaModels(true);
   }, [open, guided, activeTab, activeProvider, ollamaModelUrl]);
-  const gigabytes = (bytes: number) => `${(bytes / 1e9).toLocaleString(settings.language, { maximumFractionDigits: 1 })} GB`;
+  const gigabytes = (bytes: number) => `${(bytes / 1e9).toLocaleString(settings.language, { maximumFractionDigits: 1 })} ${settings.language === 'fa' ? 'گیگابایت' : 'GB'}`;
   const ollamaOptions = [
     ...(models.some(model => model.name === ollamaModelName) || !ollamaModelName ? [] : [{ value: ollamaModelName, label: ollamaModelName, description: t.modelNotInstalled }]),
     ...models.map(model => ({ value: model.name, label: model.name, description: model.size ? gigabytes(model.size) : undefined })),
