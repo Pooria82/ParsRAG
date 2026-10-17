@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { BookOpenCheck, ChevronDown, FileText } from 'lucide-react';
 import type { Language, SourcePassage } from '../types';
 import { translations } from '../i18n/translations';
+import { splitExcerpt } from '../core/excerpt';
 
 interface SourceListProps {
   messageId: string;
@@ -46,6 +47,10 @@ function excerptPreview(text: string): string {
   return line.length > 110 ? `${line.slice(0, 110).replace(/\s+\S*$/, '')}…` : line;
 }
 
+function Highlighted({ text, terms }: { text: string; terms: string[] }) {
+  return <>{highlightParts(text, terms).map((part, index) => part.mark ? <mark key={index}>{part.text}</mark> : part.text)}</>;
+}
+
 function SourceCard({ source, language, messageId, active, terms, showFile }: { source: SourcePassage; language: Language; messageId: string; active: boolean; terms: string[]; showFile: boolean }) {
   const ref = useRef<HTMLLIElement>(null);
   useEffect(() => {
@@ -63,7 +68,12 @@ function SourceCard({ source, language, messageId, active, terms, showFile }: { 
           <small>{showFile && <bdi>{source.filename}</bdi>}{showFile && location ? ' · ' : ''}{location}</small></span>
         <ChevronDown size={14} className="source-chevron" aria-hidden="true" />
       </summary>
-      <blockquote dir="auto">{highlightParts(source.text, terms).map((part, index) => part.mark ? <mark key={index}>{part.text}</mark> : part.text)}</blockquote>
+      <blockquote dir="auto">{splitExcerpt(source.text).map((block, index) => block.kind === 'text'
+        ? <Highlighted key={index} text={block.text} terms={terms} />
+        : <div key={index} className="table-scroll source-table"><table dir="auto">
+          {block.header && <thead><tr>{block.header.map((cell, at) => <th key={at}><Highlighted text={cell} terms={terms} /></th>)}</tr></thead>}
+          <tbody>{block.rows.map((row, at) => <tr key={at}>{row.map((cell, column) => <td key={column}><Highlighted text={cell} terms={terms} /></td>)}</tr>)}</tbody>
+        </table></div>)}</blockquote>
     </details>
   </li>;
 }

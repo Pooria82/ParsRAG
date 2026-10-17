@@ -156,9 +156,35 @@ function normalizeLine(line: string): string {
   return output;
 }
 
+const ITEX_TAG = '[extract_itex]';
+const ITEX_SPAN = /\[extract_itex\]([\s\S]*?)\[\/extract_itex\]/g;
+
+/**
+ * Repair markup that some models leak into answers. Gemini models sometimes
+ * wrap inline math as "[extract_itex]n = 45[/extract_itex]"; it becomes
+ * "$n = 45$". While an answer streams, an unclosed or half-written tag is
+ * hidden until it completes.
+ */
+export function repairModelMarkup(content: string): string {
+  let text = content.replace(ITEX_SPAN, (_match, formula: string) => {
+    const inner = formula.trim();
+    return inner ? `$${inner}$` : '';
+  }).replace(/\[\/extract_itex\]/g, '');
+  const open = text.indexOf(ITEX_TAG);
+  if (open >= 0) text = text.slice(0, open);
+  for (let length = Math.min(ITEX_TAG.length - 1, text.length); length > 0; length -= 1) {
+    if (text.endsWith(ITEX_TAG.slice(0, length))) {
+      // Only a tag prefix of at least two characters is hidden ("[" alone is common).
+      if (length >= 2) text = text.slice(0, -length);
+      break;
+    }
+  }
+  return text;
+}
+
 /** Converts common model-produced math delimiters into remark-math syntax. */
 export function normalizeMathMarkdown(content: string): string {
-  return content.split(PROTECTED_MARKDOWN).map((segment, index) => {
+  return repairModelMarkup(content).split(PROTECTED_MARKDOWN).map((segment, index) => {
     if (index % 2 === 1) return segment;
     const lines = segment
       .replace(/\\\[([\s\S]*?)\\\]/g, (_match, formula: string) => `$$\n${formula.trim()}\n$$`)

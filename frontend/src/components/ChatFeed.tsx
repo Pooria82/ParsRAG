@@ -6,6 +6,7 @@ import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
 import { SourceList } from './SourceList';
+import { repairModelMarkup } from '../core/markdown';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
@@ -55,7 +56,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   }, [messages, isGenerating, liveDraft?.content]);
   const copy = async (message: Message) => {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(repairModelMarkup(message.content));
       setCopied(message.id); setCopyError(false); clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(null), 2000);
     } catch { setCopyError(true); }
