@@ -272,3 +272,39 @@ def test_cpu_threads_are_applied_when_set(monkeypatch: pytest.MonkeyPatch) -> No
         monkeypatch.setenv("PARSRAG_CPU_THREADS", "6")
         factory.apply_runtime_settings({"PARSRAG_CPU_THREADS"})
         threads.assert_called_once_with(6)
+
+
+def test_automatic_settings_report_the_value_in_use(tmp_path: Path) -> None:
+    store = EnvironmentSettingsStore(
+        tmp_path / "s.json", automatic=lambda: {"OCR_WORKERS": "4", "OCR_DPI": "x"}
+    )
+    items = {
+        item.key: item
+        for item in ReadRuntimeSettings(store, CEILING).execute().settings
+    }
+
+    assert items["OCR_WORKERS"].automatic_value == "4"
+    # Only settings that can be automatic carry a value.
+    assert items["OCR_DPI"].automatic_value is None
+    assert items["STRICT_RAG_TOP_K"].automatic_value is None
+
+
+def test_server_reports_what_automatic_means(monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.infrastructure.llm import factory
+
+    monkeypatch.setattr(factory, "_embedding_device", "cpu")
+    monkeypatch.setattr(factory, "_DEFAULT_CPU_THREADS", 6)
+    with patch(
+        "backend.infrastructure.llm.factory.default_ocr_workers", return_value=5
+    ):
+        values = factory.automatic_setting_values()
+
+    assert values == {
+        "STRICT_RAG_TOP_K": "8-30",
+        "HYBRID_RERANK_TOP_K": "8-30",
+        "OCR_WORKERS": "5",
+        "EMBED_BATCH_SIZE": "8",
+        "PARSRAG_CPU_THREADS": "6",
+    }
+    automatic = {spec.key for spec in RUNTIME_SETTINGS if spec.automatic}
+    assert set(values) == automatic

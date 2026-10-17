@@ -27,6 +27,7 @@ class ReadRuntimeSettings:
         values = self._store.values()
         env_values = self._store.env_values()
         overrides = self._store.overrides()
+        automatic = self._store.automatic_values()
         return RuntimeSettingsResponse(
             settings=[
                 RuntimeSettingItem(
@@ -39,6 +40,7 @@ class ReadRuntimeSettings:
                     minimum=spec.minimum,
                     maximum=spec.maximum,
                     automatic=spec.automatic,
+                    automatic_value=automatic.get(spec.key) if spec.automatic else None,
                 )
                 for spec in RUNTIME_SETTINGS
             ],

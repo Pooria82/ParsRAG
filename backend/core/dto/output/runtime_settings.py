@@ -21,6 +21,8 @@ class RuntimeSettingItem(BaseModel):
     minimum: float | None = None
     maximum: float | None = None
     automatic: bool = False
+    # What "automatic" currently means, for example "8" or "8-30" (per question).
+    automatic_value: str | None = None
 
 
 class RuntimeSettingsResponse(BaseModel):

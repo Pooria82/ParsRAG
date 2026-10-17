@@ -41,10 +41,16 @@ class EnvironmentSettingsStore:
         self,
         path: Path,
         on_change: Callable[[set[str]], None] | None = None,
+        automatic: Callable[[], dict[str, str]] | None = None,
     ) -> None:
-        """Remember the ``.env`` values, then activate saved overrides."""
+        """Remember the ``.env`` values, then activate saved overrides.
+
+        ``automatic`` reports what automatic settings resolve to, so the app
+        can show the value in use.
+        """
         self._path = path
         self._on_change = on_change
+        self._automatic = automatic
         self._lock = RLock()
         self._env = {spec.key: _valid_or_default(spec.key) for spec in RUNTIME_SETTINGS}
         self._raw_env = {
@@ -67,6 +73,10 @@ class EnvironmentSettingsStore:
     def env_values(self) -> dict[str, str]:
         """Return the value each setting had from ``.env`` at startup."""
         return dict(self._env)
+
+    def automatic_values(self) -> dict[str, str]:
+        """Return what each automatic setting resolves to right now."""
+        return self._automatic() if self._automatic is not None else {}
 
     def overrides(self) -> dict[str, str]:
         """Return the settings changed in the app."""

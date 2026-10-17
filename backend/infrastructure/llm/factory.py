@@ -15,6 +15,7 @@ from llama_index.llms.ollama import Ollama  # type: ignore
 from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 from backend.infrastructure.embedding_profile import active_embedding_profile
 from backend.infrastructure.llm.config_store import (
     load_model_configuration,
@@ -26,6 +27,7 @@ from backend.infrastructure.llm.endpoint_policy import (
     validate_model_api_url,
 )
 from backend.infrastructure.llm.reasoning import ReasoningFreeOpenAILike
+from backend.infrastructure.parsers.document_parser import default_ocr_workers
 
 load_dotenv()
 
@@ -408,6 +410,23 @@ def apply_cpu_threads() -> None:
     raw = os.getenv("PARSRAG_CPU_THREADS", "").strip()
     if raw.isdigit() and 1 <= int(raw) <= 64:
         torch.set_num_threads(int(raw))
+
+
+# PyTorch's thread count before any override (from OMP_NUM_THREADS or the CPU).
+_DEFAULT_CPU_THREADS = torch.get_num_threads()
+
+
+def automatic_setting_values() -> dict[str, str]:
+    """What each automatic runtime setting resolves to on this server."""
+    depth = f"{RetrievalOptimizer.MIN_TOP_K}-{RetrievalOptimizer.MAX_TOP_K}"
+    device = _embedding_device or resolve_embedding_device()
+    return {
+        "STRICT_RAG_TOP_K": depth,
+        "HYBRID_RERANK_TOP_K": depth,
+        "OCR_WORKERS": str(default_ocr_workers()),
+        "EMBED_BATCH_SIZE": "32" if device == "cuda" else "8",
+        "PARSRAG_CPU_THREADS": str(_DEFAULT_CPU_THREADS),
+    }
 
 
 # Settings that change how the model clients are built.

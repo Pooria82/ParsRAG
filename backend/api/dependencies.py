@@ -47,7 +47,11 @@ from backend.core.use_case.system.runtime_settings import (
     UpdateRuntimeSettings,
 )
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
-from backend.infrastructure.llm.factory import apply_runtime_settings, condensing_llm
+from backend.infrastructure.llm.factory import (
+    apply_runtime_settings,
+    automatic_setting_values,
+    condensing_llm,
+)
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
 from backend.infrastructure.llm.reranker import FlashRankReranker
 from backend.infrastructure.parsers.chunker import SentenceWindowChunker
@@ -59,7 +63,9 @@ from backend.infrastructure.runtime_settings import (
 
 # Overrides saved in the app are active before any setting is read.
 runtime_settings_store = EnvironmentSettingsStore(
-    runtime_settings_path(), on_change=apply_runtime_settings
+    runtime_settings_path(),
+    on_change=apply_runtime_settings,
+    automatic=automatic_setting_values,
 )
 _REQUEST_OVERHEAD_BYTES = 10 * 1024 * 1024
 

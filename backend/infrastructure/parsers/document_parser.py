@@ -559,13 +559,18 @@ def _ocr_unavailable(exc: OCRUnavailableError) -> DocumentError:
     return DocumentError(f"OCR is unavailable: {exc}", "ocr_unavailable")
 
 
+def default_ocr_workers() -> int:
+    """Images read at the same time when ``OCR_WORKERS`` is automatic."""
+    return max(1, min(8, (os.cpu_count() or 2) // 2))
+
+
 def ocr_workers() -> int:
     """Images recognized at the same time (``OCR_WORKERS``; default half the CPUs).
 
     Each image is still read by its own Tesseract process with the same
     settings, so the text is the same as reading them one by one.
     """
-    default = max(1, min(8, (os.cpu_count() or 2) // 2))
+    default = default_ocr_workers()
     try:
         value = int(os.getenv("OCR_WORKERS", "") or default)
     except ValueError:

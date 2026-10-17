@@ -14,6 +14,10 @@ class RuntimeSettingsStore(Protocol):
         """Return the value each setting had from ``.env`` at startup."""
         ...
 
+    def automatic_values(self) -> dict[str, str]:
+        """Return what each automatic setting resolves to right now."""
+        ...
+
     def overrides(self) -> dict[str, str]:
         """Return the settings changed in the app."""
         ...
