@@ -80,7 +80,10 @@ def test_app_can_reach_an_ollama_installed_on_the_host() -> None:
 def test_upload_spool_holds_the_largest_allowed_request() -> None:
     """The default RAM-backed /tmp can hold a full upload request."""
     example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    values = dict(line.split("=", 1) for line in example.splitlines() if "=" in line)
+    # Optional settings are documented as commented-out defaults.
+    values = dict(
+        line.lstrip("# ").split("=", 1) for line in example.splitlines() if "=" in line
+    )
     tmpfs_bytes = int(values["PARSRAG_TMPFS_SIZE"].removesuffix("m")) * 1024 * 1024
 
     assert tmpfs_bytes >= int(values["PARSRAG_MAX_REQUEST_BYTES"])
@@ -105,6 +108,33 @@ def test_docker_context_excludes_secrets_and_local_test_data() -> None:
 
     for expected in (".env", ".venv", "testData", "scratch", "data"):
         assert expected in patterns
+
+
+def test_example_environment_requires_only_the_model() -> None:
+    """Only the model choice is active; every other setting shows its default."""
+    example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    active = [
+        line.split("=", 1)[0]
+        for line in example.splitlines()
+        if "=" in line and not line.startswith("#")
+    ]
+
+    assert active == [
+        "LLM_PROVIDER",
+        "LLM_MODEL_NAME",
+        "OLLAMA_DOCKER_BASE_URL",
+        "MODEL_API_BASE_URL",
+        "MODEL_API_KEY",
+        "MODEL_API_DISCLOSURE_ACKNOWLEDGED",
+    ]
+
+
+def test_every_runtime_setting_is_documented_in_the_example() -> None:
+    from backend.core.domain.runtime_settings import RUNTIME_SETTINGS
+
+    example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    for spec in RUNTIME_SETTINGS:
+        assert f"# {spec.key}=" in example, spec.key
 
 
 def test_example_environment_contains_no_example_secret() -> None:
