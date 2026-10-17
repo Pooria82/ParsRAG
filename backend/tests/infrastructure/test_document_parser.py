@@ -1,5 +1,4 @@
 import json
-import os
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -344,20 +343,26 @@ def test_real_two_page_pdf_preserves_one_split_fact() -> None:
 
 
 def test_real_docx_parsing() -> None:
-    """End-to-End ingestion parser test using a real file from testData copied to data/."""
-    file_path = os.path.join(
-        os.path.dirname(__file__), "../../../data/نیازمندی‌های تست.docx"
-    )
+    """A Persian Word file with a heading, paragraphs, and a table parses fully."""
+    from docx import Document as WordDocument
 
-    if not os.path.exists(file_path):
-        pytest.skip("Test file 'نیازمندی‌های تست.docx' not found in data/ directory.")
+    document = WordDocument()
+    document.add_heading("نیازمندی‌های تست", level=1)
+    document.add_paragraph("تست واحد باید ورودی‌های معمولی و نامعتبر را پوشش دهد.")
+    document.add_paragraph("تست یکپارچگی جریان داده بین ماژول‌ها را بررسی می‌کند.")
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "شناسه"
+    table.cell(0, 1).text = "ماژول‌ها"
+    table.cell(1, 0).text = "IS002"
+    table.cell(1, 1).text = "ورود و داشبورد"
+    buffer = BytesIO()
+    document.save(buffer)
 
-    with open(file_path, "rb") as f:
-        file_bytes = f.read()
+    text = parse_document(buffer.getvalue(), "نیازمندی‌های تست.docx")
 
-    text = parse_document(file_bytes, "نیازمندی‌های تست.docx")
-    assert len(text) > 0
-    assert "تست" in text
+    assert "تست واحد باید ورودی‌های معمولی" in text
+    assert "جریان داده بین ماژول‌ها" in text
+    assert "IS002" in text and "ورود و داشبورد" in text
 
 
 @pytest.mark.parametrize(

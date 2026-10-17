@@ -656,16 +656,32 @@ npm run test:e2e
 npm run test:pwa
 Set-Location ..
 
-# End-to-end pipeline (real parsing, embeddings, and Qdrant; stand-in model)
-docker run -d --rm -p 6333:6333 --name qdrant-e2e qdrant/qdrant:v1.19.1
+# End-to-end pipeline: real parsing, embeddings, search, and an in-memory
+# Qdrant with a stand-in model. The first run downloads the embedding model.
 $env:PARSRAG_E2E = "1"
 .\.venv\Scripts\python.exe -m pytest backend/tests/e2e --no-cov
-docker stop qdrant-e2e
 
 docker compose config --quiet
 docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model config --quiet
 docker compose -f compose.yaml -f compose.gpu.yaml -f compose.gpu-low-vram.yaml --profile local-model config --quiet
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config --quiet
+```
+
+A plain `pytest` skips the two end-to-end tests. To run every backend test
+with none skipped, set `PARSRAG_E2E` first (it stays set for the rest of the
+PowerShell session; `Remove-Item Env:PARSRAG_E2E` clears it):
+
+```powershell
+$env:PARSRAG_E2E = "1"; .\.venv\Scripts\python.exe -m pytest
+```
+
+To test against a Qdrant server instead, as CI does, start one and point
+`QDRANT_HOST` at it. The Compose stack's Qdrant is not published on the host:
+
+```powershell
+docker run -d --rm --name qdrant-e2e -p 127.0.0.1:6333:6333 qdrant/qdrant:v1.19.1
+$env:PARSRAG_E2E = "1"; $env:QDRANT_HOST = "localhost"; .\.venv\Scripts\python.exe -m pytest backend/tests/e2e --no-cov
+docker stop qdrant-e2e
 ```
 
 Private fixtures belong in ignored `testData/`; generated experiments and raw
