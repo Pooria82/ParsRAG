@@ -518,7 +518,7 @@ the rest apply from `.env` after a restart.
 | `QDRANT_MEMORY_LIMIT` | `2g` | Qdrant memory ceiling |
 | `OLLAMA_MEMORY_LIMIT` | `12g` | Ollama memory ceiling |
 | `PARSRAG_CPU_THREADS` ⚙ | `4` | PyTorch/OpenMP CPU threads; up to the physical cores speeds up indexing |
-| `OCR_WORKERS` ⚙ | half the CPUs (max 8) | Images read at the same time while indexing; the text is the same as one by one |
+| `OCR_WORKERS` ⚙ | the CPU cores (max 8) | Images read at the same time while indexing; the text is the same as one by one |
 | `EMBED_DEVICE` | `auto` | Embedding device; GPU overlay sets `cuda` |
 | `EMBED_BATCH_SIZE` | `8` | Embedding batch; GPU overlay defaults to `32` |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | Bounded vector insertion batch |

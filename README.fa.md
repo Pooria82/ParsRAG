@@ -518,7 +518,7 @@ API فقط به نام‌های `localhost`، `127.0.0.1` و `::1` پاسخ می
 | `QDRANT_MEMORY_LIMIT` | `2g` | سقف حافظه Qdrant |
 | `OLLAMA_MEMORY_LIMIT` | `12g` | سقف حافظه Ollama |
 | `PARSRAG_CPU_THREADS` ⚙ | `4` | تعداد threadهای CPU برای PyTorch/OpenMP؛ تا تعداد هسته‌های واقعی، ایندکس را سریع‌تر می‌کند |
-| `OCR_WORKERS` ⚙ | نصف هسته‌ها (حداکثر ۸) | تصویرهایی که هنگام ایندکس هم‌زمان خوانده می‌شوند؛ متن حاصل همان خواندن تک‌به‌تک است |
+| `OCR_WORKERS` ⚙ | هسته‌های CPU (حداکثر ۸) | تصویرهایی که هنگام ایندکس هم‌زمان خوانده می‌شوند؛ متن حاصل همان خواندن تک‌به‌تک است |
 | `EMBED_DEVICE` | `auto` | دستگاه embedding؛ overlay انویدیا آن را `cuda` می‌کند |
 | `EMBED_BATCH_SIZE` | `8` | batch embedding؛ در GPU مقدار پیش‌فرض `32` است |
 | `QDRANT_UPSERT_BATCH_SIZE` | `64` | اندازه batch محدودشده برای ثبت بردارها |

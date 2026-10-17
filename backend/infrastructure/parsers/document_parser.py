@@ -560,12 +560,20 @@ def _ocr_unavailable(exc: OCRUnavailableError) -> DocumentError:
 
 
 def default_ocr_workers() -> int:
-    """Images read at the same time when ``OCR_WORKERS`` is automatic."""
-    return max(1, min(8, (os.cpu_count() or 2) // 2))
+    """Images read at the same time when ``OCR_WORKERS`` is automatic.
+
+    Every CPU this process may use, at most 8: OCR finishes before the
+    document is embedded, so the two never compete for the CPU.
+    """
+    if hasattr(os, "sched_getaffinity"):
+        available = len(os.sched_getaffinity(0))
+    else:  # Windows and macOS have no affinity mask.
+        available = os.cpu_count() or 1
+    return max(1, min(8, available))
 
 
 def ocr_workers() -> int:
-    """Images recognized at the same time (``OCR_WORKERS``; default half the CPUs).
+    """Images recognized at the same time (``OCR_WORKERS``; default the CPUs, max 8).
 
     Each image is still read by its own Tesseract process with the same
     settings, so the text is the same as reading them one by one.

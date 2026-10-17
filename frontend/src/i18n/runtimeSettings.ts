@@ -98,7 +98,7 @@ export const SETTING_TEXT: Record<string, { label: Text; hint: Text }> = {
   },
   OCR_WORKERS: {
     label: { fa: 'تصویرهایی که هم‌زمان خوانده می‌شوند', en: 'Images read at the same time' },
-    hint: { fa: 'بیشتر یعنی ایندکس سریع‌تر و مصرف CPU بیشتر. «خودکار»: نصف هسته‌ها.', en: 'More is faster indexing and more CPU. Automatic: half the cores.' },
+    hint: { fa: 'بیشتر یعنی ایندکس سریع‌تر و مصرف CPU بیشتر. «خودکار»: همهٔ هسته‌ها، حداکثر ۸.', en: 'More is faster indexing and more CPU. Automatic: every core, at most 8.' },
   },
   EMBED_BATCH_SIZE: {
     label: { fa: 'اندازهٔ دستهٔ بردارسازی', en: 'Embedding batch size' },

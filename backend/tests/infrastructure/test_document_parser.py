@@ -555,3 +555,13 @@ def test_only_images_that_became_sections_get_previews(
     assert list(_section_previews(sections, blobs)) == [2]
     monkeypatch.setenv("SOURCE_IMAGE_PREVIEWS", "0")
     assert _section_previews(sections, blobs) == {}
+
+
+def test_automatic_ocr_workers_use_the_available_cpus() -> None:
+    from backend.infrastructure.parsers.document_parser import default_ocr_workers
+
+    affinity = "backend.infrastructure.parsers.document_parser.os.sched_getaffinity"
+    with patch(affinity, create=True, return_value={0, 1, 2}):
+        assert default_ocr_workers() == 3
+    with patch(affinity, create=True, return_value=set(range(20))):
+        assert default_ocr_workers() == 8
