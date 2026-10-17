@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CircleHelp, Database, Download, FileUp, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
-import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode } from '../types';
+import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode, RuntimeSettings } from '../types';
+import { ServerSettings } from './ServerSettings';
+import { GROUP_TEXT, RUNTIME_TEXT } from '../i18n/runtimeSettings';
 import { translations } from '../i18n/translations';
 import { DEFAULT_SETTINGS, isLocalEndpoint, MODES } from '../core/state';
 import { Dialog } from './Dialog';
@@ -30,7 +32,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [backupStatus, setBackupStatus] = useState<{ kind: 'done' | 'error'; text: string } | null>(null);
   const t = translations[settings.language];
   const applePlatform = isApplePlatform(navigator.platform || navigator.userAgent);
-  const [tab, setTab] = useState<'general' | 'rag' | 'connection'>('general');
+  const [tab, setTab] = useState<'general' | 'rag' | 'connection' | 'documents'>('general');
   const activeTab = guidedTab ?? tab;
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearStatus, setClearStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -50,6 +52,19 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'saved' | 'error'>('idle');
   const [modelError, setModelError] = useState<string | null>(null);
   const modelApi = useMemo(() => new ParsRagApiClient(settings.backendUrl), [settings.backendUrl]);
+  const [runtime, setRuntime] = useState<RuntimeSettings | null>(null);
+  const [runtimeError, setRuntimeError] = useState(false);
+  useEffect(() => {
+    if (!open || guided) return;
+    const controller = new AbortController(); setRuntimeError(false);
+    void modelApi.runtimeSettings(controller.signal).then(setRuntime).catch(error => {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setRuntimeError(true);
+    });
+    return () => controller.abort();
+  }, [open, guided, modelApi]);
+  const serverSettings = (groups: Array<'model' | 'retrieval' | 'documents' | 'performance'>) => runtime
+    ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={setRuntime} />
+    : runtimeError ? <p className="info-note"><CircleHelp size={18} />{RUNTIME_TEXT[settings.language].loadError}</p> : null;
   const modelName = activeProvider === 'api' ? apiModelName : ollamaModelName;
   const setModelName = (value: string) => provider === 'api' ? setApiModelName(value) : setOllamaModelName(value);
   const modelUrl = activeProvider === 'api' ? apiModelUrl : ollamaModelUrl;
@@ -95,7 +110,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     ...(models.some(model => model.name === ollamaModelName) || !ollamaModelName ? [] : [{ value: ollamaModelName, label: ollamaModelName, description: t.modelNotInstalled }]),
     ...models.map(model => ({ value: model.name, label: model.name, description: model.size ? gigabytes(model.size) : undefined })),
   ];
-  const tabs = [{ id: 'general', label: t.tabGeneral, Icon: Sun }, { id: 'rag', label: t.tabRAG, Icon: SlidersHorizontal }, { id: 'connection', label: t.tabModel, Icon: Database }] as const;
+  const tabs = [{ id: 'general', label: t.tabGeneral, Icon: Sun }, { id: 'rag', label: t.tabRAG, Icon: SlidersHorizontal }, { id: 'connection', label: t.tabModel, Icon: Database }, { id: 'documents', label: t.tabDocuments, Icon: FileUp }] as const;
   return <Dialog open={open} guided={guided} onClose={onClose} title={t.settingsTitle} subtitle={t.settingsSubtitle} closeLabel={t.close} className="settings-dialog">
     <div className="settings-tabs" data-tour="settings-tabs" role="tablist" aria-label={t.settingsTitle}>
       {tabs.map(({ id, label, Icon }, index) => <button key={id} id={'tab-' + id} role="tab" aria-controls={'panel-' + id}
@@ -151,7 +166,11 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         {!settings.dynamicDepth && <div className="setting-field"><label htmlFor="top-k">{t.manualTopKLabel}<output>{settings.topK.toLocaleString(settings.language)}</output></label>
           <input type="range" id="top-k" min="1" max="50" value={settings.topK} onChange={e => onUpdateSettings({ topK: Number(e.target.value) })} />
         </div>}
-        <p className="info-note"><CircleHelp size={18} />{t.serverManaged}</p>
+        {serverSettings(['retrieval'])}
+      </>}
+      {activeTab === 'documents' && <>
+        {serverSettings(['documents', 'performance'])}
+        <p className="info-note"><CircleHelp size={18} />{RUNTIME_TEXT[settings.language].envOnly}</p>
       </>}
       {activeTab === 'connection' && <>
         <form className="model-settings" onSubmit={event => {
@@ -179,6 +198,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           <div className="model-actions" data-tour="settings-model-actions">{activeProvider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button primary model-save" disabled={busy || modelStatus === 'loading' || !modelName.trim()}>{modelStatus === 'loading' ? t.saving : t.saveModel}</button></div>
           {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && modelError && <p className="inline-error" role="alert">{modelError}</p>}
         </form>
+        {(runtime || runtimeError) && <details className="advanced-settings"><summary>{GROUP_TEXT.model[settings.language]}</summary>{serverSettings(['model'])}</details>}
         <form className="setting-field" data-tour="settings-backend" onSubmit={event => {
           event.preventDefault();
           if (!isLocalEndpoint(endpoint, window.location.origin)) { setInvalid(true); return; }
