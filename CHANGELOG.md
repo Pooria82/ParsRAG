@@ -7,6 +7,22 @@ and this project uses Semantic Versioning.
 
 ### Added
 
+- Settings in the app can change the options that used to need `.env` and a
+  restart (27 in all), in four groups:
+  - model: context sizes, thinking, retries, timeouts
+  - retrieval: threshold, depths, keyword search
+  - documents: upload limits, OCR, image previews
+  - indexing speed: OCR workers, CPU threads, batches
+
+  Each shows its `.env` value and can be reset to it. Overrides survive
+  restarts. Ports, allowed addresses, Qdrant, memory limits, and the embedding
+  model stay in `.env`.
+- Answer sources show the image an excerpt was read from, next to the excerpt.
+- Installed Ollama models are offered in a menu, with their sizes.
+- `.env.example` now has only the model choice active. Every other setting
+  shows its default, grouped by whether Settings can also change it.
+- The README starts with one complete setup using every capability; other ways
+  to run follow it.
 - The app can use the Ollama installed on the computer (Windows, macOS,
   Linux) with its existing models and GPU. Set
   `OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434` in `.env` and
@@ -31,6 +47,13 @@ and this project uses Semantic Versioning.
 
 ### Improved
 
+- Indexing is faster with the same results:
+  - Pictures in Word and PowerPoint are read several at a time
+    (`OCR_WORKERS`). The 96-image final report parsed in 33 s instead of
+    121 s, with identical text.
+  - Each document is embedded in length-sorted batches.
+
+  Indexing that whole report went from about 4.5 minutes to about 3.
 - OCR reads screenshots better: a second, sparse-text pass adds text that
   page layout analysis skipped (status panels, dark UI themes).
 - Up to 200 images per Word or PowerPoint file are read (was 30).
@@ -44,6 +67,8 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- `[extract_itex]...[/extract_itex]` markup that Gemini models leak into answers
+  is shown as math, and table rows inside a source excerpt render as a table.
 - Thinking models on Ollama (such as `qwen3.5`) no longer return empty
   answers. They could spend the whole answer budget on reasoning, so Ollama
   is now asked not to think unless `OLLAMA_THINK=1`. On a 6 GB GPU with

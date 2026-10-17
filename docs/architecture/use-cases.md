@@ -18,6 +18,7 @@ flowchart LR
     end
     subgraph session
         LSF[ListSessionFiles]
+        RSI[ReadSourceImage]
         RD[ReuseDocument]
         DD[DeleteDocument]
         DS[DeleteSession]
@@ -31,11 +32,14 @@ flowchart LR
     subgraph system
         CR[CheckReadiness]
         DC[DescribeCapabilities]
+        RRS[ReadRuntimeSettings]
+        URS[UpdateRuntimeSettings]
     end
     ID --> DocumentParser & TextChunker & DocumentRepository
     AQ --> QuestionCondenser & QueryStrategy & DocumentRepository & ProgressTracker
     RQP --> ProgressTracker
-    LSF & RD & DD & DS --> DocumentRepository
+    LSF & RSI & RD & DD & DS --> DocumentRepository
+    RRS & URS --> RuntimeSettingsStore
     RMC & CM & LOM & GCT --> ModelGateway
     CR --> DocumentRepository
 ```
@@ -54,6 +58,9 @@ flowchart LR
 | `ReadModelConfiguration` | `GET /models/configuration` | — | `ModelConfigurationResponse` | `ModelGateway` | — |
 | `ConfigureModel` | `PUT /models/configuration` | `ModelConfigurationRequest` | `ModelConfigurationResponse` | `ModelGateway` | — |
 | `ListOllamaModels` | `GET /models/ollama` | base URL | `list[OllamaModel]` | `ModelGateway` | — |
+| `ReadRuntimeSettings` | `GET /settings/runtime` | — | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | — |
+| `UpdateRuntimeSettings` | `PUT`/`DELETE /settings/runtime` | `RuntimeSettingsUpdate` | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | Persists overrides; rebuilds model clients when their settings change |
+| `ReadSourceImage` | `GET /sessions/{id}/images/{n}` | session, filename, image number | WebP bytes | `DocumentRepository` | — |
 | `GenerateConversationTitle` | `POST /conversations/title` | `ConversationTitleRequest` | `ConversationTitleResponse` | `ModelGateway` | query limiter |
 | `CheckReadiness` | `GET /health/ready` | — | status string | `DocumentRepository` (lazy) | readiness state |
 | `DescribeCapabilities` | `GET /capabilities` | — | `AppCapabilitiesResponse` | — | upload policy |
@@ -78,6 +85,8 @@ flowchart LR
 | | Target lacks the filename and has room | `ConflictError` / `InvalidInputError` | 409 / 400 |
 | `ConfigureModel` | Ollama is plain `http://host:port` on loopback, `ollama`, `host.docker.internal`, or `OLLAMA_ALLOWED_HOSTS`; API URLs safe; external APIs acknowledged; endpoint verified | `InvalidInputError` (`ollama_url_not_allowed`, `ollama_unreachable`, or `invalid_request`) | 400 |
 | `ListOllamaModels` | Ollama reachable at an allowed URL (default: the server's `OLLAMA_BASE_URL`) | `UpstreamServiceError` (`ollama_url_not_allowed`, `ollama_unreachable`, or `upstream_unavailable`) | 502 |
+| `UpdateRuntimeSettings` | Known setting, value in bounds; file ≤ batch ≤ request ceiling | `InvalidInputError` (`invalid_setting`, `upload_ceiling`) | 400 |
+| `ReadSourceImage` | Valid session and reference; preview stored | `InvalidInputError` / `NotFoundError` | 400 / 404 |
 | `ReadQueryProgress` | Stage exists and is younger than 5 minutes | `NotFoundError` | 404 |
 
 ## Testing

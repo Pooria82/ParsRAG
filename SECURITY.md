@@ -49,6 +49,16 @@ On Linux, the containers can reach it only if it listens on another address:
   it, restrict port 11434 with a firewall to Docker's subnets and use it only
   on a trusted private network.
 
+### Runtime settings
+
+`PUT`/`DELETE /settings/runtime` change only the settings listed in
+`backend/core/domain/runtime_settings.py`, within the same bounds as `.env`.
+Like every state-changing request, they must come from the application's own
+origin. Settings that guard the trust boundary cannot be changed this way:
+ports, `PARSRAG_ALLOWED_HOSTS`/`PARSRAG_ALLOWED_ORIGINS`,
+`OLLAMA_ALLOWED_HOSTS`, the request ceiling, memory limits, and model
+downloads. Upload limits cannot exceed the request ceiling fixed at startup.
+
 ## Documented transitive advisory
 
 `llama-index-core` requires NLTK. ParsRAG pins NLTK 3.10.3 but does not call the
