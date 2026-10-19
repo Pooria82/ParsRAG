@@ -5,6 +5,8 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
 ### Added
 
 - Settings in the app can change the options that used to need `.env` and a
@@ -94,6 +96,29 @@ and this project uses Semantic Versioning.
   ordinary word with the file name (such as «اول» or «تست»).
 - An API provider that is out of credit (HTTP 402) is reported as such, with
   a hint to top up the account or choose another model.
+
+### Security
+
+- Questions with long runs of spaces or many unclosed `@{` mentions can no
+  longer make question splitting or answer-language detection slow (CodeQL
+  regular-expression alerts).
+
+### Changed
+
+- Every backend test runs without skips and without Docker:
+  `PARSRAG_E2E=1 pytest` runs the end-to-end tests against an in-memory
+  Qdrant unless `QDRANT_HOST` names a server.
+- Dependencies: FastAPI 0.143, Uvicorn 0.54, python-dotenv 1.2.4, Ruff 0.17,
+  mypy 2.4, KaTeX 0.19, Vite 8.3.4, Playwright 1.64, lucide-react 1.56,
+  msgpack 1.2.3 or later.
+
+### Upgrade note
+
+- Documents indexed by 1.0.0 keep working. Upload Word and PowerPoint files
+  again to gain image and table citations, image previews next to sources,
+  images past the 30th, and the improved OCR of screenshots.
+- Settings changed in the app are saved in the `app_config` volume and take
+  precedence over `.env`; each can be reset to its `.env` value.
 
 ## [1.0.0] - 2026-10-08
 
@@ -273,7 +298,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.1.0
