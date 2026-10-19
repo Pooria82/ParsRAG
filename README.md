@@ -100,6 +100,11 @@ excerpts, and the improved PDF text and OCR; reusing an old index does not
 rebuild it. Conversations move from `localStorage` to IndexedDB on first start,
 and the first start downloads the Hybrid reranker into the model cache.
 
+**After upgrading to 1.1.0:** documents indexed by 1.0.0 keep working. Upload
+Word and PowerPoint files again to gain image and table citations, image
+previews next to sources, images past the 30th, and better OCR of screenshots.
+Settings changed in the app take precedence over `.env` and can be reset to it.
+
 In the composer, type `@` to choose a document already indexed in the current
 conversation. You can mention more than one file, for example:
 `@{budget.pdf} What is the cost? And @{timeline.docx} When is delivery?`
