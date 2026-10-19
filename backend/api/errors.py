@@ -44,6 +44,7 @@ MODEL_FAILURE_DETAIL = {
     "model_not_found": "The configured model was not found on the model service.",
     "model_unavailable": "The model service could not be reached.",
     "model_rejected": "The model service rejected the request.",
+    "model_quota": "The model service account is out of credit.",
 }
 
 
