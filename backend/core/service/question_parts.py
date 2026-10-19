@@ -50,8 +50,9 @@ _QUESTION_WORD = re.compile(
     + r")(?![\w‌])",
     re.IGNORECASE,
 )
-# Clauses are joined by "و" / "and", optionally after a comma.
-_CONNECTOR = re.compile(r"\s*[،,]?\s+(?:و|and)\s+", re.IGNORECASE)
+# Clauses are joined by "و" / "and", optionally after a comma. A match starts
+# only where a run of spaces begins, so long runs of spaces stay linear.
+_CONNECTOR = re.compile(r"(?<![\s،,])(?:\s*[،,])?\s+(?:و|and)\s+", re.IGNORECASE)
 _MIN_PART_WORDS = 3
 _MAX_PARTS = 4
 

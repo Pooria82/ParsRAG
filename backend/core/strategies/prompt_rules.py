@@ -31,7 +31,9 @@ CITATION RULES:
 _PERSIAN_WORD = re.compile(r"[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]+")
 _LATIN_WORD = re.compile(r"[A-Za-z]+")
 # Code spans, @{file} mentions, and links say nothing about the question's language.
-_NEUTRAL = re.compile(r"`[^`]*`|@\{(?:\\.|[^}])*\}|https?://\S+")
+# A mention stops at the next brace and a backslash only starts an escape, so
+# unclosed or repeated "@{" cannot make matching slow.
+_NEUTRAL = re.compile(r"`[^`]*`|@\{(?:\\.|[^{}\\])*\}|https?://\S+")
 
 
 def question_language(question: str) -> str:

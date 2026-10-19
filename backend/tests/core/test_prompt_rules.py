@@ -40,3 +40,21 @@ def test_every_prompt_ends_with_the_answer_language(mode: str) -> None:
         "llm_only": llm_only.LLM_ONLY_PROMPT_TEMPLATE,
     }[mode]
     assert template.rstrip().endswith("{answer_language}\nAnswer:")
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["@{" * 20000, "@{" + "\\|" * 20000, "`" * 20000],
+    ids=["repeated-mentions", "escapes", "backticks"],
+)
+def test_question_language_is_fast_on_unclosed_markup(question: str) -> None:
+    import time
+
+    started = time.perf_counter()
+    question_language(question)
+
+    assert time.perf_counter() - started < 1.0
+
+
+def test_escaped_braces_stay_inside_a_mention() -> None:
+    assert question_language(r"What does @{report \{v2\} نهایی.docx} say?") == "en"
