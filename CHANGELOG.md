@@ -97,6 +97,12 @@ and this project uses Semantic Versioning.
 - An API provider that is out of credit (HTTP 402) is reported as such, with
   a hint to top up the account or choose another model.
 
+### Security
+
+- Questions with long runs of spaces or many unclosed `@{` mentions can no
+  longer make question splitting or answer-language detection slow (CodeQL
+  regular-expression alerts).
+
 ### Changed
 
 - Every backend test runs without skips and without Docker:
