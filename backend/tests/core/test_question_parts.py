@@ -99,3 +99,20 @@ def test_each_part_keeps_its_best_excerpts() -> None:
         "answer to part two",
         "second hit",
     ]
+
+
+def test_long_runs_of_spaces_are_split_quickly() -> None:
+    import time
+
+    started = time.perf_counter()
+    question_parts("چه " + " " * 20000 + "x")
+    question_parts("چه کسی آمد" + " ،" * 10000 + " و چه گفت؟")
+
+    assert time.perf_counter() - started < 1.0
+
+
+def test_comma_before_and_still_splits() -> None:
+    assert question_parts("چه کسی پروژه را تأیید کرد، و چه تاریخی ثبت شد؟") == [
+        "چه کسی پروژه را تأیید کرد",
+        "چه تاریخی ثبت شد؟",
+    ]
