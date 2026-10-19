@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "katex": "^0.19.0",
-    "lucide-react": "^1.48.0",
+    "lucide-react": "^1.56.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
@@ -29,12 +29,12 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.4"
   },
   "overrides": { "katex": "$katex" }
 }
