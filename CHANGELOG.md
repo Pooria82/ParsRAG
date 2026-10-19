@@ -5,6 +5,121 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
+### Added
+
+- Settings in the app can change the options that used to need `.env` and a
+  restart (27 in all), in four groups:
+  - model: context sizes, thinking, retries, timeouts
+  - retrieval: threshold, depths, keyword search
+  - documents: upload limits, OCR, image previews
+  - indexing speed: OCR workers, CPU threads, batches
+
+  Each shows its `.env` value and can be reset to it. Overrides survive
+  restarts. Ports, allowed addresses, Qdrant, memory limits, and the embedding
+  model stay in `.env`.
+- Answer sources show the image an excerpt was read from, next to the excerpt.
+- Installed Ollama models are offered in a menu, with their sizes.
+- `.env.example` now has only the model choice active. Every other setting
+  shows its default, grouped by whether Settings can also change it.
+- The README starts with one complete setup using every capability; other ways
+  to run follow it.
+- The app can use the Ollama installed on the computer (Windows, macOS,
+  Linux) with its existing models and GPU. Set
+  `OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434` in `.env` and
+  start without the `local-model` profile. No override file is needed, and the
+  app container needs no GPU. The README's "Complete run" section covers
+  each system, GPU memory, and troubleshooting.
+- `OLLAMA_ALLOWED_HOSTS` adds hosts that Ollama URLs may use.
+  `OLLAMA_INTERNAL_HOST` is still read.
+- Settings explains Ollama failures ("address not allowed", "did not answer")
+  in Persian and English. When an API is active, it offers the server's own
+  Ollama URL.
+
+- Images inside Word and PowerPoint files are cited by number: text read
+  from an image is its own excerpt with the image's caption, shown as
+  "paragraph 120 · image 7" or "slide 25 · image 9", and answers say when a
+  fact comes from an image. Each image excerpt also carries the text that
+  introduces it (the end of the paragraph before it, or the slide's text).
+- Word tables are cited by number and the paragraph they follow
+  ("paragraph 120 · table 3") instead of an internal element index.
+- When part of a table is retrieved, the rest of the table comes with it, so
+  questions about the largest or smallest value see every row.
+
+### Improved
+
+- Questions that ask several things ("… with which key, and which fields …")
+  are also searched part by part. Each part keeps its best excerpts, and the
+  model is asked to answer every part. In the acceptance set, 5 of the 6
+  answers that missed a part became complete, with no regressions among the
+  questions that were already right.
+- Indexing is faster with the same results:
+  - Pictures in Word and PowerPoint are read several at a time
+    (`OCR_WORKERS`). The 96-image final report parsed in 33 s instead of
+    121 s, with identical text.
+  - Each document is embedded in length-sorted batches.
+
+  Indexing that whole report went from about 4.5 minutes to about 3.
+- OCR reads screenshots better: a second, sparse-text pass adds text that
+  page layout analysis skipped (status panels, dark UI themes).
+- Up to 200 images per Word or PowerPoint file are read (was 30).
+- With several documents, specific questions search all files together, so
+  the file that holds the answer can provide most excerpts; each other file
+  still contributes its best match, and passages repeated across files are
+  kept once.
+- Commands and code in one-cell boxes in Word stay with the sentence that
+  introduces them, so questions about them find them.
+- OCR reads text on tinted panels (for example a light-blue status box).
+
+### Fixed
+
+- `[extract_itex]...[/extract_itex]` markup that Gemini models leak into answers
+  is shown as math, and table rows inside a source excerpt render as a table.
+- Thinking models on Ollama (such as `qwen3.5`) no longer return empty
+  answers. They could spend the whole answer budget on reasoning, so Ollama
+  is now asked not to think unless `OLLAMA_THINK=1`. On a 6 GB GPU with
+  `qwen3.5:4b`, an empty reply after 59 s became a cited answer in 7 s.
+- Reasoning that some APIs put inside answers (`<thought>...</thought>` from
+  Google AI Studio's Gemma 4, `<think>...</think>` elsewhere) is removed from
+  answers, streams, conversation titles, and suggested questions.
+- Transient API failures (HTTP 5xx and 429) are retried up to
+  `MODEL_API_MAX_RETRIES` times (default 4) with growing delays; Google AI
+  Studio's free tier fails about one Gemma request in three.
+- Google AI Studio model ids get the `models/` prefix its endpoint requires.
+- English questions get English answers in Hybrid and open-chat modes; they
+  were often answered in Persian. Every prompt now names the answer language,
+  detected from the question.
+- The service retries startup when Qdrant is briefly unavailable instead of
+  staying not ready until restarted.
+- A question is no longer limited to one file just because it shares an
+  ordinary word with the file name (such as «اول» or «تست»).
+- An API provider that is out of credit (HTTP 402) is reported as such, with
+  a hint to top up the account or choose another model.
+
+### Security
+
+- Questions with long runs of spaces or many unclosed `@{` mentions can no
+  longer make question splitting or answer-language detection slow (CodeQL
+  regular-expression alerts).
+
+### Changed
+
+- Every backend test runs without skips and without Docker:
+  `PARSRAG_E2E=1 pytest` runs the end-to-end tests against an in-memory
+  Qdrant unless `QDRANT_HOST` names a server.
+- Dependencies: FastAPI 0.143, Uvicorn 0.54, python-dotenv 1.2.4, Ruff 0.17,
+  mypy 2.4, KaTeX 0.19, Vite 8.3.4, Playwright 1.64, lucide-react 1.56,
+  msgpack 1.2.3 or later.
+
+### Upgrade note
+
+- Documents indexed by 1.0.0 keep working. Upload Word and PowerPoint files
+  again to gain image and table citations, image previews next to sources,
+  images past the 30th, and the improved OCR of screenshots.
+- Settings changed in the app are saved in the `app_config` volume and take
+  precedence over `.env`; each can be reset to its `.env` value.
+
 ## [1.0.0] - 2026-10-08
 
 ### Added
@@ -183,7 +298,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.1.0

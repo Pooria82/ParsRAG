@@ -1,5 +1,6 @@
 """In-memory port fakes for framework-free use-case tests."""
 
+from collections.abc import Mapping
 from typing import Any
 
 from backend.core.domain.documents import ExtractedNode, ParsedDocument, ParsedSection
@@ -11,6 +12,7 @@ class InMemoryRepository:
     def __init__(self) -> None:
         """Start with no sessions."""
         self.sessions: dict[str, list[ExtractedNode]] = {}
+        self.images: dict[tuple[str, str, int], bytes] = {}
 
     def is_ready(self) -> bool:
         """Always reachable."""
@@ -19,6 +21,17 @@ class InMemoryRepository:
     def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
         """Append chunks to a session."""
         self.sessions.setdefault(session_id, []).extend(nodes)
+
+    def save_images(
+        self, session_id: str, filename: str, images: Mapping[int, bytes]
+    ) -> None:
+        """Keep previews by session, document, and image number."""
+        for number, data in images.items():
+            self.images[(session_id, filename, number)] = data
+
+    def get_image(self, session_id: str, filename: str, number: int) -> bytes | None:
+        """Return a stored preview."""
+        return self.images.get((session_id, filename, number))
 
     def similarity_search(
         self,
@@ -46,6 +59,17 @@ class InMemoryRepository:
             if node.metadata.get("content_sha256") == content_sha256:
                 return str(node.metadata["filename"])
         return None
+
+    def section_chunks(
+        self, session_id: str, filename: str, key: str, value: int
+    ) -> list[ExtractedNode]:
+        """Return a document's chunks whose metadata number matches."""
+        return [
+            node
+            for node in self.sessions.get(session_id, [])
+            if node.metadata.get("filename") == filename
+            and node.metadata.get(key) == value
+        ]
 
     def delete_session(self, session_id: str) -> None:
         """Drop a session."""
@@ -79,14 +103,16 @@ class FakeParser:
         self,
         sections: list[ParsedSection] | None = None,
         notices: tuple[str, ...] = (),
+        images: Mapping[int, bytes] | None = None,
     ) -> None:
         """Use one page of text unless sections are given."""
         self.sections = sections or [ParsedSection("text", {"page": 1})]
         self.notices = notices
+        self.images = images or {}
 
     def parse(self, file_bytes: bytes, filename: str) -> ParsedDocument:
-        """Return the preset sections and notices."""
-        return ParsedDocument(self.sections, self.notices)
+        """Return the preset sections, notices, and image previews."""
+        return ParsedDocument(self.sections, self.notices, self.images)
 
 
 class FakeChunker:

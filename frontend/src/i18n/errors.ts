@@ -33,6 +33,7 @@ const QUERY: Messages = {
   model_not_found: { fa: 'مدل انتخاب‌شده روی سرویس پیدا نشد. نام مدل را در تنظیمات بررسی کنید.', en: 'The selected model was not found. Check the model name in Settings.' },
   model_unavailable: { fa: 'سرویس مدل در دسترس نیست. اتصال یا اجرای Ollama را بررسی کنید.', en: 'The model service is unreachable. Check the connection or that Ollama is running.' },
   model_rejected: { fa: 'سرویس مدل درخواست را نپذیرفت.', en: 'The model service rejected the request.' },
+  model_quota: { fa: 'اعتبار حساب سرویس مدل (API) تمام شده است. حساب را شارژ کنید یا در تنظیمات مدل دیگری انتخاب کنید.', en: 'The model service account is out of credit. Top it up or choose another model in Settings.' },
   invalid_request: { fa: 'درخواست معتبر نیست؛ اشاره به سندها را بررسی کنید.', en: 'The request is invalid; check the document mentions.' },
   stream_interrupted: { fa: 'ارتباط در میانهٔ پاسخ قطع شد. دوباره تلاش کنید.', en: 'The connection dropped in the middle of the answer. Try again.' },
 };
@@ -44,6 +45,11 @@ const COMMON: Messages = {
   internal_error: { fa: 'خطای داخلی سرویس رخ داد. گزارش‌ها را بررسی کنید.', en: 'An internal service error occurred. Check the logs.' },
   network: { fa: 'ارتباط با سرویس برقرار نشد. اجرای برنامه و اتصال را بررسی کنید.', en: 'Could not reach the service. Check that it is running.' },
   untrusted_origin: { fa: 'سرویس به نشانی‌ای که این صفحه از آن باز شده اعتماد ندارد. نشانی را به PARSRAG_ALLOWED_ORIGINS بیفزایید یا برنامه را از نشانی خود سرویس باز کنید.', en: 'The service does not trust the address this page was opened from. Add it to PARSRAG_ALLOWED_ORIGINS or open the app from the service’s own address.' },
+};
+
+const MODEL_SETTINGS: Messages = {
+  ollama_url_not_allowed: { fa: 'این آدرس Ollama مجاز نیست. از http:// با localhost، ollama یا host.docker.internal استفاده کنید، یا میزبان را به OLLAMA_ALLOWED_HOSTS بیفزایید (بدون نام کاربری، مسیر یا پارامتر).', en: 'This Ollama address is not allowed. Use http:// with localhost, ollama, or host.docker.internal, or add the host to OLLAMA_ALLOWED_HOSTS (no user name, path, or query).' },
+  ollama_unreachable: { fa: 'Ollama در این آدرس پاسخ نداد. مطمئن شوید Ollama اجرا می‌شود. اگر روی همین رایانه نصب است و برنامه در Docker است، آدرس http://host.docker.internal:11434 را به کار ببرید؛ در لینوکس، OLLAMA_HOST را طوری تنظیم کنید که Ollama به شبکهٔ Docker هم گوش دهد.', en: 'Ollama did not answer at this address. Make sure Ollama is running. If it is installed on this computer and the app runs in Docker, use http://host.docker.internal:11434; on Linux, set OLLAMA_HOST so Ollama also listens on the Docker network.' },
 };
 
 const NOTICES: Messages = {
@@ -63,6 +69,11 @@ export function uploadErrorMessage(code: string | undefined, language: Language)
 export function queryErrorMessage(code: string | undefined, language: Language): string | undefined {
   const entry = code ? QUERY[code] ?? COMMON[code] : undefined;
   return entry?.[language];
+}
+
+/** Translate a model-settings error code, or undefined when unknown. */
+export function modelSettingsErrorMessage(code: string | undefined, language: Language): string | undefined {
+  return code ? MODEL_SETTINGS[code]?.[language] : undefined;
 }
 
 /** Translate a partial-indexing notice code. */

@@ -3,6 +3,7 @@ import re
 
 from backend.core.domain.documents import ExtractedNode
 from backend.core.port.document_repository import DocumentRepository
+from backend.core.service.question_parts import question_parts
 
 _BROAD_INDICATORS = (
     "هر سه",
@@ -98,10 +99,25 @@ def retrieve_document_nodes(
     minimum_per_file: int,
     document_segments: list[tuple[str, str]] | None = None,
 ) -> list[ExtractedNode]:
-    """Balance normal retrieval or bind explicit question parts to named files."""
+    """Retrieve evidence for a question across the session's documents.
+
+    - Explicit ``@{file}`` segments search each named file for its part.
+    - Questions about all documents (summaries, comparisons) take the same
+      share from every file.
+    - Specific questions search all files together, so the file holding the
+      answer can contribute most of the excerpts, and each other file still
+      contributes its best excerpt. A fixed share per file left a large
+      report three excerpts while short unrelated files took the rest.
+    Identical passages stored in several files (a final report that repeats
+    the phase reports) are kept once.
+    """
     if document_segments:
         targets = document_segments
     elif len(available_files) > 1 and file_filter is None:
+        if not _asks_about_all_documents(query):
+            return _global_with_file_coverage(
+                repo, query, available_files, session_id, total_k
+            )
         targets = [(filename, query) for filename in available_files]
     else:
         return repo.similarity_search(
@@ -116,6 +132,145 @@ def retrieve_document_nodes(
             )
         )
     return nodes
+
+
+def retrieve_question_parts(
+    repo: DocumentRepository,
+    query: str,
+    available_files: list[str],
+    file_filter: list[str] | None,
+    session_id: str | None,
+    per_part: int,
+) -> list[list[ExtractedNode]]:
+    """Search each part of a question that asks several things on its own.
+
+    Returns one result list per part, or nothing for a single question. The
+    whole question is still searched by the caller; this adds evidence for a
+    part whose answer sits far from the rest.
+    """
+    parts = question_parts(query)
+    if len(parts) < 2:
+        return []
+    return [
+        retrieve_document_nodes(
+            repo, part, available_files, file_filter, session_id, per_part, 1
+        )
+        for part in parts
+    ]
+
+
+def with_part_evidence(
+    nodes: list[ExtractedNode],
+    part_results: list[list[ExtractedNode]],
+    *,
+    per_part: int = 2,
+    minimum_score: float = 0.0,
+) -> list[ExtractedNode]:
+    """Make sure each part of the question keeps its best excerpts.
+
+    Filtering and reranking judge excerpts against the whole question, which
+    can push out the only passage that answers its second half.
+    """
+    result = list(nodes)
+    present = {_passage_key(node) for node in result}
+    for found in part_results:
+        added = 0
+        for node in found:
+            if added == per_part:
+                break
+            if (node.score or 0.0) < minimum_score:
+                continue
+            key = _passage_key(node)
+            if key in present:
+                added += 1
+                continue
+            present.add(key)
+            result.append(node)
+            added += 1
+    return result
+
+
+def _asks_about_all_documents(query: str) -> bool:
+    """Summaries and comparisons need every document, not the best matches."""
+    lowered = query.lower()
+    return any(indicator in lowered for indicator in _BROAD_INDICATORS)
+
+
+def _global_with_file_coverage(
+    repo: DocumentRepository,
+    query: str,
+    available_files: list[str],
+    session_id: str | None,
+    total_k: int,
+) -> list[ExtractedNode]:
+    """Best excerpts across all files, plus the best of each file not yet present."""
+    nodes = distinct_passages(
+        repo.similarity_search(query, top_k=total_k, session_id=session_id)
+    )
+    present = {node.metadata.get("filename") for node in nodes}
+    for filename in available_files:
+        if filename not in present:
+            nodes.extend(
+                repo.similarity_search(
+                    query, top_k=1, session_id=session_id, file_filter=[filename]
+                )
+            )
+    return distinct_passages(nodes)
+
+
+# A table split into more chunks than this is completed only up to it; the
+# context budget trims further if needed.
+_MAX_TABLE_CHUNKS = 12
+
+
+def with_whole_tables(
+    repo: DocumentRepository, nodes: list[ExtractedNode], session_id: str | None
+) -> list[ExtractedNode]:
+    """Complete each retrieved table with its other chunks, right after it.
+
+    Tables are split into 512-token chunks, so a question about the largest
+    value in a table saw only some of its rows and picked the largest of
+    those. Added chunks take the score of the chunk that brought them.
+    """
+    if not session_id:
+        return nodes
+    result: list[ExtractedNode] = []
+    present = {node.text for node in nodes}
+    completed: set[tuple[str, int]] = set()
+    for node in nodes:
+        result.append(node)
+        table = node.metadata.get("table")
+        filename = node.metadata.get("filename")
+        if not isinstance(table, int) or not filename:
+            continue
+        if (str(filename), table) in completed:
+            continue
+        completed.add((str(filename), table))
+        siblings = repo.section_chunks(session_id, str(filename), "table", table)
+        for sibling in list(siblings)[:_MAX_TABLE_CHUNKS]:
+            if sibling.text not in present:
+                present.add(sibling.text)
+                result.append(sibling.model_copy(update={"score": node.score}))
+    return result
+
+
+def _passage_key(node: ExtractedNode) -> str:
+    """The excerpt's body without its heading path, ignoring spacing."""
+    lines = node.text.strip().splitlines()
+    body = "\n".join(lines[1:]) if len(lines) > 1 and "›" in lines[0] else node.text
+    return re.sub(r"\s+", "", body)[-400:]
+
+
+def distinct_passages(nodes: list[ExtractedNode]) -> list[ExtractedNode]:
+    """Drop repeated passages, keeping the higher-scored copy in its place."""
+    best: dict[str, ExtractedNode] = {}
+    for node in nodes:
+        key = _passage_key(node)
+        current = best.get(key)
+        if current is None or (node.score or 0) > (current.score or 0):
+            best[key] = node
+    kept = {id(node) for node in best.values()}
+    return [node for node in nodes if id(node) in kept]
 
 
 def include_tagged_anchors(
@@ -171,6 +326,10 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
     ]
     if exact:
         return exact
+    # Partial names must be distinctive: ordinary words such as «اول» (first)
+    # appear in names like «گزارش اول_ فاز اول و دوم» and in many questions, so
+    # one shared word restricted a question to the wrong file.
+    words = set(re.findall(r"[\w‌]+", query))
     matched: list[str] = []
     for filename in available_files:
         parts = {
@@ -178,13 +337,24 @@ def _match_named_files(query: str, available_files: list[str]) -> list[str]:
             for part in _clean_filename_stem(filename).split()
             if len(part) >= 3 and part.lower() not in _GENERIC_FILENAME_WORDS
         }
-        if any(part in query for part in parts):
+        hits = len(parts & words)
+        if hits >= 2 or (len(parts) == 1 and hits == 1 and len(next(iter(parts))) >= 4):
             matched.append(filename)
     return matched
 
 
 def _location_tag(node: ExtractedNode) -> str:
     """Formats reliable parser metadata for model-visible inline citations."""
+    tag = _position_tag(node)
+    for key in ("table", "image"):
+        value = node.metadata.get(key)
+        if isinstance(value, int):
+            tag += f", {key}: {value}"
+    return tag
+
+
+def _position_tag(node: ExtractedNode) -> str:
+    """The page, slide, paragraph, or section an excerpt comes from."""
     metadata = node.metadata
     page = metadata.get("page")
     page_end = metadata.get("page_end")

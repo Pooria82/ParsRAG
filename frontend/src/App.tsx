@@ -412,6 +412,7 @@ export function App() {
           queryStage={queryProgress?.sessionId === active.id ? queryProgress.stage : undefined}
           streamingDraft={streamDraft?.sessionId === active.id ? streamDraft : undefined}
           revealingMessageId={revealingMessageId} onRevealComplete={() => setRevealingMessageId(undefined)}
+          imageUrl={(filename, image) => api.sourceImageUrl(active.id, filename, image)}
           isBusy={busy} onRetry={messageId => {
             const assistant = active.messages.find(message => message.id === messageId);
             const assistantIndex = active.messages.findIndex(message => message.id === messageId);

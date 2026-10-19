@@ -1,6 +1,7 @@
 """Ingestion use-case rules exercised without FastAPI, Qdrant, or parsers."""
 
 import io
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from unittest.mock import patch
@@ -78,27 +79,28 @@ def test_ingests_sections_and_bridges_consecutive_pages(
 
 
 class FailingRepository(InMemoryRepository):
-    """Store chunks until a configured save call fails."""
+    """Store chunks, then fail while saving image previews."""
 
-    def __init__(self, fail_on_save: int) -> None:
-        """Fail on the given 1-based ``save_nodes`` call."""
+    def __init__(self, fail_images: bool) -> None:
+        """Fail every ``save_images`` call while ``fail_images`` is set."""
         super().__init__()
-        self.fail_on_save = fail_on_save
-        self.saves = 0
+        self.fail_images = fail_images
 
-    def save_nodes(self, nodes: list[ExtractedNode], session_id: str) -> None:
-        """Raise like a dropped Qdrant connection on the configured call."""
-        self.saves += 1
-        if self.saves == self.fail_on_save:
+    def save_images(
+        self, session_id: str, filename: str, images: Mapping[int, bytes]
+    ) -> None:
+        """Raise like a dropped Qdrant connection after the chunks were stored."""
+        if self.fail_images:
             raise VectorDBConnectionError("connection reset")
-        super().save_nodes(nodes, session_id)
+        super().save_images(session_id, filename, images)
 
 
 def test_failed_file_is_rolled_back_so_it_can_be_retried() -> None:
-    """A failure after some pages were stored leaves no partial document."""
-    repository = FailingRepository(fail_on_save=2)
+    """A failure after the chunks were stored leaves no partial document."""
+    repository = FailingRepository(fail_images=True)
     parser = FakeParser(
-        [ParsedSection("first", {"page": 1}), ParsedSection("second", {"page": 2})]
+        [ParsedSection("first", {"page": 1}), ParsedSection("second", {"page": 2})],
+        images={1: b"preview"},
     )
     use_case = _use_case(repository, parser)
 
@@ -106,7 +108,7 @@ def test_failed_file_is_rolled_back_so_it_can_be_retried() -> None:
         use_case.execute(_command("a.pdf"))
 
     assert repository.get_session_files("session-1") == []
-    repository.fail_on_save = 0
+    repository.fail_images = False
     assert use_case.execute(_command("a.pdf")).message.startswith(
         "Successfully ingested a.pdf"
     )
@@ -139,7 +141,7 @@ def test_failed_batch_removes_files_already_stored_by_the_request(
 
 def test_rollback_failure_does_not_hide_the_ingestion_error() -> None:
     """The caller sees the original error even when cleanup also fails."""
-    repository = FailingRepository(fail_on_save=1)
+    repository = FailingRepository(fail_images=True)
 
     def broken_delete(session_id: str, filename: str) -> None:
         raise VectorDBConnectionError("still down")
@@ -307,3 +309,17 @@ def test_concurrent_uploads_recheck_session_duplicates(
         assert first.result(timeout=5).message == "ingested"
         with pytest.raises(ConflictError):
             second.result(timeout=5)
+
+
+def test_image_previews_are_saved_with_the_document(
+    repository: InMemoryRepository,
+) -> None:
+    """A cited image can be shown next to its excerpt."""
+    parser = FakeParser(
+        [ParsedSection("[تصویر 1] chart", {"paragraph": 3, "image": 1})],
+        images={1: b"webp"},
+    )
+    _use_case(repository, parser).execute(_command("a.pdf"))
+
+    assert repository.get_image("session-1", "a.pdf", 1) == b"webp"
+    assert repository.get_image("session-1", "a.pdf", 2) is None

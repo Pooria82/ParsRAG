@@ -26,10 +26,12 @@ services:
       LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
       LLM_MODEL_NAME: "${LLM_MODEL_NAME:-gemma3:12b}"
       OLLAMA_BASE_URL: "${OLLAMA_DOCKER_BASE_URL:-http://ollama:11434}"
-      OLLAMA_INTERNAL_HOST: ollama
+      OLLAMA_INTERNAL_HOST: "${OLLAMA_INTERNAL_HOST:-ollama}"
+      OLLAMA_ALLOWED_HOSTS: "${OLLAMA_ALLOWED_HOSTS:-}"
       MODEL_API_BASE_URL: "${MODEL_API_BASE_URL:-https://openrouter.ai/api/v1}"
       MODEL_API_KEY: "${MODEL_API_KEY:-}"
       MODEL_API_DISCLOSURE_ACKNOWLEDGED: "${MODEL_API_DISCLOSURE_ACKNOWLEDGED:-0}"
+      MODEL_API_MAX_RETRIES: "${MODEL_API_MAX_RETRIES:-4}"
       OPENROUTER_BASE_URL: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       PARSRAG_CONFIG_PATH: /var/lib/parsrag/model-configuration.json
@@ -39,6 +41,9 @@ services:
       EMBED_BATCH_SIZE: "${EMBED_BATCH_SIZE:-8}"
       EMBED_CACHE_DIR: /home/parsrag/.cache/huggingface
       QDRANT_UPSERT_BATCH_SIZE: "${QDRANT_UPSERT_BATCH_SIZE:-64}"
+      PARSRAG_CPU_THREADS: "${PARSRAG_CPU_THREADS:-4}"
+      OCR_WORKERS: "${OCR_WORKERS:-}"
+      SOURCE_IMAGE_PREVIEWS: "${SOURCE_IMAGE_PREVIEWS:-1}"
       OMP_NUM_THREADS: "${PARSRAG_CPU_THREADS:-4}"
       MKL_NUM_THREADS: "${PARSRAG_CPU_THREADS:-4}"
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-1}"
@@ -48,7 +53,7 @@ services:
       OCR_ORIENTATION: "${OCR_ORIENTATION:-1}"
       OCR_TIMEOUT_SECONDS: "${OCR_TIMEOUT_SECONDS:-45}"
       OCR_MAX_PAGES: "${OCR_MAX_PAGES:-30}"
-      OCR_MAX_IMAGES: "${OCR_MAX_IMAGES:-30}"
+      OCR_MAX_IMAGES: "${OCR_MAX_IMAGES:-200}"
       OCR_MAX_IMAGE_PIXELS: "${OCR_MAX_IMAGE_PIXELS:-40000000}"
       OCR_MIN_IMAGE_PIXELS: "${OCR_MIN_IMAGE_PIXELS:-10000}"
       STRICT_RAG_THRESHOLD: "${STRICT_RAG_THRESHOLD:-0.75}"
@@ -57,6 +62,7 @@ services:
       HYBRID_RETRIEVE_TOP_K: "${HYBRID_RETRIEVE_TOP_K:-25}"
       HYBRID_RERANK_TOP_K: "${HYBRID_RERANK_TOP_K:-}"
       OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-8192}"
+      OLLAMA_THINK: "${OLLAMA_THINK:-0}"
       MODEL_CONTEXT_WINDOW: "${MODEL_CONTEXT_WINDOW:-32768}"
       LLM_REQUEST_TIMEOUT_SECONDS: "${LLM_REQUEST_TIMEOUT_SECONDS:-120}"
       CONDENSE_TIMEOUT_SECONDS: "${CONDENSE_TIMEOUT_SECONDS:-30}"
@@ -67,6 +73,11 @@ services:
       - model_cache:/home/parsrag/.cache
       - app_config:/var/lib/parsrag
     mem_limit: "${PARSRAG_APP_MEMORY_LIMIT:-6g}"
+    # Lets the app reach an Ollama installed on the host itself
+    # (OLLAMA_DOCKER_BASE_URL=http://host.docker.internal:11434). Docker Desktop
+    # already provides this name; on Linux, host-gateway maps it to the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       qdrant:
         condition: service_healthy

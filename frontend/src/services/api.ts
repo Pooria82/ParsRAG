@@ -1,4 +1,4 @@
-import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelProvider, OllamaModel, QueryStage } from '../types';
+import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelProvider, OllamaModel, QueryStage, RuntimeSettings } from '../types';
 
 /** A failed request with the server's stable error code ('network' when unreachable). */
 export class ApiError extends Error {
@@ -80,6 +80,11 @@ export class ParsRagApiClient {
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  /** Address of the stored preview of image `image` in `filename`. */
+  sourceImageUrl(sessionId: string, filename: string, image: number): string {
+    return this.url(`/sessions/${encodeURIComponent(sessionId)}/images/${image}?filename=${encodeURIComponent(filename)}`);
   }
 
   private url(path: string): string {
@@ -223,13 +228,26 @@ export class ParsRagApiClient {
 
   async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string; disclosure_acknowledged?: boolean }, signal?: AbortSignal): Promise<ModelConfiguration> {
     const response = await fetch(this.url('/models/configuration'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
-    if (!response.ok) throw new ApiError('request_failed', response.status);
+    if (!response.ok) throw errorFromBody(response.status, await response.text().catch(() => ''));
     return response.json() as Promise<ModelConfiguration>;
+  }
+
+  async runtimeSettings(signal?: AbortSignal): Promise<RuntimeSettings> {
+    const response = await fetch(this.url('/settings/runtime'), { signal });
+    if (!response.ok) throw errorFromBody(response.status, await response.text().catch(() => ''));
+    return response.json() as Promise<RuntimeSettings>;
+  }
+
+  /** Change server settings; null returns a setting to its `.env` value. */
+  async updateRuntimeSettings(values: Record<string, string | null>, signal?: AbortSignal): Promise<RuntimeSettings> {
+    const response = await fetch(this.url('/settings/runtime'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values }), signal });
+    if (!response.ok) throw errorFromBody(response.status, await response.text().catch(() => ''));
+    return response.json() as Promise<RuntimeSettings>;
   }
 
   async ollamaModels(baseUrl: string, signal?: AbortSignal): Promise<OllamaModel[]> {
     const response = await fetch(this.url(`/models/ollama?base_url=${encodeURIComponent(baseUrl)}`), { signal });
-    if (!response.ok) throw new ApiError('request_failed', response.status);
+    if (!response.ok) throw errorFromBody(response.status, await response.text().catch(() => ''));
     return response.json() as Promise<OllamaModel[]>;
   }
 

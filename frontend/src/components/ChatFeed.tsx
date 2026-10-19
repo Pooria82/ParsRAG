@@ -6,6 +6,7 @@ import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
 import { SourceList } from './SourceList';
+import { repairModelMarkup } from '../core/markdown';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
@@ -14,6 +15,8 @@ interface ChatFeedProps {
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
   /** Text streamed so far; `messageId` when it replaces an answer being retried. */
   streamingDraft?: { messageId?: string; content: string; sourceCount?: number };
+  /** Address of a cited image's preview, shown with its source excerpt. */
+  imageUrl?: (filename: string, image: number) => string;
 }
 
 function GroundingBadge({ language, grounding, sources }: { language: Language; grounding: Grounding; sources?: SourcePassage[] }) {
@@ -27,7 +30,7 @@ function GroundingBadge({ language, grounding, sources }: { language: Language; 
   </span>;
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft, imageUrl }: ChatFeedProps) {
   const liveDraft = isGenerating && streamingDraft?.content ? streamingDraft : undefined;
   const t = translations[language];
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -55,7 +58,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
   }, [messages, isGenerating, liveDraft?.content]);
   const copy = async (message: Message) => {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(repairModelMarkup(message.content));
       setCopied(message.id); setCopyError(false); clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(null), 2000);
     } catch { setCopyError(true); }
@@ -96,7 +99,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                     formatNumber={n => n.toLocaleString(language)} />
                 </div>}
               {liveDraft?.messageId !== message.id && !message.error && message.sources?.length ? <SourceList messageId={message.id} sources={message.sources} language={language}
-                question={promptFor(messages, message)}
+                question={promptFor(messages, message)} imageUrl={imageUrl}
                 focus={focusedSource?.messageId === message.id ? focusedSource.n : undefined}
                 focusToken={focusedSource?.messageId === message.id ? focusedSource.token : undefined} /> : null}
               {!message.sources?.length && Boolean(message.citations?.length) && <section className="citation-summary" data-tour="sources" aria-label={t.citationsTitle}>

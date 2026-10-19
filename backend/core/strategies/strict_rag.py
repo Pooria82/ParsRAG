@@ -19,18 +19,23 @@ from backend.core.service.retrieval_optimizer import (
 )
 from backend.core.strategies.generation import GeneratingStrategy
 from backend.core.strategies.multi_doc_utils import (
+    distinct_passages,
     format_multi_doc_context,
     has_tagged_evidence,
     include_tagged_anchors,
     order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
+    retrieve_question_parts,
+    with_part_evidence,
+    with_whole_tables,
 )
 from backend.core.strategies.prompt_rules import (
     CITATION_RULES,
     CODE_VERIFICATION_RULES,
     FORMATTING_RULES,
     LANGUAGE_RULES,
+    answer_language_rule,
 )
 
 STRICT_REFUSAL_FA = "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
@@ -43,7 +48,7 @@ GROUNDING RULES (documents-only mode):
 1. Every fact, number, name, date, and claim in your answer must come from the context. Never add outside knowledge, assumptions, or examples that are not in the context.
 2. The question may use different words, spelling, or language than the documents. Match by meaning, not by exact wording: paraphrase, translate, summarize, and combine information from several excerpts.
 3. You may state conclusions that follow directly from the context, such as what kind of document it is, its main topic, or a comparison the user asks for, as long as you cite the excerpts they rest on.
-4. If the context answers only part of the question, answer that part, then say briefly which part the documents do not cover.
+4. When the question asks several things, answer each one. If the context answers only some of them, answer those, then say plainly which part the documents do not cover.
 5. Only when nothing in the context is relevant to the question, reply with exactly one sentence:
    - Persian: "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
    - English: "I do not know based on the provided documents."
@@ -63,6 +68,8 @@ Context:
 {context_str}
 
 Query: {query}
+
+{answer_language}
 Answer:"""
 )
 
@@ -247,6 +254,29 @@ class StrictRAGStrategy(GeneratingStrategy):
             3,
             document_segments,
         )
+        # Each part of a question that asks several things is searched too.
+        part_results = (
+            []
+            if document_segments
+            else retrieve_question_parts(
+                self.repo,
+                query,
+                available_files,
+                effective_filter,
+                session_id,
+                max(4, fetch_k // 2),
+            )
+        )
+        # Part results decide whether there is evidence and add each part's
+        # best excerpts below; the main pool is not widened with all of them.
+        evidence = (
+            distinct_passages(
+                [*nodes, *(node for found in part_results for node in found)]
+            )
+            if part_results
+            else nodes
+        )
+        nodes = nodes or evidence
 
         # 3. Threshold Check
         if not nodes:
@@ -256,12 +286,12 @@ class StrictRAGStrategy(GeneratingStrategy):
             )
 
         highest_score = max(
-            [n.score for n in nodes if n.score is not None], default=0.0
+            [n.score for n in evidence if n.score is not None], default=0.0
         )
         if (
             highest_score < self.threshold
             and not is_document_overview_question(query)
-            and not _has_lexical_evidence(query, nodes, self.threshold)
+            and not _has_lexical_evidence(query, evidence, self.threshold)
         ):
             return PreparedAnswer(
                 immediate="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
@@ -290,14 +320,27 @@ class StrictRAGStrategy(GeneratingStrategy):
                 nodes, filtered_nodes, document_segments, self.threshold
             )
 
+        filtered_nodes = with_part_evidence(
+            filtered_nodes,
+            part_results,
+            per_part=3,
+            minimum_score=max(0.55, self.threshold - 0.20),
+        )
+        filtered_nodes = with_whole_tables(self.repo, filtered_nodes, session_id)
+
         # 5. Build Grouped Multi-Document Context within the model's window
+        answer_language = answer_language_rule(query)
         filtered_nodes = order_by_document(
             fit_to_context(
                 filtered_nodes,
                 context_window=model_context_window(self.llm),
-                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+                fixed_prompt=self.prompt_template.format(
+                    context_str="", query=query, answer_language=answer_language
+                ),
             )
         )
         context_str = format_multi_doc_context(filtered_nodes)
-        prompt = self.prompt_template.format(context_str=context_str, query=query)
+        prompt = self.prompt_template.format(
+            context_str=context_str, query=query, answer_language=answer_language
+        )
         return PreparedAnswer(prompt=prompt, sources=filtered_nodes)

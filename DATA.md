@@ -20,9 +20,11 @@ covered in [ARCHITECTURE.md](ARCHITECTURE.md); trust boundaries in
 | Uploaded file bytes | Browser upload | Process memory and the RAM-backed `/tmp` (Docker), only while the upload request runs | No — raw files are never written to disk or Qdrant in Docker. A source install spools uploads above 1 MiB to the OS temporary directory and deletes them when the request ends |
 | Parsed text chunks and metadata | `IngestDocuments` | Qdrant payload (`text`, `filename`, location fields, `session_id`) | No |
 | Embedding vectors | Local `multilingual-e5-base` | Qdrant vectors | No |
+| Image previews | `IngestDocuments` (images read with OCR) | A separate Qdrant collection (`<collection>_images`): one WebP copy, at most 1280 px, per image, with `session_id`, `filename`, and image number | No; deleted and copied with their document. `SOURCE_IMAGE_PREVIEWS=0` stops keeping them |
 | Conversations, branches, answer sources | Frontend | Browser IndexedDB (`parsrag` database; `localStorage` where IndexedDB is unavailable) | No |
 | Interface preferences, active conversation | Frontend | Browser `localStorage` | No |
 | Non-secret model settings | `ConfigureModel` | `app_config` volume (JSON) | No |
+| Runtime setting overrides | `UpdateRuntimeSettings` (Settings in the app) | `app_config` volume (`runtime-settings.json`) | No |
 | API key | Environment or settings form | Process memory | Only to the configured model endpoint, as a credential |
 | Prompt and retrieved excerpts | `AnswerQuery` | Not persisted by the backend | Only when an API model is selected (disclosed in the UI) |
 | Logs | Request middleware | Container stdout | No; method, path, status, duration, and correlation ID only |
@@ -157,6 +159,14 @@ segments, each retrieved from its own document. Otherwise an explicit file
 filter or filenames named in the question narrow the search. Broad questions
 spread retrieval across files so one large document cannot crowd out the rest.
 
+**Questions that ask several things.** A question with two clauses joined by
+"و"/"and", each with its own question word ("which key opens Edit mode, and
+which fields did the example add?"), is also searched part by part. Clauses
+without their own question word ("unit and system tests") are not split. Each
+part keeps its best excerpts (three in documents-only mode) even when filtering
+or reranking against the whole question would drop them. The prompt asks the
+model to answer every part, and to say which part the documents do not cover.
+
 **Search.** Every search fuses two rankings with reciprocal-rank fusion:
 vector similarity (meaning) and BM25 keyword matching over the session's
 chunks (exact terms such as tool names, identifiers, and numbers, after
@@ -208,8 +218,8 @@ recorded in [ADR 02](.context/02_Architecture_and_Patterns.md).
 
 | Action | Effect |
 | --- | --- |
-| Delete one document | Removes its points from that session only |
-| Delete a conversation | Deletes the session's points, then the browser record |
+| Delete one document | Removes its points and image previews from that session only |
+| Delete a conversation | Deletes the session's points and image previews, then the browser record |
 | Clear all data | Deletes every known session in Qdrant before clearing browser storage, and reports partial failures |
 | Change embedding model | New collection; re-upload documents |
 

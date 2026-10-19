@@ -1,5 +1,6 @@
 """Vector-store port isolating the core from Qdrant and its client library."""
 
+from collections.abc import Mapping
 from typing import Protocol
 
 from backend.core.domain.documents import ExtractedNode
@@ -19,6 +20,16 @@ class DocumentRepository(Protocol):
             nodes (list[ExtractedNode]): The nodes to save.
             session_id: The required session isolation boundary.
         """
+        ...
+
+    def save_images(
+        self, session_id: str, filename: str, images: Mapping[int, bytes]
+    ) -> None:
+        """Keep previews of a document's images, keyed by image number."""
+        ...
+
+    def get_image(self, session_id: str, filename: str, number: int) -> bytes | None:
+        """Return one image preview, or None when the document has none."""
         ...
 
     def similarity_search(
@@ -56,6 +67,22 @@ class DocumentRepository(Protocol):
         self, session_id: str, content_sha256: str
     ) -> str | None:
         """Return the name of a session document with these exact bytes, if any."""
+        ...
+
+    def section_chunks(
+        self, session_id: str, filename: str, key: str, value: int
+    ) -> list[ExtractedNode]:
+        """All chunks of one numbered part of a document, such as table 3.
+
+        Args:
+            session_id: The session holding the document.
+            filename: The document.
+            key: The metadata key that numbers the part ("table").
+            value: The part's number.
+
+        Returns:
+            list[ExtractedNode]: The part's chunks in reading order.
+        """
         ...
 
     def delete_session(self, session_id: str) -> None:

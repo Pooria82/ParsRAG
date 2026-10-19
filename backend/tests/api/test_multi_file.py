@@ -227,6 +227,18 @@ def test_resolve_target_files_logic() -> None:
         "نیازمندی‌ها.docx"
     ]
 
+    # A single ordinary word shared with a file name does not pick that file.
+    reports = ["گزارش اول_ فاز اول و دوم پروژه.docx", "گزارش دوم_ فاز سوم پروژه.docx"]
+    assert (
+        resolve_target_files(
+            "در تصویر Katalon، سه Test Suite اول چه نام دارند؟", reports
+        )
+        is None
+    )
+    assert resolve_target_files("در فاز سوم و گزارش دوم چه آمده؟", reports) == [
+        "گزارش دوم_ فاز سوم پروژه.docx"
+    ]
+
     # Broad multi-file intent (should return None to query all files)
     assert (
         resolve_target_files("یک خلاصه جامع از هر سه فایل ارائه بده", available) is None

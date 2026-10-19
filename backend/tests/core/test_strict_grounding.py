@@ -103,7 +103,8 @@ def test_default_threshold_matches_calibration() -> None:
 def test_strict_prompt_allows_meaning_based_partial_answers() -> None:
     prompt = STRICT_RAG_PROMPT_TEMPLATE
     assert "Match by meaning, not by exact wording" in prompt
-    assert "answer that part" in prompt
+    assert "answer each one" in prompt
+    assert "which part the documents do not cover" in prompt
     assert "Never add outside knowledge" in prompt
     assert "پاسخی برای این سوال در متن یافت نشد" in prompt
 

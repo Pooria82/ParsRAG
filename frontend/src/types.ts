@@ -7,12 +7,37 @@ export type Palette = 'evergreen' | 'ocean' | 'indigo' | 'sienna';
 export type ModelProvider = 'api' | 'ollama';
 export type QueryStage = 'understanding' | 'retrieving' | 'generating' | 'complete' | 'failed';
 
+export type RuntimeSettingGroup = 'model' | 'retrieval' | 'documents' | 'performance';
+
+/** A server setting that applies without a restart (see GET /settings/runtime). */
+export interface RuntimeSetting {
+  key: string;
+  group: RuntimeSettingGroup;
+  kind: 'int' | 'float' | 'bool' | 'text' | 'bytes';
+  /** Environment string in effect: "1"/"0", bytes for sizes, "" for automatic. */
+  value: string;
+  env_value: string;
+  overridden: boolean;
+  minimum?: number | null;
+  maximum?: number | null;
+  automatic: boolean;
+  /** What automatic resolves to on the server, such as "8" or "8-30" (per question). */
+  automatic_value?: string | null;
+}
+
+export interface RuntimeSettings {
+  settings: RuntimeSetting[];
+  upload_ceiling_bytes: number;
+}
+
 export interface ModelConfiguration {
   provider: ModelProvider;
   model_name: string;
   base_url: string;
   api_key_configured: boolean;
   disclosure_acknowledged: boolean;
+  /** The server's own Ollama URL, offered when switching from an API. */
+  ollama_base_url?: string | null;
 }
 
 export interface OllamaModel { name: string; size?: number | null }
@@ -27,7 +52,8 @@ export interface IngestionCapabilities {
 
 export interface AppCapabilities { ingestion: IngestionCapabilities }
 
-export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number }
+/** Where a cited passage is: a page, slide, paragraph, or section, and an embedded image when the text was read from one. */
+export interface SourceLocation { kind: 'page' | 'slide' | 'paragraph' | 'section'; start: number; end?: number; image?: number; table?: number }
 
 export interface Citation {
   filename: string;

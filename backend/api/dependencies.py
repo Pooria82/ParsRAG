@@ -12,6 +12,7 @@ from functools import lru_cache
 from fastapi import Depends, HTTPException
 
 from backend.core.domain.enums import QueryMode
+from backend.core.domain.upload_policy import UploadPolicy
 from backend.core.port.document_repository import DocumentRepository
 from backend.core.port.query_strategy import QueryStrategy
 from backend.core.runtime.capacity import WorkLimiter
@@ -37,15 +38,64 @@ from backend.core.use_case.query.read_query_progress import ReadQueryProgress
 from backend.core.use_case.session.delete_document import DeleteDocument
 from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
+from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.runtime_settings import (
+    ReadRuntimeSettings,
+    UpdateRuntimeSettings,
+)
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
-from backend.infrastructure.llm.factory import condensing_llm
+from backend.infrastructure.llm.factory import (
+    apply_runtime_settings,
+    automatic_setting_values,
+    condensing_llm,
+)
 from backend.infrastructure.llm.gateway import LlamaIndexModelGateway
 from backend.infrastructure.llm.reranker import FlashRankReranker
 from backend.infrastructure.parsers.chunker import SentenceWindowChunker
 from backend.infrastructure.parsers.document_parser import LocalDocumentParser
+from backend.infrastructure.runtime_settings import (
+    EnvironmentSettingsStore,
+    runtime_settings_path,
+)
+
+# Overrides saved in the app are active before any setting is read.
+runtime_settings_store = EnvironmentSettingsStore(
+    runtime_settings_path(),
+    on_change=apply_runtime_settings,
+    automatic=automatic_setting_values,
+)
+_REQUEST_OVERHEAD_BYTES = 10 * 1024 * 1024
+
+
+def max_request_bytes() -> int:
+    """The HTTP body ceiling, including multipart overhead."""
+    default = UploadPolicy.from_environment().max_batch_bytes + _REQUEST_OVERHEAD_BYTES
+    try:
+        return int(os.getenv("PARSRAG_MAX_REQUEST_BYTES", str(default)))
+    except ValueError:
+        return default
+
+
+# Fixed at startup, like the middleware that enforces it.
+REQUEST_CEILING_BYTES = max_request_bytes()
+
+
+def get_read_runtime_settings() -> ReadRuntimeSettings:
+    """Build the runtime-settings reader."""
+    return ReadRuntimeSettings(
+        runtime_settings_store, REQUEST_CEILING_BYTES - _REQUEST_OVERHEAD_BYTES
+    )
+
+
+def get_update_runtime_settings() -> UpdateRuntimeSettings:
+    """Build the runtime-settings writer."""
+    return UpdateRuntimeSettings(
+        runtime_settings_store, REQUEST_CEILING_BYTES - _REQUEST_OVERHEAD_BYTES
+    )
+
 
 ingest_limiter = WorkLimiter(
     int(os.getenv("PARSRAG_INGEST_CONCURRENCY", "1")), "ingestion"
@@ -138,6 +188,13 @@ def get_list_session_files(
 ) -> ListSessionFiles:
     """Build the session file listing use case."""
     return ListSessionFiles(repo)
+
+
+def get_read_source_image(
+    repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
+) -> ReadSourceImage:
+    """Build the image-preview use case."""
+    return ReadSourceImage(repo)
 
 
 def get_reuse_document(

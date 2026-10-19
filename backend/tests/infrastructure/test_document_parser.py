@@ -1,5 +1,4 @@
 import json
-import os
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -193,7 +192,7 @@ def test_office_images_past_the_limit_are_skipped_not_fatal(
     mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Text around the 31st image is still indexed; a notice says what was skipped."""
-    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.document_parser import recognize_images
     from backend.infrastructure.parsers.ocr import OCRError, OCRSettings
 
     monkeypatch.setenv("OCR_MAX_IMAGES", "1")
@@ -201,22 +200,20 @@ def test_office_images_past_the_limit_are_skipped_not_fatal(
     notices: list[str] = []
     mock_extract.return_value = "chart caption"
 
-    first = _extract_embedded_image(b"img", settings, 0, notices)
-    second = _extract_embedded_image(b"img", settings, 1, notices)
+    within_limit = recognize_images([b"img", b"img"], settings, notices)
     mock_extract.side_effect = OCRError("unreadable")
-    third = _extract_embedded_image(
-        b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+    unreadable = recognize_images(
+        [b"img"], OCRSettings(True, "fas", 200, 30, 30), notices
     )
 
-    assert first == ("chart caption", 1)
-    assert second == ("", 2)
-    assert third == ("", 1)
+    assert within_limit == ["chart caption", ""]
+    assert unreadable == [""]
     assert notices == ["ocr_image_limit", "ocr_partial"]
 
 
 def test_missing_tesseract_skips_images_with_a_notice() -> None:
     """Word text is indexed even when the images cannot be read."""
-    from backend.infrastructure.parsers.document_parser import _extract_embedded_image
+    from backend.infrastructure.parsers.document_parser import recognize_images
     from backend.infrastructure.parsers.ocr import OCRSettings, OCRUnavailableError
 
     notices: list[str] = []
@@ -224,10 +221,10 @@ def test_missing_tesseract_skips_images_with_a_notice() -> None:
         "backend.infrastructure.parsers.document_parser.extract_image_text",
         side_effect=OCRUnavailableError("missing"),
     ):
-        result = _extract_embedded_image(
-            b"img", OCRSettings(True, "fas", 200, 30, 30), 0, notices
+        result = recognize_images(
+            [b"img"], OCRSettings(True, "fas", 200, 30, 30), notices
         )
-    assert result == ("", 1)
+    assert result == [""]
     assert notices == ["ocr_unavailable"]
 
 
@@ -346,20 +343,26 @@ def test_real_two_page_pdf_preserves_one_split_fact() -> None:
 
 
 def test_real_docx_parsing() -> None:
-    """End-to-End ingestion parser test using a real file from testData copied to data/."""
-    file_path = os.path.join(
-        os.path.dirname(__file__), "../../../data/نیازمندی‌های تست.docx"
-    )
+    """A Persian Word file with a heading, paragraphs, and a table parses fully."""
+    from docx import Document as WordDocument
 
-    if not os.path.exists(file_path):
-        pytest.skip("Test file 'نیازمندی‌های تست.docx' not found in data/ directory.")
+    document = WordDocument()
+    document.add_heading("نیازمندی‌های تست", level=1)
+    document.add_paragraph("تست واحد باید ورودی‌های معمولی و نامعتبر را پوشش دهد.")
+    document.add_paragraph("تست یکپارچگی جریان داده بین ماژول‌ها را بررسی می‌کند.")
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "شناسه"
+    table.cell(0, 1).text = "ماژول‌ها"
+    table.cell(1, 0).text = "IS002"
+    table.cell(1, 1).text = "ورود و داشبورد"
+    buffer = BytesIO()
+    document.save(buffer)
 
-    with open(file_path, "rb") as f:
-        file_bytes = f.read()
+    text = parse_document(buffer.getvalue(), "نیازمندی‌های تست.docx")
 
-    text = parse_document(file_bytes, "نیازمندی‌های تست.docx")
-    assert len(text) > 0
-    assert "تست" in text
+    assert "تست واحد باید ورودی‌های معمولی" in text
+    assert "جریان داده بین ماژول‌ها" in text
+    assert "IS002" in text and "ورود و داشبورد" in text
 
 
 @pytest.mark.parametrize(
@@ -415,9 +418,48 @@ def test_docx_embedded_image_is_ocred_when_enabled(
 
     sections = parse_document_sections(payload.getvalue(), "image-only.docx")
 
-    assert sections[0].text == "نوشته داخل تصویر ورد"
-    assert sections[0].metadata == {"paragraph": 1}
+    assert sections[0].text == "[تصویر 1]\nنوشته داخل تصویر ورد"
+    assert sections[0].metadata == {"paragraph": 1, "image": 1}
     mock_extract.assert_called_once()
+
+
+@patch("backend.infrastructure.parsers.document_parser.extract_image_text")
+def test_docx_images_are_cited_with_number_caption_and_paragraph(
+    mock_extract: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each picture is its own section: numbered, captioned, placed after its paragraph."""
+    monkeypatch.setenv("OCR_ENABLED", "1")
+    mock_extract.side_effect = ["متن تصویر اول", "", "متن تصویر سوم"]
+    image = BytesIO()
+    Image.new("RGB", (400, 200), "white").save(image, format="PNG")
+    document = Document()
+    document.add_heading("نتایج آزمون", level=1)
+    document.add_paragraph("پاراگراف پیش از تصویر.")
+    document.add_picture(BytesIO(image.getvalue()))
+    document.add_paragraph("شکل ۳-۱: صفحه اجرای آزمون")
+    document.add_picture(BytesIO(image.getvalue()))
+    document.add_paragraph("متن پایانی بدون شرح.")
+    document.add_picture(BytesIO(image.getvalue()))
+    payload = BytesIO()
+    document.save(payload)
+
+    sections = parse_document_sections(payload.getvalue(), "report.docx")
+
+    images = [s for s in sections if "image" in s.metadata]
+    assert [s.metadata for s in images] == [
+        {"paragraph": 2, "image": 1},
+        {"paragraph": 4, "image": 3},
+    ]
+    assert (
+        images[0].text
+        == "نتایج آزمون\n[تصویر 1] شکل ۳-۱: صفحه اجرای آزمون\nپاراگراف پیش از تصویر.\nمتن تصویر اول"
+    )
+    assert (
+        images[1].text == "نتایج آزمون\n[تصویر 3]\nمتن پایانی بدون شرح.\nمتن تصویر سوم"
+    )
+    text = [s for s in sections if "image" not in s.metadata]
+    assert text[0].metadata == {"paragraph": 2, "paragraph_end": 4}
+    assert "متن تصویر" not in text[0].text
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_image_text")
@@ -437,6 +479,94 @@ def test_pptx_picture_is_ocred_with_slide_metadata(
 
     sections = parse_document_sections(payload.getvalue(), "image-only.pptx")
 
-    assert sections[0].text == "نوشته داخل تصویر پاورپوینت"
-    assert sections[0].metadata == {"slide": 1}
+    assert sections[0].text == "[تصویر 1]\nنوشته داخل تصویر پاورپوینت"
+    assert sections[0].metadata == {"slide": 1, "image": 1}
     mock_extract.assert_called_once()
+
+
+def test_parallel_ocr_keeps_document_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Images finish in any order but their text stays in document order."""
+    import time
+
+    from backend.infrastructure.parsers.document_parser import recognize_images
+    from backend.infrastructure.parsers.ocr import OCRSettings
+
+    monkeypatch.setenv("OCR_WORKERS", "4")
+    seen_single_thread: list[bool] = []
+
+    def slow_read(image: bytes, settings: OCRSettings) -> str:
+        seen_single_thread.append(settings.single_thread)
+        time.sleep(0.05 * (4 - int(image)))
+        return f"text {image.decode()}"
+
+    with patch(
+        "backend.infrastructure.parsers.document_parser.extract_image_text",
+        side_effect=slow_read,
+    ):
+        texts = recognize_images(
+            [b"1", b"2", b"3"], OCRSettings(True, "fas", 200, 30, 30), []
+        )
+
+    assert texts == ["text 1", "text 2", "text 3"]
+    assert all(seen_single_thread)
+
+
+@pytest.mark.parametrize(("value", "expected"), [("1", 1), ("3", 3), ("x", None)])
+def test_ocr_workers_are_configurable(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: int | None
+) -> None:
+    from backend.infrastructure.parsers.document_parser import ocr_workers
+
+    monkeypatch.setenv("OCR_WORKERS", value)
+    assert ocr_workers() == (expected if expected is not None else ocr_workers())
+    assert 1 <= ocr_workers() <= 16
+
+
+def test_image_previews_are_small_webp_and_skip_unreadable_data() -> None:
+    import io
+
+    from PIL import Image
+
+    from backend.infrastructure.parsers.document_parser import image_preview
+
+    source = io.BytesIO()
+    Image.new("RGB", (2400, 1200), "white").save(source, format="PNG")
+    preview = image_preview(source.getvalue())
+
+    assert preview is not None and preview[:4] == b"RIFF" and preview[8:12] == b"WEBP"
+    with Image.open(io.BytesIO(preview)) as image:
+        assert max(image.size) == 1280
+    assert image_preview(b"not an image") is None
+
+
+def test_only_images_that_became_sections_get_previews(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+
+    from PIL import Image
+
+    from backend.core.domain.documents import ParsedSection
+    from backend.infrastructure.parsers.document_parser import _section_previews
+
+    png = io.BytesIO()
+    Image.new("RGB", (40, 40), "red").save(png, format="PNG")
+    sections = [
+        ParsedSection("text", {"paragraph": 1}),
+        ParsedSection("[تصویر 2] chart", {"paragraph": 1, "image": 2}),
+    ]
+    blobs = {1: png.getvalue(), 2: png.getvalue()}
+
+    assert list(_section_previews(sections, blobs)) == [2]
+    monkeypatch.setenv("SOURCE_IMAGE_PREVIEWS", "0")
+    assert _section_previews(sections, blobs) == {}
+
+
+def test_automatic_ocr_workers_use_the_available_cpus() -> None:
+    from backend.infrastructure.parsers.document_parser import default_ocr_workers
+
+    affinity = "backend.infrastructure.parsers.document_parser.os.sched_getaffinity"
+    with patch(affinity, create=True, return_value={0, 1, 2}):
+        assert default_ocr_workers() == 3
+    with patch(affinity, create=True, return_value=set(range(20))):
+        assert default_ocr_workers() == 8

@@ -1,7 +1,7 @@
 {
   "name": "parsrag-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Bilingual Persian (Farsi) and English workspace for offline-first document RAG",
   "keywords": ["persian", "farsi", "rag", "document-qa", "ocr", "ollama", "local-llm"],
   "author": "Pooria Madani",
@@ -15,11 +15,12 @@
     "preview": "vite preview",
     "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
-    "test:pwa": "npm run build && playwright test --config=playwright.pwa.config.ts"
+    "test:pwa": "npm run build && playwright test --config=playwright.pwa.config.ts",
+    "screenshots": "npm run build && node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
-    "katex": "^0.18.9",
-    "lucide-react": "^1.48.0",
+    "katex": "^0.19.0",
+    "lucide-react": "^1.56.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
@@ -28,12 +29,12 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.4"
   },
   "overrides": { "katex": "$katex" }
 }

@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from ollama import ResponseError
 
 from backend.api.dependencies import get_answer_query
+from backend.api.errors import MODEL_FAILURE_DETAIL
+from backend.infrastructure.llm import failures
 from backend.infrastructure.llm.failures import classify_model_failure
 from backend.main import app
 
@@ -29,6 +31,7 @@ def _status_error(status: int) -> openai.APIStatusError:
         (_status_error(429), (503, "model_rate_limited")),
         (_status_error(500), (502, "model_unavailable")),
         (_status_error(400), (502, "model_rejected")),
+        (_status_error(402), (502, "model_quota")),
         (openai.APIConnectionError(request=REQUEST), (502, "model_unavailable")),
         (httpx.ConnectError("refused", request=REQUEST), (502, "model_unavailable")),
         (ResponseError("model 'x' not found", 404), (502, "model_not_found")),
@@ -80,3 +83,36 @@ def test_query_route_returns_the_specific_model_failure(
 
     assert response.status_code == status
     assert response.json()["code"] == code
+
+
+def test_every_model_failure_code_has_a_message() -> None:
+    codes = {
+        value[1]
+        for name, value in vars(failures).items()
+        if name.startswith("MODEL_") and isinstance(value, tuple) and len(value) == 2
+    }
+
+    assert "model_quota" in codes
+    assert codes <= set(MODEL_FAILURE_DETAIL)
+
+
+def test_out_of_credit_is_reported_over_http() -> None:
+    error = _status_error(402)
+
+    class FailingUseCase:
+        def execute(self, request: object) -> object:
+            raise error
+
+    app.dependency_overrides[get_answer_query] = lambda: FailingUseCase()
+    try:
+        response = TestClient(app).post(
+            "/query", json={"prompt": "سلام", "mode": "llm-only"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "The model service account is out of credit.",
+        "code": "model_quota",
+    }

@@ -27,6 +27,7 @@ MODEL_RATE_LIMITED = (503, "model_rate_limited")
 MODEL_NOT_FOUND = (502, "model_not_found")
 MODEL_UNAVAILABLE = (502, "model_unavailable")
 MODEL_REJECTED = (502, "model_rejected")
+MODEL_QUOTA = (502, "model_quota")
 
 
 def _status_failure(status: int) -> tuple[int, str]:
@@ -34,6 +35,9 @@ def _status_failure(status: int) -> tuple[int, str]:
         return MODEL_AUTH
     if status == 404:
         return MODEL_NOT_FOUND
+    if status == 402:
+        # Out of credit: no retry helps until the account is topped up.
+        return MODEL_QUOTA
     if status == 429:
         return MODEL_RATE_LIMITED
     if status >= 500:

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import get_document_repository
@@ -162,7 +163,7 @@ def test_ingest_pdf_indexes_one_page_boundary_window() -> None:
     app.dependency_overrides.clear()
     assert response.status_code == 200
     assert "3 chunks" in response.json()["message"]
-    bridge = repo.save_nodes.call_args_list[1].args[0][-1]
+    bridge = repo.save_nodes.call_args.args[0][-1]
     assert bridge.metadata["page"] == 3
     assert bridge.metadata["page_end"] == 4
     assert "invoice total is\n[page 4] 425 euros" in bridge.text
@@ -452,6 +453,45 @@ def test_update_model_configuration(mock_configure: MagicMock) -> None:
     assert response.json()["provider"] == "ollama"
 
 
+def test_ollama_errors_name_their_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disallowed and unreachable Ollama URLs get distinct, translatable codes."""
+    monkeypatch.delenv("OLLAMA_ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("OLLAMA_INTERNAL_HOST", raising=False)
+    blocked = client.get("/models/ollama", params={"base_url": "http://evil.example"})
+    assert blocked.status_code == 502
+    assert blocked.json()["code"] == "ollama_url_not_allowed"
+
+    saved = client.put(
+        "/models/configuration",
+        json={
+            "provider": "ollama",
+            "model_name": "m",
+            "base_url": "http://evil.example",
+        },
+    )
+    assert saved.status_code == 400
+    assert saved.json()["code"] == "ollama_url_not_allowed"
+
+    # Port 9 (discard) is closed on loopback, so nothing answers.
+    down = client.get("/models/ollama", params={"base_url": "http://127.0.0.1:9"})
+    assert down.status_code == 502
+    assert down.json()["code"] == "ollama_unreachable"
+
+
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_ollama_models_default_to_the_server_url(
+    mock_get: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    mock_get.return_value.json.return_value = {"models": [{"name": "qwen2.5:7b"}]}
+
+    response = client.get("/models/ollama")
+
+    assert response.status_code == 200
+    assert response.json() == [{"name": "qwen2.5:7b", "size": None}]
+    assert mock_get.call_args.args[0] == "http://host.docker.internal:11434/api/tags"
+
+
 @patch("backend.infrastructure.llm.factory.generate_conversation_title")
 def test_generate_conversation_title(mock_generate: MagicMock) -> None:
     """The title endpoint validates input and returns only the generated label."""
@@ -466,3 +506,25 @@ def test_generate_conversation_title(mock_generate: MagicMock) -> None:
     assert response.status_code == 200
     assert response.json() == {"title": "ساختار رمزنگاری فیستل"}
     mock_generate.assert_called_once_with("ساختار فیستل چیست؟", "fa")
+
+
+def test_source_image_preview_is_served_as_webp() -> None:
+    from backend.tests.core.use_case.fakes import InMemoryRepository
+
+    repository = InMemoryRepository()
+    repository.save_images("session-1", "گزارش.docx", {3: b"RIFFwebp"})
+    app.dependency_overrides[get_document_repository] = lambda: repository
+    try:
+        found = client.get(
+            "/sessions/session-1/images/3", params={"filename": "گزارش.docx"}
+        )
+        missing = client.get(
+            "/sessions/session-1/images/4", params={"filename": "گزارش.docx"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert found.status_code == 200
+    assert found.headers["content-type"] == "image/webp"
+    assert found.content == b"RIFFwebp"
+    assert missing.status_code == 404

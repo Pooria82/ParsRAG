@@ -15,16 +15,21 @@ from backend.core.service.retrieval_optimizer import (
 )
 from backend.core.strategies.generation import GeneratingStrategy
 from backend.core.strategies.multi_doc_utils import (
+    distinct_passages,
     format_multi_doc_context,
     order_by_document,
     resolve_target_files,
     retrieve_document_nodes,
+    retrieve_question_parts,
+    with_part_evidence,
+    with_whole_tables,
 )
 from backend.core.strategies.prompt_rules import (
     CITATION_RULES,
     CODE_VERIFICATION_RULES,
     FORMATTING_RULES,
     LANGUAGE_RULES,
+    answer_language_rule,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = (
@@ -36,6 +41,7 @@ SOURCE RULES (hybrid mode):
 2. You may add general knowledge to explain, complete, or connect the documents' content. Make clear which statements come from the documents and which are general knowledge, and never attribute outside knowledge to a document.
 3. If the documents and general knowledge disagree, say so and give the documents' version.
 4. When summarizing, comparing, or concluding across documents, synthesize the key findings of each and state the overall conclusion.
+5. When the question asks several things, answer each one. If neither the documents nor reliable general knowledge answer a part, say so plainly for that part.
 
 """
     + CODE_VERIFICATION_RULES
@@ -51,6 +57,8 @@ Context:
 {context_str}
 
 Query: {query}
+
+{answer_language}
 Answer:"""
 )
 
@@ -215,6 +223,23 @@ class HybridRAGStrategy(GeneratingStrategy):
             5,
             document_segments,
         )
+        # Each part of a question that asks several things is searched too.
+        part_results = (
+            []
+            if document_segments
+            else retrieve_question_parts(
+                self.repo,
+                query,
+                available_files,
+                effective_filter,
+                session_id,
+                max(5, rerank_n),
+            )
+        )
+        if part_results:
+            extracted_nodes = distinct_passages(
+                [*extracted_nodes, *(n for found in part_results for n in found)]
+            )
 
         if not extracted_nodes:
             return PreparedAnswer(
@@ -242,13 +267,22 @@ class HybridRAGStrategy(GeneratingStrategy):
             else 3,
         )
 
+        final_source_nodes = with_part_evidence(final_source_nodes, part_results)
+        final_source_nodes = with_whole_tables(
+            self.repo, final_source_nodes, session_id
+        )
+        answer_language = answer_language_rule(query)
         final_source_nodes = order_by_document(
             fit_to_context(
                 final_source_nodes,
                 context_window=model_context_window(self.llm),
-                fixed_prompt=self.prompt_template.format(context_str="", query=query),
+                fixed_prompt=self.prompt_template.format(
+                    context_str="", query=query, answer_language=answer_language
+                ),
             )
         )
         context_str = format_multi_doc_context(final_source_nodes)
-        prompt = self.prompt_template.format(context_str=context_str, query=query)
+        prompt = self.prompt_template.format(
+            context_str=context_str, query=query, answer_language=answer_language
+        )
         return PreparedAnswer(prompt=prompt, sources=final_source_nodes)
