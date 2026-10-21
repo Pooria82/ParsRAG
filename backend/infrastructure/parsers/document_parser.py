@@ -15,7 +15,7 @@ from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
 from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
 
 from backend.core.domain.documents import ParsedDocument, ParsedSection
 from backend.core.domain.exceptions import DocumentError, EmptyDocumentError
@@ -500,6 +500,8 @@ def _parse_pptx_sections(
         parts: list[str] = []
         images: list[tuple[int, str]] = []
         for shape in slide.shapes:
+            if _is_pptx_layout_field(shape):
+                continue
             if getattr(shape, "has_table", False):
                 parts.append(_format_pptx_table(shape.table))
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and settings.enabled:
@@ -507,10 +509,25 @@ def _parse_pptx_sections(
                 text = next(readings)
                 if text.strip():
                     images.append((image_number, text.strip()))
-            elif hasattr(shape, "text") and shape.text and shape.text.strip():
+            elif hasattr(shape, "text") and shape.text.strip() not in _PPTX_FIELD_TEXT:
                 parts.append(shape.text.strip())
         sections.extend(_slide_sections(slide_index, parts, images))
     return sections
+
+
+# Slide number, date and footer placeholders repeat layout fields on every
+# slide; an unrendered slide-number field reads as U+2039 # U+203A.
+_PPTX_LAYOUT_FIELDS = frozenset(
+    {PP_PLACEHOLDER.SLIDE_NUMBER, PP_PLACEHOLDER.DATE, PP_PLACEHOLDER.FOOTER}
+)
+_PPTX_FIELD_TEXT = frozenset({"", "\u2039#\u203a"})
+
+
+def _is_pptx_layout_field(shape: Any) -> bool:
+    """Whether a shape is a slide-number, date or footer placeholder."""
+    return bool(
+        shape.is_placeholder and shape.placeholder_format.type in _PPTX_LAYOUT_FIELDS
+    )
 
 
 def _slide_sections(
