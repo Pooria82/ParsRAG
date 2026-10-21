@@ -12,6 +12,11 @@ and this project uses Semantic Versioning.
   answer sources or search. Upload existing presentations again to remove it
   from them.
 
+### Security
+
+- Pillow is upgraded to 13.0.0 to fix denial-of-service and information
+  disclosure vulnerabilities in 12.3.0, one of them critical.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
