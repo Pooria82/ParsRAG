@@ -5,6 +5,13 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- PowerPoint slides no longer add their slide number, date, or footer to the
+  text, so the slide-number field (shown as `‹#›`) no longer appears in
+  answer sources or search. Upload existing presentations again to remove it
+  from them.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
