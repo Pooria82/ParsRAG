@@ -336,7 +336,7 @@ only when the user enables a remote API endpoint.
 - [x] Replace the permissive development license with an owner-controlled source-available license, contributor agreement, copyright notice, citation metadata, CODEOWNERS rule, security policy, contribution guide, code of conduct, changelog, PR template, and issue templates.
 - [x] Replace documentation promises that are not implemented and provide a reproducible evaluation harness for quantitative claims. The September 18 benchmark records model, retrieval, latency, scoring, OCR, and regression evidence only in ignored local artifacts; no private fixtures or generated evaluation reports are committed.
 - [x] Document hardware, storage, first-start downloads, offline provisioning, API data flow, and source-only versus container installation.
-- [ ] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag after the release checks pass.
+- [x] Merge `develop` into protected `main` through CI, configure the GitHub remote, and create the first pre-1.0 semantic version tag after the release checks pass.
 
 ### Task 10.9: Multi-Format Ingestion & Hardware-Aware Runtime
 **Description:** Expand safe document ingestion while keeping CPU-only machines usable and accelerating model workloads on supported GPUs.
@@ -374,7 +374,7 @@ only when the user enables a remote API endpoint.
 - [x] Fix the development proxy's IPv4/IPv6 ambiguity and add Windows, macOS,
   and Linux test jobs for backend and frontend checks.
 - [x] Refresh bilingual setup and discoverability documentation.
-- [ ] Confirm the new cross-platform CI jobs on the GitHub remote after the
+- [x] Confirm the new cross-platform CI jobs on the GitHub remote after the
   local commits are authorized for push.
 
 ## Phase 12: Installable Local Workspace
@@ -403,3 +403,303 @@ only when the user enables a remote API endpoint.
 - [x] Expand the skippable and replayable tour to cover conversation history,
   documents, composer, answer modes, response branches and sources, model
   settings, privacy, local data controls, and installability.
+
+## Phase 14: Release 1.0.0 (2026-10-08)
+
+- [x] Stream answers token by token over Server-Sent Events, with numbered
+  citations, a provenance badge, and suggested questions for new conversations.
+- [x] Rebuild Persian PDF text in reading order, correct rotated and skewed
+  scans, and normalize Persian spelling in indexed text and questions.
+- [x] Chunk Word documents under their headings, detect duplicate uploads by
+  content, and read legacy Windows-1256 and UTF-16 text files.
+- [x] Fuse BM25 keyword search with vector search and rerank Hybrid answers
+  with an Arabic-script cross-encoder; fit prompts to the model's context.
+- [x] Roll back failed uploads, block DNS rebinding, and return stable error
+  codes that the interface translates.
+- [x] Store conversations in IndexedDB, add backup and restore, and add an
+  end-to-end CI job with a retrieval quality gate.
+
+## Phase 15: Release 1.1.0 (2026-10-19)
+
+- [x] Make 27 `.env` settings changeable in the app without a restart; show
+  each `.env` value, allow a reset, and show what "automatic" resolves to.
+- [x] Cite tables and images inside Word and PowerPoint by number, show the
+  cited image next to its source, and send a retrieved table to the model whole.
+- [x] Search each part of a question that asks several things, and ask the
+  model to answer every part.
+- [x] Use the Ollama installed on the computer, with its models and GPU, from
+  Docker; list installed models; stop thinking models from returning empty
+  answers.
+- [x] Support Google AI Studio (model prefix, reasoning removal, retries for
+  5xx and 429) and report an out-of-credit API (402) clearly.
+- [x] OCR images in parallel (96-image report: 121 s to 33 s parse) and read
+  screenshots and tinted panels better.
+- [x] Keep question parsing linear on hostile input (CodeQL regular-expression
+  alerts) and run every backend test without skips or Docker.
+- [x] Acceptance test on the project's own reports (52 questions, 244 images):
+  44/52 Strict and 42/52 Hybrid with `gemini-flash-lite-latest`, up from 33 and
+  30; 9/12 in both modes with local `gemma3:4b`.
+
+## Phase 16: Defects to Fix
+
+Found in a full review of the code, CI, and documentation on 2026-10-21.
+Each item names where the problem is and what it breaks.
+
+### Task 16.1: Release blockers
+- [ ] Publish 1.1.1. The only supported version (1.1.x) still ships Pillow
+  12.3.0 with a critical advisory; the fix (Pillow 13.0.0) and the PowerPoint
+  slide-number fix are only in `develop`.
+- [ ] Configure logging from `LOG_LEVEL` in `backend/main.py`. Nothing sets up
+  a handler, so the request log in `api/middleware.py` and the operation logs
+  in the use cases are dropped, and `LOG_LEVEL`/`ENVIRONMENT` have no effect.
+- [ ] Add `OLLAMA_DOCKER_BASE_URL=http://ollama:11434` to the README sections
+  that run Ollama inside Docker (CPU, NVIDIA, AMD; both languages). Without it
+  the app keeps calling the host Ollama from `.env.example`.
+
+### Task 16.2: Backend correctness
+- [ ] BM25 cache race (`infrastructure/database/qdrant_repo.py`,
+  `keyword_index.py`): writes invalidate the cache before they change Qdrant, so
+  a query in that window caches the old corpus, including deleted documents.
+  Invalidate again after the write; prune the per-session version map.
+- [ ] `/query/stream` reports a full query slot (`busy`) or an invalid mention
+  as HTTP 200 plus an `error` event, because the slot and validation run inside
+  the generator (`core/use_case/query/answer_query.py`). Check both before
+  returning the `StreamingResponse`.
+- [ ] Strict evidence gate is skipped for any question containing «خلاصه»,
+  «موضوع», «کلیات» or «چه نوع» (`DOCUMENT_OVERVIEW_PATTERN` in
+  `core/strategies/strict_rag.py`). Match only whole-document questions.
+- [ ] The stored API key is sent to a new base URL when the user changes the
+  host without entering a key (`infrastructure/llm/factory.py`). Reuse it only
+  for the same scheme, host, and port.
+- [ ] Session routes (files, images, reuse, delete) are not gated on readiness
+  and can build the repository before the embedding model is set, which probes
+  the wrong vector size (`api/dependencies.py`, `api/routes.py`).
+- [ ] Hybrid context trimming ranks reranker scores and cosine scores
+  together, so a top reranked chunk can be dropped for a weaker dense anchor
+  (`core/strategies/hybrid_rag.py`, `core/service/context_budget.py`).
+- [ ] PowerPoint: a linked (not embedded) picture fails the whole deck, and
+  text and pictures inside grouped shapes are not indexed
+  (`infrastructure/parsers/document_parser.py`).
+- [ ] Word: content inside content controls (`w:sdt`) is not indexed.
+- [ ] OCR has no per-document deadline: one image can run eight Tesseract
+  passes and scanned PDF pages run one after another, holding the only
+  ingestion slot for a long time (`infrastructure/parsers/ocr.py`).
+- [ ] Catch `Image.DecompressionBombError`; an image that declares huge
+  dimensions returns 500 instead of a notice.
+- [ ] Citation parsing counts math intervals such as `[1, 3]` as citations
+  (`core/service/citations.py`); skip math and code spans.
+- [ ] Runtime settings: the file, batch, and request-size check runs outside
+  the store lock, `os.environ` changes before the file is saved, and model
+  rebuilds run outside the lock (`core/use_case/system/runtime_settings.py`,
+  `infrastructure/runtime_settings.py`). Apply, validate, and save atomically.
+- [ ] Resetting `PARSRAG_CPU_THREADS` to automatic leaves the old thread count
+  in PyTorch while Settings shows the default (`infrastructure/llm/factory.py`).
+- [ ] An invalid `STRICT_RAG_THRESHOLD` in `.env` makes every Strict query fail
+  while Settings shows 0.75; parse it with a bounded helper.
+- [ ] The reranker download is retried on every query after a failure and has
+  no network timeout (`infrastructure/llm/reranker.py`).
+- [ ] Retries stack: the OpenAI SDK retries inside ParsRAG's own status retries
+  (`max_retries=1` plus `MODEL_API_MAX_RETRIES`). Let one layer retry.
+- [ ] The model endpoint is validated once; later DNS changes and HTTP
+  redirects are not checked (`infrastructure/llm/endpoint_policy.py`). Disable
+  redirects and check the address at connect time.
+- [ ] HTML table cells are joined without a separator (`<td>Name</td><td>Ali`
+  becomes `NameAli`), and a UTF-8 file with one bad byte is decoded as cp1256
+  garbage (`infrastructure/parsers/document_parser.py`).
+- [ ] `max_tokens` is ignored for Ollama titles and suggestions; pass
+  `num_predict` instead.
+- [ ] A disconnected stream leaves the progress stage at "generating" for five
+  minutes; set a final stage in `finally`.
+- [ ] Unify the Strict refusal text: `STRICT_REFUSAL_FA/EN` are unused and the
+  gate and the prompt use different wording (`core/strategies/strict_rag.py`).
+- [ ] The evaluation runner (`backend/tests/evaluation/run_pdf_evaluation.py`)
+  skips Persian normalization, page bridges, and duplicate checks; run it
+  through the real ingestion use case.
+
+### Task 16.3: Frontend correctness
+- [ ] The composer accepts 30,000 characters but the API accepts 12,000; the
+  error is generic and the long turn is resent as history, so the next
+  questions fail too (`components/Composer.tsx`, `core/state.ts`,
+  `services/api.ts`). Match the limit, map 422 errors, and mark the failed turn.
+- [ ] The math normalizer breaks links, `snake_case` words, and dollar amounts
+  (`core/markdown.ts`): `[docs](…/my_page)` loses its link and "$5" loses its
+  sign.
+- [ ] Unsaved server-setting edits are reset whenever the app re-renders, for
+  example on the 30-second health check (`components/SettingsModal.tsx`,
+  `components/ServerSettings.tsx`).
+- [ ] Editing a prompt that never got an answer attaches the new answer to a
+  later question (`App.tsx`, `core/state.ts`).
+- [ ] A save that fell back to `localStorage` is discarded on the next load in
+  favour of the older IndexedDB copy, and two open tabs overwrite each other
+  (`hooks/usePersistentWorkspace.ts`, `core/storage.ts`).
+- [ ] The 330-second stream timeout ignores the server's answer timeout (up to
+  600 s); derive it from the runtime settings or send SSE heartbeats.
+- [ ] Keyboard shortcuts compare `event.key`, so they do not fire with the
+  Persian keyboard layout; compare `event.code` (`core/shortcuts.ts`).
+- [ ] The Strict threshold in browser settings (`strictThreshold`) is never sent
+  to the server; remove it or send it.
+- [ ] The Vite development proxy has no `/settings` route, so runtime settings
+  fail under `npm run dev` (`vite.config.ts`).
+- [ ] Deleting a conversation or clearing data fails while the backend is
+  offline, even for conversations without documents.
+- [ ] Backup import drops the saved preferences and shows imported documents as
+  indexed although they are not on this server (`core/workspaceTransfer.ts`).
+- [ ] A timeout or dropped connection discards text that already streamed;
+  keep it as Stop does.
+- [ ] Smaller issues: clearing a number field switches it to automatic;
+  upload limits are stale after a settings change until the next health check;
+  answer-version arrows point the wrong way in English; Strict mode with every
+  document unticked returns "no evidence" instead of asking to select one; an
+  unanswered question has no retry; starter cards change the chosen mode;
+  dragging out of a dialog closes it; the rename field is not focused.
+- [ ] Add interface messages for the backend codes `not_found`, `conflict`,
+  `upstream_unavailable`, `invalid_session`, `no_file`, `untrusted_host`,
+  `service_error`, and `request_failed`, and pass codes through on the reuse,
+  delete, and model-settings paths (`i18n/errors.ts`).
+
+### Task 16.4: Configuration and documentation
+- [ ] Use one default model everywhere: `gemma3:12b` in `compose.yaml`,
+  `factory.py`, and `core/state.ts`, but `qwen2.5:7b` in `.env.example` and the
+  README. The quick start also pulls a 7B model while recommending 3-4B.
+- [ ] After the startup retries give up, readiness stays `failed` and the
+  container is never restarted (`main.py`, `Dockerfile` healthcheck). Exit
+  non-zero or keep retrying with a capped backoff.
+- [ ] README settings table: API requests are retried up to
+  `MODEL_API_MAX_RETRIES` (default 4), not once, and the ⚙ marker misses most
+  runtime settings. Generate the table from `RUNTIME_SETTINGS`.
+- [ ] CHANGELOG 1.0.0 does not record that the Strict threshold moved from 0.80
+  to 0.75.
+- [ ] `CONTRIBUTING.md` points to `.agents/AGENTS.md`, which is not in the
+  repository; `EMBED_QUERY_PREFIX` and `EMBED_PASSAGE_PREFIX` (DATA.md) are not
+  passed through `compose.yaml`.
+- [ ] Bring the ADRs in line with the project: `.context/03` (Poetry,
+  `docker-compose.yml`, Testcontainers, Ragas, JSON logs), `.context/04` (GitHub
+  Flow, `staging`, image publishing), the two files numbered 07, React 18 in ADR
+  06, and the missing `Reranker`, `RuntimeSettingsStore`, and
+  `SuggestQuestions` in `ARCHITECTURE.md` and `docs/architecture/use-cases.md`.
+
+## Phase 17: Improvements
+
+### Task 17.1: Retrieval quality
+- [ ] Read images with a vision model during indexing (see Task 19.1); OCR
+  errors in small screenshots and near-identical screenshots cause most of the
+  remaining wrong answers in the acceptance test.
+- [ ] Add MMR or a similar diversity step so near-duplicate chunks do not fill
+  the context.
+- [ ] Re-measure the Strict threshold on a labelled set: top scores of relevant
+  and off-topic questions overlap (medians 0.806 and 0.807).
+- [ ] Evaluate larger multilingual embedding models (`multilingual-e5-large`,
+  `bge-m3`) against `multilingual-e5-base` on Persian questions.
+- [ ] Return a distinct outcome for an empty model answer instead of
+  `answered` with no text.
+
+### Task 17.2: Performance
+- [ ] Embed each question once per request instead of once per search call;
+  a multi-part question over ten files can trigger about 50 embeddings.
+- [ ] List a session's files with Qdrant facets instead of scrolling every
+  chunk, at least twice per question.
+- [ ] Give BM25 an inverted index instead of scanning every chunk per query.
+- [ ] OCR scanned PDF pages in parallel, as Office images already are, and skip
+  the deskew search when the first reading is confident.
+- [ ] Frontend: memoize messages and markdown rendering, keep the draft out of
+  the sessions state, and window long conversations; typing and streaming slow
+  down in long chats.
+
+### Task 17.3: Ingestion
+- [ ] Parse CSV and TSV as tables so they get row records and whole-table
+  answers.
+- [ ] Split plain-text files into line or heading sections so citations point
+  somewhere more precise than "section 1".
+- [ ] Index PowerPoint speaker notes.
+- [ ] Keep an image preview for standalone image uploads, as for Word and
+  PowerPoint images.
+
+### Task 17.4: Interface
+- [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
+  button to code blocks.
+- [ ] Show the offline hint, poll faster while the backend is preparing, and
+  check for new service-worker versions while the app stays open.
+- [ ] Call `navigator.storage.persist()`, flush pending saves on `pagehide`,
+  and keep a copy of stored data that fails to parse instead of overwriting it.
+- [ ] Offer export and reset from the error screen, so stored data that breaks
+  rendering does not crash every reload.
+- [ ] Remove dead code (`progressRef`, `revealingMessageId`, unused API calls,
+  `selectedModel`, unused strings) and fix the smaller accessibility gaps in
+  version navigation, settings tabs, and the mobile sidebar.
+
+### Task 17.5: CI, packaging, and supply chain
+- [ ] Add an explicit CodeQL workflow that runs on every pull request to
+  `develop`; today CodeQL is GitHub's default setup and skips most of them, so
+  its alerts appeared only on the 1.1.0 release pull request.
+- [ ] Generate a full, hashed lock file (for example with `uv` or
+  `pip-compile`) so Dependabot can update Python dependencies and builds are
+  reproducible; audit the packages inside the image.
+- [ ] Add the `docker-compose` ecosystem to Dependabot (Qdrant and Ollama
+  images) and pin `ollama/ollama:rocm` to a version.
+- [ ] Install the same CPU PyTorch in CI as in the image; split PyTorch into
+  its own Docker layer and use BuildKit pip caches.
+- [ ] Turn `.dockerignore` into an allowlist; local folders (`demo-video`,
+  `graphify-out`, `defense`) add about 95 MB to the build context.
+- [ ] Add `concurrency` and `timeout-minutes` to workflows, cache image builds,
+  and build the image once per push.
+- [ ] Start the built container in CI and request `/health/live` and `/`;
+  build the CUDA and ROCm variants.
+- [ ] Split the release job into a read-only verify job and a write-scoped
+  publish job; pin every action by commit SHA; check `backend/main.py`,
+  `CITATION.cff`, and the CHANGELOG section in the release version check.
+- [ ] Add `cap_drop`, `no-new-privileges`, and `pids_limit` to the Qdrant and
+  Ollama services.
+- [ ] Add a test that compares Compose defaults, `.env.example`, and
+  `RUNTIME_SETTINGS`; replace wall-clock assertions in the regular-expression
+  tests with growth checks; add an SSE disconnect test through the route.
+- [ ] Add a pre-commit configuration, ESLint, and frontend coverage.
+- [ ] Add a GitHub ruleset that allows only squash merges into `main`, so each
+  release stays one commit.
+- [ ] Refresh the landing-site screenshots (`ParsRAG-Landing`,
+  `assets/img/shots/wall`) on each release.
+
+## Phase 18: New Features
+
+- [ ] Vision-model image descriptions during indexing, optional and
+  configurable like OCR (Task 19.1).
+- [ ] Legacy Office formats (`.doc`, `.ppt`) and spreadsheets (`.xlsx`).
+- [ ] Background indexing queue with progress, so large documents do not hold
+  an HTTP request and the single ingestion slot.
+- [ ] A shared, persistent document library next to per-conversation documents,
+  as described in the original PRD (Section 3.2).
+- [ ] Answer export (Markdown or PDF) with its sources, and a link that opens a
+  cited page or image in the original document.
+- [ ] Conversation search that shows the matching snippet and jumps to it.
+- [ ] In-app evaluation: run a labelled question set against the current model
+  and settings and show the results.
+
+## Phase 19: Long-Term Plans
+
+### Task 19.1: Vision model for images
+- [ ] Describe each image with a vision model (local through Ollama, for
+  example `gemma3:4b`, or Gemini through an API) in addition to OCR, and store
+  the description with the OCR text.
+- [ ] Make it optional, since it slows indexing, and re-run the 52-question
+  acceptance set to measure the effect on the 19 image questions.
+
+### Task 19.2: Multi-user deployment
+- [ ] Authentication, per-user sessions and documents, and roles, so the app
+  can run on a shared server instead of only on one workstation.
+- [ ] Move BM25 into Qdrant sparse vectors so keyword search scales beyond the
+  in-memory per-session index.
+
+### Task 19.3: Evaluation
+- [ ] Measure faithfulness and answer relevance with Ragas or TruLens on a
+  larger, standard Persian question set, alongside the current deterministic
+  fact-coverage scoring.
+
+### Task 19.4: Distribution
+- [ ] Publish signed images with SBOM and provenance to a registry from the
+  release workflow, so users do not have to build the PyTorch layer locally
+  (check the license terms on redistribution first).
+- [ ] Validate a current ROCm PyTorch for the AMD overlay or mark it
+  experimental, and give it its own constraints.
+
+### Task 19.5: Knowledge graph
+- [ ] GraphRAG for questions about relations between entities across
+  documents, reserved for after Phase 1 in the original PRD.

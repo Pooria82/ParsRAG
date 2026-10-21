@@ -692,7 +692,7 @@ docker stop qdrant-e2e
 - [راهنمای داده، ورود اسناد و RAG](DATA.md) (انگلیسی)
 - [سوابق تصمیم‌های معماری](.context/)
 - [هویت بصری و قواعد حرکت](frontend/BRAND.md)
-- [نقشه راه پیاده‌سازی](.context/05_Implementation_Roadmap.md)
+- [نقشه راه](.context/05_Implementation_Roadmap.md): مرحله‌های انجام‌شده، ایرادهای شناخته‌شده، بهبودها و برنامه‌های آینده
 - [سیاست امنیت](SECURITY.md)
 - [راهنمای مشارکت](CONTRIBUTING.md)
 - [روش استناد به پارس‌رگ](CITATION.cff)

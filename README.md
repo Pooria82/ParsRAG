@@ -700,7 +700,7 @@ committed.
 - [Data, ingestion, and RAG guide](DATA.md)
 - [Architecture decision records](.context/)
 - [Visual identity and motion rules](frontend/BRAND.md)
-- [Implementation roadmap](.context/05_Implementation_Roadmap.md)
+- [Roadmap](.context/05_Implementation_Roadmap.md): completed phases, known defects, planned improvements, and future work
 - [Security policy](SECURITY.md)
 - [Contribution guide](CONTRIBUTING.md)
 - [How to cite ParsRAG](CITATION.cff)
