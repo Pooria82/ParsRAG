@@ -8,7 +8,7 @@ const { errorFromBody, parseSseBlock } = require('./.compiled/services/api.js');
 const { flushPendingDeletions, hydrateSessions, mergeSavedSessions, parsePendingDeletions } = require('./.compiled/core/storage.js');
 const { mergeSessions } = require('./.compiled/core/workspaceTransfer.js');
 const { modelSettingsErrorMessage, queryErrorMessage, uploadErrorMessage } = require('./.compiled/i18n/errors.js');
-const { ChatFeed } = require('./.compiled/components/ChatFeed.js');
+const { ChatFeed, promptDirection } = require('./.compiled/components/ChatFeed.js');
 
 const noop = () => {};
 const user = (id, content = 'q ' + id) => ({ id, role: 'user', content, timestamp: 1 });
@@ -125,3 +125,25 @@ test('imported documents show as missing until this server lists them', () => {
   const { sessions } = mergeSessions([], [imported]);
   assert.deepEqual(sessions[0].documents, [{ name: 'a.pdf', status: 'error', enabled: true, errorMessage: 'not_on_server' }]);
 });
+
+test('a prompt sits on the side its language starts from', () => {
+  assert.equal(promptDirection('توکن‌ها چه مدت اعتبار دارند؟', 'ltr'), 'rtl');
+  assert.equal(promptDirection('ORM در SQLAlchemy چیست؟', 'ltr'), 'rtl');
+  assert.equal(promptDirection('What does the word نیازمندی mean?', 'rtl'), 'ltr');
+  assert.equal(promptDirection('`x = 1` @{گزارش.pdf}', 'ltr'), 'ltr');
+  const placement = (language, content) => /message message-user (prompt-\w+)/.exec(renderToStaticMarkup(React.createElement(ChatFeed, {
+    messages: [user('u1', content)], language, isGenerating: true, activeMode: 'hybrid',
+    onRetry: noop, onEditPrompt: noop, onRetryQuestion: noop, onSelectVariant: noop, isBusy: false })))[1];
+  // Persian in the Persian interface and English in the English one start at the reading edge.
+  assert.equal(placement('fa', 'سلام، این سند دربارهٔ چیست؟'), 'prompt-start');
+  assert.equal(placement('en', 'What is this document about?'), 'prompt-start');
+  assert.equal(placement('fa', 'What is this document about?'), 'prompt-end');
+  assert.equal(placement('en', 'سلام، این سند دربارهٔ چیست؟'), 'prompt-end');
+});
+
+test('questions carry the interface language for prompts without words', () => {
+  const session = { ...createSession('en', 'llm-only') };
+  assert.equal(buildQuery(session, { ...DEFAULT_SETTINGS, language: 'en' }, '2 + 2 = ?').language, 'en');
+  assert.equal(buildQuery(session, { ...DEFAULT_SETTINGS, language: 'fa' }, '2 + 2 = ?').language, 'fa');
+});
+

@@ -75,8 +75,7 @@ Context:
 
 Query: {query}
 
-{answer_language}
-Answer:"""
+{answer_language}"""
 )
 
 DEFAULT_STRICT_THRESHOLD = 0.75
@@ -282,6 +281,7 @@ class StrictRAGStrategy(GeneratingStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> PreparedAnswer:
         """Retrieve, apply the evidence gates, and build the grounded prompt.
 
@@ -293,10 +293,12 @@ class StrictRAGStrategy(GeneratingStrategy):
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
             document_segments: File-scoped question segments from explicit mentions.
+            answer_language: ``"fa"`` or ``"en"``; by default the language of ``query``.
 
         Returns:
             PreparedAnswer: The prompt with numbered sources, or a refusal.
         """
+        language = answer_language or question_language(query)
         if progress:
             progress("retrieving")
 
@@ -351,7 +353,7 @@ class StrictRAGStrategy(GeneratingStrategy):
         nodes = nodes or evidence
 
         # 3. Threshold Check
-        persian = question_language(query) == "fa"
+        persian = language == "fa"
         if not nodes:
             return PreparedAnswer(
                 immediate=(
@@ -410,18 +412,18 @@ class StrictRAGStrategy(GeneratingStrategy):
         filtered_nodes = with_whole_tables(self.repo, filtered_nodes, session_id)
 
         # 5. Build Grouped Multi-Document Context within the model's window
-        answer_language = answer_language_rule(query)
+        language_rule = answer_language_rule(language)
         filtered_nodes = order_by_document(
             fit_to_context(
                 filtered_nodes,
                 context_window=model_context_window(self.llm),
                 fixed_prompt=self.prompt_template.format(
-                    context_str="", query=query, answer_language=answer_language
+                    context_str="", query=query, answer_language=language_rule
                 ),
             )
         )
         context_str = format_multi_doc_context(filtered_nodes)
         prompt = self.prompt_template.format(
-            context_str=context_str, query=query, answer_language=answer_language
+            context_str=context_str, query=query, answer_language=language_rule
         )
         return PreparedAnswer(prompt=prompt, sources=filtered_nodes)

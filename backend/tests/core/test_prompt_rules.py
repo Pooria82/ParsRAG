@@ -23,10 +23,24 @@ def test_question_language(question: str, language: str) -> None:
     assert question_language(question) == language
 
 
-def test_answer_language_rule_names_the_language() -> None:
-    """The rule placed after the question names the language explicitly."""
-    assert "in English" in answer_language_rule("What is ORM?")
-    assert "in Persian" in answer_language_rule("ORM چیست؟")
+def test_answer_language_rule_names_the_language_and_starts_the_answer() -> None:
+    """The rule names the language, asks to translate, and starts the answer in it."""
+    persian = answer_language_rule("fa")
+    english = answer_language_rule("en")
+    assert (
+        "in Persian" in persian and "even when the documents are in English" in persian
+    )
+    assert persian.endswith("پاسخ (به فارسی):")
+    assert "in English" in english and "documents or examples are in Persian" in english
+    assert english.endswith("Answer (in English):")
+
+
+def test_a_question_without_words_takes_the_interface_language() -> None:
+    assert question_language("$x^2 + 1$ ?", "en") == "en"
+    assert question_language("@{report.pdf} ؟", "fa") == "fa"
+    # A question with words keeps its own language whatever the interface.
+    assert question_language("What is ORM?", "fa") == "en"
+    assert question_language("ORM چیست؟", "en") == "fa"
 
 
 @pytest.mark.parametrize("mode", ["strict", "hybrid", "llm_only"])
@@ -39,7 +53,7 @@ def test_every_prompt_ends_with_the_answer_language(mode: str) -> None:
         "hybrid": hybrid_rag.HYBRID_RAG_PROMPT_TEMPLATE,
         "llm_only": llm_only.LLM_ONLY_PROMPT_TEMPLATE,
     }[mode]
-    assert template.rstrip().endswith("{answer_language}\nAnswer:")
+    assert template.rstrip().splitlines()[-1] == "{answer_language}"
 
 
 @pytest.mark.parametrize(

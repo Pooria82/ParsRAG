@@ -25,6 +25,10 @@ class QueryRequest(BaseModel):
     mode: QueryMode = Field(
         default=QueryMode.HYBRID, description="The RAG execution mode"
     )
+    language: Literal["fa", "en"] | None = Field(
+        default=None,
+        description="Interface language; answers a question without words in either language",
+    )
     request_id: UUID | None = Field(
         default=None,
         description="Optional opaque identifier used to read non-sensitive progress state",

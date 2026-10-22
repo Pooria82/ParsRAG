@@ -211,7 +211,12 @@ a{color:var(--accent);text-underline-offset:3px}
 .message-actions{display:flex;align-items:center;gap:8px;margin-top:13px}
 .message-actions button{display:inline-flex;align-items:center;gap:6px;padding:7px 8px;border-radius:7px;font-size:10px;color:var(--muted)}
 .message-actions button:hover{color:var(--accent);background:var(--surface-soft)}.message-actions button>span{display:flex}
-.user-actions{justify-content:flex-end;margin-top:5px;opacity:.65;transition:opacity var(--ease)}.message-user:hover .user-actions,.message-user:focus-within .user-actions{opacity:1}
+.user-actions{justify-content:flex-end;margin-top:5px;opacity:.65;transition:opacity var(--ease)}
+/* A prompt sits on the side its language starts from: the start side when it
+   reads in the interface's direction (Persian in Persian), the other side otherwise. */
+.message-user.prompt-start{align-items:flex-start;padding-inline-start:0;padding-inline-end:45px}
+.message-user.prompt-start .user-bubble{border-end-end-radius:17px;border-end-start-radius:5px}
+.message-user.prompt-start .user-actions,.message-user.prompt-start .prompt-edit>div{justify-content:flex-start}.message-user:hover .user-actions,.message-user:focus-within .user-actions{opacity:1}
 .prompt-edit{width:min(620px,94%);padding:12px;border:1px solid var(--line-strong);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}.prompt-edit textarea{display:block;width:100%;min-height:86px;resize:vertical;border:0;outline:0;background:transparent;line-height:1.9}.prompt-edit>div{display:flex;justify-content:flex-end;gap:7px;margin-top:8px}.prompt-edit button{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:8px;font-size:11px}.prompt-edit .save-prompt{background:var(--accent);color:var(--on-accent)}
 .variant-navigation{display:inline-flex;align-items:center;gap:2px;margin-inline-start:auto;color:var(--muted)}.variant-navigation button{padding:5px}.variant-navigation output{min-width:42px;text-align:center;font-size:10px;font-variant-numeric:tabular-nums}
 .citation-group{margin-top:20px;border:1px solid var(--line);border-radius:11px;max-width:100%;background:var(--surface)}
@@ -402,7 +407,7 @@ html[dir="rtl"] .documents-dialog{--drawer-offset:-105%}
  .starter-top{margin:0;position:absolute;inset-inline-start:15px;top:22px}.starter-arrow{display:none}
  .starter-card strong{font-size:12px;margin-bottom:2px}.starter-card>span{font-size:10px}.welcome-signature{margin-top:24px;font-size:9px}
  .active-composer{padding-inline:14px}.chat-feed{padding:18px 19px 25px}.prose-content{font-size:14px;line-height:2}
- .user-bubble{padding:10px 14px;font-size:13px;max-width:100%}.message-user{padding-inline-start:28px}
+ .user-bubble{padding:10px 14px;font-size:13px;max-width:100%}.message-user{padding-inline-start:28px}.message-user.prompt-start{padding-inline-start:0;padding-inline-end:28px}
  .notice{margin:0 14px 7px;font-size:11px;padding:10px}.thinking-row{font-size:11px;flex-wrap:wrap;gap:7px}
  .documents-dialog{width:100%}.dialog-header{padding:21px 20px 18px}.dialog-header h2{font-size:17px}
  .dialog-body,.settings-body{padding-inline:20px}.settings-body{padding-block:22px;min-height:320px}

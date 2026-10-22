@@ -138,3 +138,25 @@ test('two open tabs share changes instead of overwriting each other', async ({ p
   await other.reload();
   await expect(other.getByLabel('Conversation options: Budget 2026')).toBeVisible();
 });
+
+for (const [language, prompt, side] of [
+  ['fa', 'این گزارش دربارهٔ چیست؟', 'right'],
+  ['en', 'What is this report about?', 'left'],
+  ['fa', 'What is this report about?', 'left'],
+  ['en', 'این گزارش دربارهٔ چیست؟', 'right'],
+] as const) {
+  test(`a ${language} interface puts "${prompt}" on the ${side}`, async ({ page }) => {
+    await open(page, [{ id: 'talk', title: 'Report', messages: [{ id: 'u', role: 'user', content: prompt, timestamp: 1 },
+      { id: 'a', role: 'assistant', parentUserId: 'u', content: language === 'fa' ? 'این گزارش دربارهٔ امنیت توکن‌هاست.' : 'The report is about token security.', timestamp: 2 }] }]);
+    await page.addInitScript(lang => localStorage.setItem('parsrag_settings_v1', JSON.stringify({ language: lang, theme: 'light' })), language);
+    await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+    await page.route('**/sessions/*/files', route => route.fulfill({ json: [] }));
+    await page.goto('/');
+    const bubble = (await page.locator('.user-bubble').boundingBox())!;
+    const list = (await page.locator('.message-list').boundingBox())!;
+    const gap = side === 'right' ? list.x + list.width - (bubble.x + bubble.width) : bubble.x - list.x;
+    expect(gap).toBeLessThan(4);
+    await expect(page.locator('.boot-sequence')).toHaveCount(0, { timeout: 10000 });
+    await page.screenshot({ path: `test-results/bubble-${language}-${side}.png` });
+  });
+}

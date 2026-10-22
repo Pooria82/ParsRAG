@@ -296,6 +296,8 @@ export function buildQuery(session: Session, settings: AppSettings, prompt: stri
   const selected = indexed.filter(d => d.enabled !== false).map(d => d.name);
   return {
     prompt: prompt.trim(), mode: session.ragMode, session_id: session.id,
+    // Answers a question without words (a formula) in the interface language.
+    language: settings.language,
     top_k: settings.dynamicDepth ? null : settings.topK,
     file_filter: session.ragMode === 'llm-only' || !indexed.length ? null : selected,
     chat_history: chatHistory(session.messages),
