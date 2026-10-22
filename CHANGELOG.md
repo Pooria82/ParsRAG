@@ -5,6 +5,8 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-22
+
 ### Changed
 
 - The default local model is `gemma3:4b` everywhere (code, Compose,
@@ -331,7 +333,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.2.0
