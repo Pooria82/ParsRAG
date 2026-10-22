@@ -8,7 +8,10 @@ import pytest
 from backend.core.domain.documents import ExtractedNode
 from backend.infrastructure.llm.reranker import (
     DEFAULT_RERANK_MODEL,
+    DOWNLOAD_TIMEOUT_SECONDS,
+    RETRY_AFTER_SECONDS,
     FlashRankReranker,
+    _download_timeout,
     configured_rerank_model,
     rerank_cache_dir,
 )
@@ -87,3 +90,30 @@ def test_disabled_reranker_never_loads_a_model() -> None:
     load.assert_not_called()
     assert [node.text for node in ranked] == ["strong", "middle", "weak"]
     assert reranker.rerank("question", [], top_n=3) == []
+
+
+def test_a_failed_load_is_not_retried_on_every_question() -> None:
+    now = [0.0]
+    with patch(
+        "backend.infrastructure.llm.reranker._load_ranker",
+        side_effect=OSError("no network"),
+    ) as load:
+        reranker = FlashRankReranker("model", clock=lambda: now[0])
+        reranker.rerank("q", _nodes(), top_n=2)
+        reranker.rerank("q", _nodes(), top_n=2)
+        assert load.call_count == 1
+
+        now[0] = RETRY_AFTER_SECONDS + 1
+        reranker.rerank("q", _nodes(), top_n=2)
+        assert load.call_count == 2
+
+
+def test_the_model_download_has_a_timeout() -> None:
+    import importlib
+
+    module = importlib.import_module("flashrank.Ranker")
+    original = module.requests
+    with _download_timeout():
+        assert module.requests.get.keywords == {"timeout": DOWNLOAD_TIMEOUT_SECONDS}
+        assert module.requests.exceptions is original.exceptions
+    assert module.requests is original
