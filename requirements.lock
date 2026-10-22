@@ -14,7 +14,7 @@ sentence-transformers==6.1.0
 transformers==5.18.0
 qdrant-client==1.19.1
 pymupdf==2.0
-pydantic==2.13.5
+pydantic==2.14.1
 flashrank==0.2.10
 python-docx==1.2.0
 llama-index-llms-openai-like==0.8.0
