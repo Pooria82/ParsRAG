@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -482,6 +483,26 @@ def test_pptx_picture_is_ocred_with_slide_metadata(
     assert sections[0].text == "[تصویر 1]\nنوشته داخل تصویر پاورپوینت"
     assert sections[0].metadata == {"slide": 1, "image": 1}
     mock_extract.assert_called_once()
+
+
+def test_pptx_skips_slide_number_date_and_footer_placeholders() -> None:
+    """Slide-number, date and footer layout fields are not slide content."""
+    presentation = Presentation()
+    layout = presentation.slide_layouts[1]
+    slide = presentation.slides.add_slide(layout)
+    slide.shapes.title.text = "عنوان اسلاید"
+    # add_slide never copies these fields, so take them from the layout
+    # the way PowerPoint itself does.
+    for shape in layout.shapes:
+        if shape.is_placeholder and shape.placeholder_format.idx > 1:
+            slide.shapes._spTree.append(deepcopy(shape._element))
+    payload = BytesIO()
+    presentation.save(payload)
+
+    sections = parse_document_sections(payload.getvalue(), "fields.pptx")
+
+    assert [section.text for section in sections] == ["عنوان اسلاید"]
+    assert sections[0].metadata == {"slide": 1}
 
 
 def test_parallel_ocr_keeps_document_order(monkeypatch: pytest.MonkeyPatch) -> None:

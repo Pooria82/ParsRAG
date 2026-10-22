@@ -5,6 +5,39 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-22
+
+### Changed
+
+- The default local model is `gemma3:4b` everywhere (code, Compose,
+  `.env.example`, the interface, and the README). It fits fully on a 6 GB GPU
+  and was the most accurate of the small models tested. Set `LLM_MODEL_NAME`
+  to keep another model.
+
+### Fixed
+
+- Request and operation logs are written to stdout at `LOG_LEVEL` (one JSON
+  object per line, or plain text with `ENVIRONMENT=development`). Nothing
+  configured them before, so they were dropped.
+- After the startup retries run out, the service reports `failed` but keeps
+  retrying every minute and becomes ready once Qdrant or the model cache is
+  back, without a restart.
+- The README sections that run Ollama inside Docker set
+  `OLLAMA_DOCKER_BASE_URL=http://ollama:11434`; without it the app kept using
+  the Ollama installed on the computer.
+- `EMBED_QUERY_PREFIX` and `EMBED_PASSAGE_PREFIX` reach the app in Docker.
+- The README settings tables mark every setting that can be changed in the
+  app and document `MODEL_API_MAX_RETRIES`.
+- PowerPoint slides no longer add their slide number, date, or footer to the
+  text, so the slide-number field (shown as `‹#›`) no longer appears in
+  answer sources or search. Upload existing presentations again to remove it
+  from them.
+
+### Security
+
+- Pillow is upgraded to 13.0.0 to fix denial-of-service and information
+  disclosure vulnerabilities in 12.3.0, one of them critical.
+
 ## [1.1.0] - 2026-10-19
 
 ### Added
@@ -187,6 +220,8 @@ and this project uses Semantic Versioning.
 
 ### Changed
 
+- The Strict evidence threshold defaults to 0.75 (was 0.80), so paraphrased
+  questions about the documents are no longer refused.
 - Error responses carry a stable `code` next to `detail`, and the interface
   explains each one (for example an encrypted PDF or a rejected API key).
 - `POST /ingest` returns per-file chunk counts and notices; `POST /query`
@@ -298,7 +333,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Pooria82/ParsRAG/releases/tag/v0.2.0

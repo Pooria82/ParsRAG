@@ -211,3 +211,40 @@ def test_repository_uses_container_environment(
     assert next(dependency) is mock_repository.return_value
     dependency.close()
     mock_repository.assert_called_once_with(host="qdrant", port=7333)
+
+
+def test_one_default_model_everywhere() -> None:
+    """Compose, .env.example, the model factory and the interface agree."""
+    import re
+
+    sources = {
+        "compose.yaml": r'LLM_MODEL_NAME: "\$\{LLM_MODEL_NAME:-([^}]+)\}"',
+        ".env.example": r"^LLM_MODEL_NAME=(\S+)$",
+        "backend/infrastructure/llm/factory.py": r'getenv\("LLM_MODEL_NAME", "([^"]+)"\)',
+        "frontend/src/core/state.ts": r"ollamaModelName: '([^']+)'",
+    }
+    defaults: dict[str, str] = {}
+    for name, pattern in sources.items():
+        found = re.search(pattern, (ROOT / name).read_text(encoding="utf-8"), re.M)
+        assert found, name
+        defaults[name] = found.group(1)
+
+    assert len(set(defaults.values())) == 1, defaults
+
+
+@pytest.mark.parametrize("readme", ["README.md", "README.fa.md"])
+def test_readme_marks_every_runtime_setting_in_the_performance_table(
+    readme: str,
+) -> None:
+    """Rows of settings that Settings can change carry the ⚙ marker."""
+    import re
+
+    from backend.core.domain.runtime_settings import RUNTIME_SETTINGS
+
+    runtime = {spec.key for spec in RUNTIME_SETTINGS}
+    text = (ROOT / readme).read_text(encoding="utf-8")
+    table = text[text.index("| `PARSRAG_APP_MEMORY_LIMIT`") :].split("\n\n", 1)[0]
+    for line in table.splitlines():
+        key = re.match(r"\| `([A-Z0-9_]+)`", line)
+        assert key, line
+        assert ("⚙" in line.split("|")[1]) == (key.group(1) in runtime), line

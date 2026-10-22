@@ -12,8 +12,8 @@ export const STORAGE = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'fa', theme: 'light', palette: 'evergreen', defaultMode: 'hybrid', strictThreshold: 0.8,
-  dynamicDepth: true, topK: 15, selectedModel: 'gemma3:12b',
-  apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:12b',
+  dynamicDepth: true, topK: 15, selectedModel: 'gemma3:4b',
+  apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:4b',
   apiBaseUrl: 'https://openrouter.ai/api/v1', ollamaBaseUrl: 'http://localhost:11434', backendUrl: '',
 };
 

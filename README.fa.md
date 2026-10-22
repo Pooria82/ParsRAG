@@ -197,7 +197,7 @@ Embedding و Qdrant در همه حالت‌ها محلی می‌مانند. کل
 میلیارد پارامتری کاملاً روی GPU اجرا می‌شود:
 
 ```bash
-ollama pull qwen2.5:7b
+ollama pull gemma3:4b
 ```
 
 ۲. فایل تنظیمات را بسازید. پیش‌فرض‌های آن از همین Ollamaی رایانه استفاده
@@ -225,7 +225,7 @@ docker compose up -d --build
 
 ```text
 NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL
-qwen3.5:4b    d8b0f5e9760c    3.1 GB    100% GPU     4096       4 minutes from now
+gemma3:4b     68ceab7e468a    2.9 GB    100% GPU     4096       4 minutes from now
 ```
 
 در برنامه، **تنظیمات** بقیهٔ موارد را در حین اجرا تغییر می‌دهد:
@@ -321,6 +321,9 @@ Ollama مدل‌ها را در مسیری که `OLLAMA_MODELS` نشان می‌�
   می‌فرستد، پس Ollama سیستم فقط همین اندازه حافظه برای متن می‌گیرد.
 - اندازه‌گیری روی کارت RTX 3060 لپ‌تاپ با ۶ گیگابایت حافظه، در حالی که خود
   ویندوز حدود ۱٫۶ گیگابایت از آن را گرفته بود:
+  - مدل پیش‌فرض `gemma3:4b` (۲٫۹ گیگابایت) با `OLLAMA_CONTEXT_LENGTH=4096`
+    کاملاً روی GPU (`100% GPU`) اجرا شد. در ۱۲ پرسش از گزارش‌های خود پروژه، ۱۸
+    پاسخ از ۲۴ پاسخ درست بود و میانهٔ زمان هر پاسخ ۷٫۴ ثانیه بود.
   - `qwen3.5:4b` (۳٫۳ گیگابایت) با `OLLAMA_CONTEXT_LENGTH=4096` کاملاً روی GPU
     (`100% GPU`) اجرا شد و در چند ثانیه پاسخ داد.
   - `qwen2.5:7b` (۴٫۷ گیگابایت) حتی با متن ۲۰۴۸ توکنی حدود `82%` روی GPU
@@ -433,9 +436,13 @@ docker compose up -d --build
 
 ```dotenv
 LLM_PROVIDER=ollama
-LLM_MODEL_NAME=qwen2.5:7b
-OLLAMA_MODEL=qwen2.5:7b
+LLM_MODEL_NAME=gemma3:4b
+OLLAMA_MODEL=gemma3:4b
+OLLAMA_DOCKER_BASE_URL=http://ollama:11434
 ```
+
+متغیر `OLLAMA_DOCKER_BASE_URL` برنامه را به‌جای Ollamaی نصب‌شده روی رایانه، که
+پیش‌فرض `.env.example` است، به کانتینر Ollama وصل می‌کند.
 
 ```powershell
 docker compose --profile local-model up -d qdrant ollama
@@ -450,7 +457,8 @@ quantized کوچک‌تر یا API استفاده کنید.
 ### اجرای Ollama و embedding روی NVIDIA GPU
 
 در میزبان Docker باید درایور به‌روز NVIDIA و پشتیبانی NVIDIA Container Toolkit
-فعال باشد. overlay زیر را در همه فرمان‌های مرتبط وارد کنید:
+فعال باشد. مقادیر `.env` بخش CPU را هم (از جمله `OLLAMA_DOCKER_BASE_URL`)
+تنظیم کنید و overlay زیر را در همه فرمان‌های مرتبط وارد کنید:
 
 ```powershell
 docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model config --quiet
@@ -463,7 +471,7 @@ docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model up -d -
 
 ```powershell
 docker compose -f compose.yaml -f compose.gpu.yaml exec app python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama run qwen2.5:7b "Reply with exactly GPU_OK"
+docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama run gemma3:4b "Reply with exactly GPU_OK"
 docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama ps
 ```
 
@@ -493,7 +501,7 @@ NVIDIA را برای هر دو سرویس `app` و `ollama` رزرو می‌کن
 ### اجرای AMD در میزبان‌های پشتیبانی‌شده
 
 overlay مربوط به AMD برای Linux و ROCm طراحی شده و `/dev/kfd` و `/dev/dri` را
-در اختیار کانتینرها می‌گذارد:
+در اختیار کانتینرها می‌گذارد. پیش از اجرا، مقادیر `.env` بخش CPU را تنظیم کنید:
 
 ```bash
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config --quiet
@@ -525,16 +533,17 @@ API فقط به نام‌های `localhost`، `127.0.0.1` و `::1` پاسخ می
 | `PARSRAG_CPU_THREADS` ⚙ | `4` | تعداد threadهای CPU برای PyTorch/OpenMP؛ تا تعداد هسته‌های واقعی، ایندکس را سریع‌تر می‌کند |
 | `OCR_WORKERS` ⚙ | هسته‌های CPU (حداکثر ۸) | تصویرهایی که هنگام ایندکس هم‌زمان خوانده می‌شوند؛ متن حاصل همان خواندن تک‌به‌تک است |
 | `EMBED_DEVICE` | `auto` | دستگاه embedding؛ overlay انویدیا آن را `cuda` می‌کند |
-| `EMBED_BATCH_SIZE` | `8` | batch embedding؛ در GPU مقدار پیش‌فرض `32` است |
-| `QDRANT_UPSERT_BATCH_SIZE` | `64` | اندازه batch محدودشده برای ثبت بردارها |
+| `EMBED_BATCH_SIZE` ⚙ | `8` | batch embedding؛ در GPU مقدار پیش‌فرض `32` است |
+| `QDRANT_UPSERT_BATCH_SIZE` ⚙ | `64` | اندازه batch محدودشده برای ثبت بردارها |
 | `OLLAMA_MAX_LOADED_MODELS` | `1` | تعداد مدل‌های هم‌زمان در حافظه |
 | `OLLAMA_NUM_PARALLEL` | `1` | تعداد generationهای هم‌زمان Ollama |
 | `OLLAMA_KEEP_ALIVE` | `5m` | مدت نگه‌داشتن وزن مدل در حافظه |
-| `OLLAMA_CONTEXT_LENGTH` | `8192` | context درخواستی از Ollama (`num_ctx`)؛ بخش‌های بازیابی‌شده برای جاشدن کوتاه می‌شوند. overlay کم‌حافظه مقدار `2048` دارد |
-| `OLLAMA_THINK` | `0` | اجازهٔ «فکر کردن» به مدل‌های فکرکننده پیش از پاسخ؛ context بزرگ‌تری لازم دارد |
-| `MODEL_CONTEXT_WINDOW` | `32768` | context فرضی مدل‌های API برای جادادن بخش‌های بازیابی‌شده |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120` | زمان یک درخواست پاسخ؛ درخواست API یک بار تکرار می‌شود |
-| `CONDENSE_TIMEOUT_SECONDS` | `30` | بازنویسی پرسش پیگیری؛ پس از این زمان همان پرسش اصلی استفاده می‌شود |
+| `OLLAMA_CONTEXT_LENGTH` ⚙ | `8192` | context درخواستی از Ollama (`num_ctx`)؛ بخش‌های بازیابی‌شده برای جاشدن کوتاه می‌شوند. overlay کم‌حافظه مقدار `2048` دارد |
+| `OLLAMA_THINK` ⚙ | `0` | اجازهٔ «فکر کردن» به مدل‌های فکرکننده پیش از پاسخ؛ context بزرگ‌تری لازم دارد |
+| `MODEL_CONTEXT_WINDOW` ⚙ | `32768` | context فرضی مدل‌های API برای جادادن بخش‌های بازیابی‌شده |
+| `LLM_REQUEST_TIMEOUT_SECONDS` ⚙ | `120` | زمان یک درخواست پاسخ؛ برای تکرار درخواست، `MODEL_API_MAX_RETRIES` را ببینید |
+| `MODEL_API_MAX_RETRIES` ⚙ | `4` | تکرار درخواست API پس از خطای 5xx یا 429 (برای 429 تا یک دقیقه صبر) |
+| `CONDENSE_TIMEOUT_SECONDS` ⚙ | `30` | بازنویسی پرسش پیگیری؛ پس از این زمان همان پرسش اصلی استفاده می‌شود |
 
 برای سیستم‌های کم‌حافظه batch و concurrency را کاهش دهید. محدودیت حافظه
 کانتینر سقف مصرف است؛ مدل محلی همچنان باید در RAM یا VRAM موجود جا شود.
@@ -692,7 +701,7 @@ docker stop qdrant-e2e
 - [راهنمای داده، ورود اسناد و RAG](DATA.md) (انگلیسی)
 - [سوابق تصمیم‌های معماری](.context/)
 - [هویت بصری و قواعد حرکت](frontend/BRAND.md)
-- [نقشه راه پیاده‌سازی](.context/05_Implementation_Roadmap.md)
+- [نقشه راه](.context/05_Implementation_Roadmap.md): مرحله‌های انجام‌شده، ایرادهای شناخته‌شده، بهبودها و برنامه‌های آینده
 - [سیاست امنیت](SECURITY.md)
 - [راهنمای مشارکت](CONTRIBUTING.md)
 - [روش استناد به پارس‌رگ](CITATION.cff)

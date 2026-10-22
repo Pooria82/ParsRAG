@@ -200,7 +200,7 @@ Requirements: Docker Desktop (Windows, macOS) or Docker Engine with Compose
    3–4B model runs fully on the GPU:
 
    ```bash
-   ollama pull qwen2.5:7b
+   ollama pull gemma3:4b
    ```
 
 2. Create the settings file. Its defaults already use the Ollama on this
@@ -228,7 +228,7 @@ Requirements: Docker Desktop (Windows, macOS) or Docker Engine with Compose
 
    ```text
    NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL
-   qwen3.5:4b    d8b0f5e9760c    3.1 GB    100% GPU     4096       4 minutes from now
+   gemma3:4b     68ceab7e468a    2.9 GB    100% GPU     4096       4 minutes from now
    ```
 
 In the app, **Settings** changes everything else while ParsRAG runs:
@@ -321,6 +321,9 @@ this mode: `ollama-init` belongs to the `local-model` profile.
 - The app passes `OLLAMA_CONTEXT_LENGTH` (default `8192`) to Ollama with every
   request, so the host's Ollama allocates only that context.
 - Measured on a 6 GB RTX 3060 Laptop GPU, with the desktop using about 1.6 GB:
+  - `gemma3:4b` (2.9 GB, the default) runs at `100% GPU` with
+    `OLLAMA_CONTEXT_LENGTH=4096`. On 12 questions over the project's own
+    reports it answered 18 of 24 correctly, with a median of 7.4 s per answer.
   - `qwen3.5:4b` (3.3 GB) runs at `100% GPU` with `OLLAMA_CONTEXT_LENGTH=4096`
     and answers in seconds.
   - `qwen2.5:7b` (4.7 GB) stays at about `82%` GPU, even with a 2048-token
@@ -435,9 +438,13 @@ Choose a model that fits the machine:
 
 ```dotenv
 LLM_PROVIDER=ollama
-LLM_MODEL_NAME=qwen2.5:7b
-OLLAMA_MODEL=qwen2.5:7b
+LLM_MODEL_NAME=gemma3:4b
+OLLAMA_MODEL=gemma3:4b
+OLLAMA_DOCKER_BASE_URL=http://ollama:11434
 ```
+
+`OLLAMA_DOCKER_BASE_URL` points the app at the Ollama container instead of the
+Ollama installed on the computer, which `.env.example` uses by default.
 
 ```powershell
 docker compose --profile local-model up -d qdrant ollama
@@ -452,7 +459,9 @@ better on machines without a suitable GPU.
 ### Run Ollama and embeddings on NVIDIA GPU
 
 Install a current NVIDIA driver and NVIDIA Container Toolkit support in the
-Docker host, then use the overlay for every related Compose command:
+Docker host, and set the `.env` values from the CPU section above (including
+`OLLAMA_DOCKER_BASE_URL`). Then use the overlay for every related Compose
+command:
 
 ```powershell
 docker compose -f compose.yaml -f compose.gpu.yaml --profile local-model config --quiet
@@ -465,7 +474,7 @@ Verify both acceleration paths:
 
 ```powershell
 docker compose -f compose.yaml -f compose.gpu.yaml exec app python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama run qwen2.5:7b "Reply with exactly GPU_OK"
+docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama run gemma3:4b "Reply with exactly GPU_OK"
 docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama ps
 ```
 
@@ -493,7 +502,8 @@ when preparing a new host.
 
 ### Run on supported AMD GPU hosts
 
-The AMD overlay targets Linux ROCm hosts and maps `/dev/kfd` and `/dev/dri`:
+The AMD overlay targets Linux ROCm hosts and maps `/dev/kfd` and `/dev/dri`.
+Set the `.env` values from the CPU section above first:
 
 ```bash
 docker compose -f compose.yaml -f compose.amd.yaml --profile local-model config --quiet
@@ -525,16 +535,17 @@ the rest apply from `.env` after a restart.
 | `PARSRAG_CPU_THREADS` ⚙ | `4` | PyTorch/OpenMP CPU threads; up to the physical cores speeds up indexing |
 | `OCR_WORKERS` ⚙ | the CPU cores (max 8) | Images read at the same time while indexing; the text is the same as one by one |
 | `EMBED_DEVICE` | `auto` | Embedding device; GPU overlay sets `cuda` |
-| `EMBED_BATCH_SIZE` | `8` | Embedding batch; GPU overlay defaults to `32` |
-| `QDRANT_UPSERT_BATCH_SIZE` | `64` | Bounded vector insertion batch |
+| `EMBED_BATCH_SIZE` ⚙ | `8` | Embedding batch; GPU overlay defaults to `32` |
+| `QDRANT_UPSERT_BATCH_SIZE` ⚙ | `64` | Bounded vector insertion batch |
 | `OLLAMA_MAX_LOADED_MODELS` | `1` | Limits concurrently resident models |
 | `OLLAMA_NUM_PARALLEL` | `1` | Limits parallel Ollama generations |
 | `OLLAMA_KEEP_ALIVE` | `5m` | Duration model weights remain loaded |
-| `OLLAMA_CONTEXT_LENGTH` | `8192` | Context requested from Ollama (`num_ctx`); retrieved chunks are trimmed to fit. Low-VRAM overlay uses `2048` |
-| `OLLAMA_THINK` | `0` | Let thinking models reason before answering; needs a larger context |
-| `MODEL_CONTEXT_WINDOW` | `32768` | Context assumed for API models when fitting retrieved chunks |
-| `LLM_REQUEST_TIMEOUT_SECONDS` | `120` | One answer request; API requests are retried once |
-| `CONDENSE_TIMEOUT_SECONDS` | `30` | Follow-up rewrite; on timeout the question is used as asked |
+| `OLLAMA_CONTEXT_LENGTH` ⚙ | `8192` | Context requested from Ollama (`num_ctx`); retrieved chunks are trimmed to fit. Low-VRAM overlay uses `2048` |
+| `OLLAMA_THINK` ⚙ | `0` | Let thinking models reason before answering; needs a larger context |
+| `MODEL_CONTEXT_WINDOW` ⚙ | `32768` | Context assumed for API models when fitting retrieved chunks |
+| `LLM_REQUEST_TIMEOUT_SECONDS` ⚙ | `120` | One answer request; see `MODEL_API_MAX_RETRIES` for retries |
+| `MODEL_API_MAX_RETRIES` ⚙ | `4` | Retries of an API request after HTTP 5xx or 429 (a 429 waits up to a minute) |
+| `CONDENSE_TIMEOUT_SECONDS` ⚙ | `30` | Follow-up rewrite; on timeout the question is used as asked |
 
 Lower batch sizes and concurrency for small-memory machines. Container limits
 are ceilings, not reservations; a local model still needs enough RAM or VRAM to
@@ -700,7 +711,7 @@ committed.
 - [Data, ingestion, and RAG guide](DATA.md)
 - [Architecture decision records](.context/)
 - [Visual identity and motion rules](frontend/BRAND.md)
-- [Implementation roadmap](.context/05_Implementation_Roadmap.md)
+- [Roadmap](.context/05_Implementation_Roadmap.md): completed phases, known defects, planned improvements, and future work
 - [Security policy](SECURITY.md)
 - [Contribution guide](CONTRIBUTING.md)
 - [How to cite ParsRAG](CITATION.cff)

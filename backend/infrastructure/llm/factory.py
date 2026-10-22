@@ -149,7 +149,7 @@ def _environment_configuration() -> ModelConfigurationRequest:
         base_url = default_ollama_base_url()
     return ModelConfigurationRequest(
         provider=provider,
-        model_name=os.getenv("LLM_MODEL_NAME", "gemma3:12b"),
+        model_name=os.getenv("LLM_MODEL_NAME", "gemma3:4b"),
         base_url=base_url,
         api_key=_api_key,
         disclosure_acknowledged=_environment_disclosure_acknowledged(),

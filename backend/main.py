@@ -27,29 +27,37 @@ from backend.api.middleware import (
 from backend.api.routes import router as api_router
 from backend.core.runtime.readiness import runtime_state
 from backend.infrastructure.llm.factory import setup_llm_and_embeddings
+from backend.infrastructure.log_config import configure_logging
 
 # Load environment variables
 load_dotenv()
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
 
 # Seconds to wait before each retry of a failed start. A busy or still-starting
 # Qdrant can time out once; without a retry the service stayed "not ready"
-# until it was restarted.
+# until it was restarted. After the last delay the service reports "failed"
+# but keeps retrying at that interval, so it recovers once Qdrant or the model
+# cache comes back, without a container restart.
 _INIT_RETRY_DELAYS = (5, 10, 20, 40, 60)
 
 
 def _initialize_runtime(
     delays: tuple[float, ...] = _INIT_RETRY_DELAYS,
     sleep: Callable[[float], None] = time.sleep,
+    max_attempts: int | None = None,
 ) -> None:
     """Initialize heavyweight model and storage adapters in a background thread.
 
     Transient failures are retried with growing delays while readiness stays
-    "preparing"; only the last failure marks the runtime as failed.
+    "preparing". Once the delays run out, readiness becomes "failed" and the
+    last delay repeats until a start succeeds (or ``max_attempts`` is reached,
+    which tests use).
     """
-    for attempt in range(len(delays) + 1):
+    attempt = 0
+    while max_attempts is None or attempt < max_attempts:
         try:
             from backend.api.dependencies import _shared_document_repository, reranker
 
@@ -61,16 +69,20 @@ def _initialize_runtime(
             runtime_state.mark_ready()
             return
         except Exception:
-            if attempt == len(delays):
+            if attempt >= len(delays):
                 runtime_state.mark_failed()
-                logger.exception("Runtime initialization failed")
-                return
-            logger.warning(
-                "Runtime initialization failed; retrying in %s s",
-                delays[attempt],
-                exc_info=True,
-            )
-            sleep(delays[attempt])
+                logger.exception(
+                    "Runtime initialization failed; retrying in %s s", delays[-1]
+                )
+            else:
+                logger.warning(
+                    "Runtime initialization failed; retrying in %s s",
+                    delays[attempt],
+                    exc_info=True,
+                )
+        attempt += 1
+        if max_attempts is None or attempt < max_attempts:
+            sleep(delays[min(attempt - 1, len(delays) - 1)])
 
 
 def _max_request_bytes() -> int:
@@ -115,7 +127,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="ParsRAG API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="ParsRAG API", version="1.1.1", lifespan=lifespan)
 
 trusted_origins = configured_browser_origins()
 app.add_middleware(
