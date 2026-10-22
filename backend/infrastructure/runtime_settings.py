@@ -83,19 +83,39 @@ class EnvironmentSettingsStore:
         with self._lock:
             return dict(self._overrides)
 
-    def apply(self, changes: dict[str, str | None]) -> None:
-        """Activate and persist changes; None returns a setting to ``.env``."""
+    def apply(
+        self,
+        changes: dict[str, str | None],
+        validate: Callable[[dict[str, str]], None] | None = None,
+    ) -> None:
+        """Validate, persist, then activate changes as one step.
+
+        Everything runs under one lock, so two requests cannot each pass the
+        upload-limit check and together break it. The file is written before
+        ``os.environ`` changes: if saving fails (read-only volume, full disk)
+        nothing takes effect. Model clients are rebuilt under the same lock,
+        so rebuilds run in the order the changes were made.
+        """
         with self._lock:
+            overrides = dict(self._overrides)
             for key, value in changes.items():
                 if value is None:
-                    self._overrides.pop(key, None)
+                    overrides.pop(key, None)
+                else:
+                    overrides[key] = value
+            if validate is not None:
+                validate(
+                    {key: overrides.get(key, env) for key, env in self._env.items()}
+                )
+            self._save(overrides)
+            self._overrides = overrides
+            for key, value in changes.items():
+                if value is None:
                     self._restore(key)
                 else:
-                    self._overrides[key] = value
                     os.environ[key] = value
-            self._save()
-        if self._on_change is not None and changes:
-            self._on_change(set(changes))
+            if self._on_change is not None and changes:
+                self._on_change(set(changes))
 
     def _restore(self, key: str) -> None:
         """Put back exactly what ``.env`` provided, or remove the variable."""
@@ -126,16 +146,15 @@ class EnvironmentSettingsStore:
                 logger.warning("Ignoring invalid saved setting %s", key)
         return overrides
 
-    def _save(self) -> None:
+    def _save(self, overrides: dict[str, str]) -> None:
         """Write overrides atomically; an empty set removes the file."""
-        if not self._overrides:
+        if not overrides:
             self._path.unlink(missing_ok=True)
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self._path.with_suffix(self._path.suffix + ".tmp")
         temporary.write_text(
-            json.dumps(self._overrides, ensure_ascii=False, indent=2, sort_keys=True)
-            + "\n",
+            json.dumps(overrides, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         if os.name != "nt":

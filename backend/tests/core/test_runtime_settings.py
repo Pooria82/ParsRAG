@@ -311,3 +311,42 @@ def test_server_reports_what_automatic_means(monkeypatch: pytest.MonkeyPatch) ->
     }
     automatic = {spec.key for spec in RUNTIME_SETTINGS if spec.automatic}
     assert set(values) == automatic
+
+
+def test_a_failed_save_changes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read-only volume or full disk must not leave live but unsaved values."""
+    monkeypatch.setenv("OCR_MAX_PAGES", "30")
+    changed: list[set[str]] = []
+    store = EnvironmentSettingsStore(tmp_path / "s.json", on_change=changed.append)
+
+    with (
+        patch.object(store, "_save", side_effect=OSError("read-only")),
+        pytest.raises(OSError),
+    ):
+        store.apply({"OCR_MAX_PAGES": "40"})
+
+    assert store.overrides() == {}
+    assert store.values()["OCR_MAX_PAGES"] == "30"
+    import os
+
+    assert os.environ["OCR_MAX_PAGES"] == "30"
+    assert changed == []
+
+
+def test_upload_limits_are_checked_inside_the_store_lock(tmp_path: Path) -> None:
+    """The check sees the values the change would produce, under the lock."""
+    store = EnvironmentSettingsStore(tmp_path / "s.json")
+    seen: list[dict[str, str]] = []
+
+    def validate(values: dict[str, str]) -> None:
+        assert store._lock._is_owned()  # type: ignore[attr-defined]
+        seen.append(values)
+        raise InvalidInputError("no", code="invalid_setting")
+
+    with pytest.raises(InvalidInputError):
+        store.apply({"PARSRAG_MAX_FILE_BYTES": str(600 * MB)}, validate=validate)
+
+    assert seen[0]["PARSRAG_MAX_FILE_BYTES"] == str(600 * MB)
+    assert store.overrides() == {}
