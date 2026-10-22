@@ -56,11 +56,18 @@ interface ServerSettingsProps {
 /** Server settings that apply without a restart, grouped like `.env.example`. */
 export function ServerSettings({ api, language, runtime, groups, onChange }: ServerSettingsProps) {
   const t = RUNTIME_TEXT[language];
-  const shown = useMemo(() => runtime.settings.filter(setting => groups.includes(setting.group)), [runtime, groups]);
+  // The parent passes a new array on every render; edits must survive those.
+  const groupKey = groups.join(',');
+  const shown = useMemo(() => runtime.settings.filter(setting => groupKey.split(',').includes(setting.group)), [runtime, groupKey]);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  /** Number fields left empty while typing: not a value, and not "Automatic". */
+  const [blank, setBlank] = useState<ReadonlySet<string>>(new Set());
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { setDraft(Object.fromEntries(shown.map(setting => [setting.key, setting.value]))); }, [shown]);
+  useEffect(() => {
+    setDraft(Object.fromEntries(shown.map(setting => [setting.key, setting.value])));
+    setBlank(new Set());
+  }, [shown]);
   const changes = changedValues(shown, draft);
   const overridden = shown.filter(setting => setting.overridden);
 
@@ -83,15 +90,19 @@ export function ServerSettings({ api, language, runtime, groups, onChange }: Ser
       return <section key={group} className="server-settings-group" aria-label={GROUP_TEXT[group][language]}>
         <h3>{GROUP_TEXT[group][language]}</h3>
         {items.map(setting => <SettingField key={setting.key} setting={setting} language={language}
-          value={draft[setting.key] ?? setting.value} disabled={status === 'saving'}
-          onChange={value => { setDraft(current => ({ ...current, [setting.key]: value })); setStatus('idle'); }}
+          value={draft[setting.key] ?? setting.value} blank={blank.has(setting.key)} disabled={status === 'saving'}
+          onChange={value => {
+            setBlank(current => { const next = new Set(current); if (value === null) next.add(setting.key); else next.delete(setting.key); return next; });
+            if (value !== null) setDraft(current => ({ ...current, [setting.key]: value }));
+            setStatus('idle');
+          }}
           onReset={() => void send({ [setting.key]: null })} />)}
       </section>;
     })}
     <div className="model-actions">
       {overridden.length > 0 && <button type="button" className="button secondary" disabled={status === 'saving'}
         onClick={() => void send(Object.fromEntries(overridden.map(setting => [setting.key, null])))}><RotateCcw size={15} />{t.resetAll}</button>}
-      <button type="button" className="button primary" disabled={status === 'saving' || !Object.keys(changes).length}
+      <button type="button" className="button primary" disabled={status === 'saving' || blank.size > 0 || !Object.keys(changes).length}
         onClick={() => void send(changes)}>{status === 'saving' ? t.saving : t.save}</button>
     </div>
     {status === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.saved}</p>}
@@ -99,9 +110,10 @@ export function ServerSettings({ api, language, runtime, groups, onChange }: Ser
   </div>;
 }
 
-function SettingField({ setting, language, value, disabled, onChange, onReset }: {
-  setting: RuntimeSetting; language: Language; value: string; disabled: boolean;
-  onChange: (value: string) => void; onReset: () => void;
+function SettingField({ setting, language, value, blank, disabled, onChange, onReset }: {
+  setting: RuntimeSetting; language: Language; value: string; blank: boolean; disabled: boolean;
+  /** null: a number field was emptied, which is neither a value nor "Automatic". */
+  onChange: (value: string | null) => void; onReset: () => void;
 }) {
   const t = RUNTIME_TEXT[language];
   const text = SETTING_TEXT[setting.key];
@@ -122,8 +134,8 @@ function SettingField({ setting, language, value, disabled, onChange, onReset }:
       </label>
     </div>;
   }
-  const automatic = setting.automatic && value === '';
   const numeric = setting.kind !== 'text';
+  const automatic = setting.automatic && value === '' && !blank;
   const minimum = setting.minimum ?? undefined;
   const maximum = setting.maximum ?? undefined;
   const scale = setting.kind === 'bytes' ? MEBIBYTE : 1;
@@ -134,8 +146,8 @@ function SettingField({ setting, language, value, disabled, onChange, onReset }:
         type={numeric && !automatic ? 'number' : 'text'} inputMode={numeric ? (setting.kind === 'float' ? 'decimal' : 'numeric') : undefined}
         min={minimum !== undefined ? minimum / scale : undefined} max={maximum !== undefined ? maximum / scale : undefined}
         step={setting.kind === 'float' ? 0.05 : 1}
-        value={automatic ? automaticText(setting, language) : displayValue(setting, value)} readOnly={automatic}
-        onChange={event => onChange(storedValue(setting, event.target.value))} />
+        value={automatic ? automaticText(setting, language) : blank ? '' : displayValue(setting, value)} readOnly={automatic}
+        onChange={event => onChange(numeric && !event.target.value.trim() ? null : storedValue(setting, event.target.value))} />
       {setting.automatic && <label className="automatic-choice"><input type="checkbox" checked={automatic} disabled={disabled}
         onChange={event => onChange(event.target.checked ? '' : manualStart(setting))} />{t.automatic}</label>}
     </div>

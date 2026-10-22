@@ -16,6 +16,7 @@ export default defineConfig({
       '/sessions': localApi,
       '/models': localApi,
       '/conversations': localApi,
+      '/settings': localApi,
     },
   },
   build: {

@@ -8,6 +8,13 @@ export class ApiError extends Error {
   }
 }
 
+/** Name a FastAPI validation failure (422 `{ detail: [{ type }] }`). */
+function validationCode(detail: unknown[]): string {
+  const tooLong = detail.some(item => typeof item === 'object' && item !== null
+    && ['string_too_long', 'too_long'].includes(String((item as Record<string, unknown>).type)));
+  return tooLong ? 'too_long' : 'invalid_request';
+}
+
 /** Read `{ detail, code }` (or FastAPI's `{ detail: { code } }`) from an error body. */
 export function errorFromBody(status: number, body: string): ApiError {
   let code = 'request_failed';
@@ -18,6 +25,7 @@ export function errorFromBody(status: number, body: string): ApiError {
       const record = value as Record<string, unknown>;
       if (typeof record.code === 'string') code = record.code;
       if (typeof record.detail === 'string') detail = record.detail;
+      else if (Array.isArray(record.detail)) { if (status === 422) code = validationCode(record.detail); }
       else if (typeof record.detail === 'object' && record.detail !== null) {
         const nested = record.detail as Record<string, unknown>;
         if (typeof nested.code === 'string') code = nested.code;
@@ -32,7 +40,9 @@ export type StreamEvent =
   | { type: 'stage'; stage: QueryStage }
   | { type: 'sources'; sourceNodes: unknown[] }
   | { type: 'token'; text: string }
-  | { type: 'done'; data: unknown };
+  | { type: 'done'; data: unknown }
+  /** Sent while the server is still working, so a slow answer is not mistaken for a dead connection. */
+  | { type: 'ping' };
 
 const STAGES: readonly QueryStage[] = ['understanding', 'retrieving', 'generating', 'complete', 'failed'];
 
@@ -53,11 +63,25 @@ export function parseSseBlock(block: string): StreamEvent | undefined {
   if (kind === 'sources' && Array.isArray(record.source_nodes)) return { type: 'sources', sourceNodes: record.source_nodes };
   if (kind === 'token' && typeof record.text === 'string') return { type: 'token', text: record.text };
   if (kind === 'done') return { type: 'done', data: value };
+  if (kind === 'ping') return { type: 'ping' };
   return undefined;
 }
 
 async function failure(response: Response): Promise<ApiError> {
   return errorFromBody(response.status, await response.text().catch(() => ''));
+}
+
+/** Fetch, turning an unreachable service into `network` and an error status into its code. */
+async function request(url: string, init: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
+    throw new ApiError('network');
+  }
+  if (!response.ok) throw await failure(response);
+  return response;
 }
 
 function parseIngested(body: string): IngestedFile[] {
@@ -275,22 +299,19 @@ export class ParsRagApiClient {
   }
 
   async deleteDocument(sessionId: string, filename: string, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}/files`), {
+    await request(this.url(`/sessions/${encodeURIComponent(sessionId)}/files`), {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }), signal,
     });
-    if (!response.ok) throw new ApiError('request_failed', response.status);
   }
 
   async reuseDocument(sessionId: string, sourceSessionId: string, filename: string, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}/files/reuse`), {
+    await request(this.url(`/sessions/${encodeURIComponent(sessionId)}/files/reuse`), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source_session_id: sourceSessionId, filename }), signal,
     });
-    if (!response.ok) throw new ApiError('request_failed', response.status);
   }
 
   async deleteSession(sessionId: string, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(this.url(`/sessions/${encodeURIComponent(sessionId)}`), { method: 'DELETE', signal });
-    if (!response.ok) throw new ApiError('request_failed', response.status);
+    await request(this.url(`/sessions/${encodeURIComponent(sessionId)}`), { method: 'DELETE', signal });
   }
 }

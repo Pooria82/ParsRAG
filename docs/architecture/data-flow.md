@@ -83,8 +83,10 @@ sequenceDiagram
 `stage` (understanding, retrieving, generating), `sources` (the numbered
 excerpts, before generation), `token` (text deltas), and `done` (the
 `QueryResponse` below). An error after the stream started arrives as an
-`error` event with `{detail, code}`. Closing the stream releases the query
-slot and stops generation. Strategies split into `prepare` (retrieval,
+`error` event with `{detail, code}`. A `ping` event is sent after 15 seconds
+without any other event, so the browser can wait for a slow model and still
+notice a dead connection (it gives up after 60 quiet seconds). Closing the
+stream releases the query slot and stops generation. Strategies split into `prepare` (retrieval,
 evidence gate, numbered prompt) and a shared generation step.
 
 ```mermaid

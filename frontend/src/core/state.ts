@@ -3,15 +3,21 @@ import { summarizeSources } from './citations';
 
 /** Longest excerpt kept per source in the browser (characters). */
 export const MAX_SOURCE_TEXT = 1600;
+/** Longest question or history turn the API accepts (characters). */
+export const MAX_PROMPT_CHARS = 12000;
 
 export const STORAGE = {
   sessions: 'parsrag_sessions_v1',
+  /** Set while `sessions` in localStorage is newer than the IndexedDB copy. */
+  sessionsFallback: 'parsrag_sessions_fallback_v1',
   active: 'parsrag_active_session_id_v1',
   settings: 'parsrag_settings_v1',
+  /** Conversations deleted while the server was unreachable. */
+  pendingDeletions: 'parsrag_pending_deletions_v1',
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  language: 'fa', theme: 'light', palette: 'evergreen', defaultMode: 'hybrid', strictThreshold: 0.8,
+  language: 'fa', theme: 'light', palette: 'evergreen', defaultMode: 'hybrid',
   dynamicDepth: true, topK: 15, selectedModel: 'gemma3:4b',
   apiModelName: 'google/gemma-4-26b-a4b-it', ollamaModelName: 'gemma3:4b',
   apiBaseUrl: 'https://openrouter.ai/api/v1', ollamaBaseUrl: 'http://localhost:11434', backendUrl: '',
@@ -258,6 +264,33 @@ export function validateUploads(
   return { accepted, rejected };
 }
 
+/** The answer to a question: the assistant message that names it, or the one right after it. */
+export function answerTo(messages: Message[], userId: string): Message | undefined {
+  const named = messages.find(message => message.role === 'assistant' && message.parentUserId === userId);
+  if (named) return named;
+  const userIndex = messages.findIndex(message => message.id === userId);
+  if (userIndex < 0) return undefined;
+  const next = messages.slice(userIndex + 1).find(message => message.role !== 'system');
+  return next?.role === 'assistant' && !next.parentUserId ? next : undefined;
+}
+
+/**
+ * Previous turns for the model: only questions that got an answer, with that
+ * answer. A failed or unanswered turn is left out so it cannot make the next
+ * request fail too, and long turns are cut to what the API accepts.
+ */
+export function chatHistory(messages: Message[]) {
+  const turns: { role: 'user' | 'assistant'; content: string }[] = [];
+  for (const message of messages) {
+    if (message.role !== 'user') continue;
+    const answer = answerTo(messages, message.id);
+    if (!answer || answer.error || !message.content.trim() || !answer.content.trim()) continue;
+    turns.push({ role: 'user', content: message.content.slice(0, MAX_PROMPT_CHARS) },
+      { role: 'assistant', content: answer.content.slice(0, MAX_PROMPT_CHARS) });
+  }
+  return turns.slice(-10);
+}
+
 export function buildQuery(session: Session, settings: AppSettings, prompt: string) {
   const indexed = session.documents.filter(d => d.status === 'indexed');
   const selected = indexed.filter(d => d.enabled !== false).map(d => d.name);
@@ -265,8 +298,7 @@ export function buildQuery(session: Session, settings: AppSettings, prompt: stri
     prompt: prompt.trim(), mode: session.ragMode, session_id: session.id,
     top_k: settings.dynamicDepth ? null : settings.topK,
     file_filter: session.ragMode === 'llm-only' || !indexed.length ? null : selected,
-    chat_history: session.messages.filter(m => !m.error && m.role !== 'system').slice(-10)
-      .map(({ role, content }) => ({ role, content })),
+    chat_history: chatHistory(session.messages),
   };
 }
 
@@ -308,6 +340,13 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
   return merged;
 }
 
+/** Add an answer right after its question (the end, for a new question). */
+export function placeAnswer(messages: Message[], answer: Message): Message[] {
+  const userIndex = answer.parentUserId ? messages.findIndex(message => message.id === answer.parentUserId) : -1;
+  if (userIndex < 0) return [...messages, answer];
+  return [...messages.slice(0, userIndex + 1), answer, ...messages.slice(userIndex + 1)];
+}
+
 export function appendResponseVariant(message: Message, variant: ResponseVariant): Message {
   const variants = message.variants?.length ? [...message.variants, variant] : [
     { id: `${message.id}-original`, content: message.content, citations: message.citations, sources: message.sources, grounding: message.grounding, error: message.error, timestamp: message.timestamp, prompt: variant.prompt },
@@ -325,6 +364,14 @@ export function prepareTurnRegeneration(messages: Message[], userId: string, ass
   const userIndex = messages.findIndex(message => message.id === userId);
   if (userIndex < 0) return { history: messages, visible: messages };
   const assistantIndex = assistantId ? messages.findIndex(message => message.id === assistantId) : -1;
+  if (assistantIndex <= userIndex) {
+    // An unanswered question: later turns stay, and so does their place. Notes
+    // right after it ("stopped") go, since the new answer takes their place.
+    let end = userIndex + 1;
+    while (messages[end]?.role === 'system') end += 1;
+    const question = edit ? { ...messages[userIndex], content: prompt.trim(), timestamp: Date.now() } : messages[userIndex];
+    return { history: messages.slice(0, userIndex), visible: [...messages.slice(0, userIndex), question, ...messages.slice(end)] };
+  }
   const lastKept = assistantIndex > userIndex ? assistantIndex : userIndex;
   const currentPrompt = messages[userIndex].content;
   const assistant = assistantIndex > userIndex
