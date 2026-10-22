@@ -1,6 +1,6 @@
 # Direct dependency constraints tested on Python 3.12 / Windows in October 2026.
 # Install with: pip install -r requirements.txt -c requirements.lock
-fastapi==0.143.0
+fastapi==0.147.0
 uvicorn==0.54.0
 python-dotenv==1.2.4
 python-multipart==0.0.32
