@@ -449,10 +449,10 @@ Each item names where the problem is and what it breaks.
 - [ ] Publish 1.1.1. The only supported version (1.1.x) still ships Pillow
   12.3.0 with a critical advisory; the fix (Pillow 13.0.0) and the PowerPoint
   slide-number fix are only in `develop`.
-- [ ] Configure logging from `LOG_LEVEL` in `backend/main.py`. Nothing sets up
+- [x] Configure logging from `LOG_LEVEL` in `backend/main.py`. Nothing sets up
   a handler, so the request log in `api/middleware.py` and the operation logs
   in the use cases are dropped, and `LOG_LEVEL`/`ENVIRONMENT` have no effect.
-- [ ] Add `OLLAMA_DOCKER_BASE_URL=http://ollama:11434` to the README sections
+- [x] Add `OLLAMA_DOCKER_BASE_URL=http://ollama:11434` to the README sections
   that run Ollama inside Docker (CPU, NVIDIA, AMD; both languages). Without it
   the app keeps calling the host Ollama from `.env.example`.
 
@@ -558,18 +558,18 @@ Each item names where the problem is and what it breaks.
   delete, and model-settings paths (`i18n/errors.ts`).
 
 ### Task 16.4: Configuration and documentation
-- [ ] Use one default model everywhere: `gemma3:12b` in `compose.yaml`,
+- [x] Use one default model everywhere: `gemma3:12b` in `compose.yaml`,
   `factory.py`, and `core/state.ts`, but `qwen2.5:7b` in `.env.example` and the
   README. The quick start also pulls a 7B model while recommending 3-4B.
-- [ ] After the startup retries give up, readiness stays `failed` and the
+- [x] After the startup retries give up, readiness stays `failed` and the
   container is never restarted (`main.py`, `Dockerfile` healthcheck). Exit
   non-zero or keep retrying with a capped backoff.
-- [ ] README settings table: API requests are retried up to
+- [x] README settings table: API requests are retried up to
   `MODEL_API_MAX_RETRIES` (default 4), not once, and the ⚙ marker misses most
   runtime settings. Generate the table from `RUNTIME_SETTINGS`.
-- [ ] CHANGELOG 1.0.0 does not record that the Strict threshold moved from 0.80
+- [x] CHANGELOG 1.0.0 does not record that the Strict threshold moved from 0.80
   to 0.75.
-- [ ] `CONTRIBUTING.md` points to `.agents/AGENTS.md`, which is not in the
+- [x] `CONTRIBUTING.md` points to `.agents/AGENTS.md`, which is not in the
   repository; `EMBED_QUERY_PREFIX` and `EMBED_PASSAGE_PREFIX` (DATA.md) are not
   passed through `compose.yaml`.
 - [ ] Bring the ADRs in line with the project: `.context/03` (Poetry,
