@@ -266,12 +266,15 @@ def test_embedding_batch_size_follows_the_setting(
 def test_cpu_threads_are_applied_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.infrastructure.llm import factory
 
+    monkeypatch.delenv("PARSRAG_CPU_THREADS", raising=False)
     with patch("backend.infrastructure.llm.factory.torch.set_num_threads") as threads:
-        factory.apply_runtime_settings({"PARSRAG_CPU_THREADS"})
-        threads.assert_not_called()
         monkeypatch.setenv("PARSRAG_CPU_THREADS", "6")
         factory.apply_runtime_settings({"PARSRAG_CPU_THREADS"})
         threads.assert_called_once_with(6)
+        # Resetting to automatic restores the startup count, not the override.
+        monkeypatch.delenv("PARSRAG_CPU_THREADS")
+        factory.apply_runtime_settings({"PARSRAG_CPU_THREADS"})
+        threads.assert_called_with(factory._DEFAULT_CPU_THREADS)
 
 
 def test_automatic_settings_report_the_value_in_use(tmp_path: Path) -> None:
