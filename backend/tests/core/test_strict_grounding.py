@@ -11,9 +11,9 @@ from backend.core.strategies.prompt_rules import FORMATTING_RULES
 from backend.core.strategies.strict_rag import (
     DEFAULT_STRICT_THRESHOLD,
     STRICT_RAG_PROMPT_TEMPLATE,
+    STRICT_REFUSAL_FA,
     StrictRAGStrategy,
     _has_lexical_evidence,
-    STRICT_REFUSAL_FA,
     configured_threshold,
     is_document_overview_question,
 )
