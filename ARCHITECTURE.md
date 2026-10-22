@@ -117,7 +117,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | Domain | `core/domain` | `ExtractedNode`, `ParsedSection`, `QueryMode`, `ModelProvider`, session ID rules, `UploadPolicy`, error hierarchy | anything outside stdlib and Pydantic |
 | DTOs | `core/dto/input`, `core/dto/output` | Validated requests/commands and responses | adapters, frameworks |
-| Ports | `core/port` | `DocumentRepository`, `QueryStrategy`, `DocumentParser`, `TextChunker`, `QuestionCondenser`, `ModelGateway`, `ProgressTracker` | adapters |
+| Ports | `core/port` | `DocumentRepository`, `QueryStrategy`, `DocumentParser`, `TextChunker`, `QuestionCondenser`, `ModelGateway`, `ProgressTracker`, `Reranker`, `RuntimeSettingsStore` | adapters |
 | Use cases | `core/use_case/<module>` | One class per operation with an `execute` method | FastAPI, Starlette, Qdrant, httpx, PyMuPDF |
 | Strategies and services | `core/strategies`, `core/service` | Answer pipelines, question condensation, retrieval depth | adapters |
 | Runtime | `core/runtime` | `WorkLimiter`, `SessionLocks`, readiness, progress store, correlation ID | frameworks |
@@ -132,8 +132,9 @@ flowchart TB
    provider (for example `get_document_repository`) instead of patching code.
 2. **Ports.** Use cases and strategies receive collaborators typed as ports.
    `QdrantRepository`, `LocalDocumentParser`, `SentenceWindowChunker`,
-   `CondenseQuestionPipeline`, `LlamaIndexModelGateway`, and
-   `InMemoryQueryProgress` satisfy them structurally; mypy checks conformance at
+   `CondenseQuestionPipeline`, `LlamaIndexModelGateway`, `FlashRankReranker`,
+   the runtime settings store, and `InMemoryQueryProgress` satisfy them
+   structurally; mypy checks conformance at
    the wiring site.
 3. **Errors.** Use cases raise `ApplicationError` subclasses. `api/errors.py`
    maps them to one status each: invalid input 400, not found 404, conflict
@@ -152,7 +153,7 @@ Detailed sequence diagrams for every flow are in the
 | Flow | Entry | Use case | Ports used |
 | --- | --- | --- | --- |
 | Upload documents | `POST /ingest` | `IngestDocuments` | `DocumentParser`, `TextChunker`, `DocumentRepository` |
-| Ask a question (streamed) | `POST /query/stream` (SSE) | `AnswerQuery.stream` | `QuestionCondenser`, `QueryStrategy`, `DocumentRepository`, `ProgressTracker` |
+| Ask a question (streamed) | `POST /query/stream` (SSE) | `AnswerQuery.stream` | `QuestionCondenser`, `QueryStrategy` (Hybrid uses `Reranker`), `DocumentRepository`, `ProgressTracker` |
 | Ask a question | `POST /query` | `AnswerQuery` | `QuestionCondenser`, `QueryStrategy`, `DocumentRepository`, `ProgressTracker` |
 | Follow progress | `GET /queries/{id}/progress` | `ReadQueryProgress` | `ProgressTracker` |
 | Reuse a document | `POST /sessions/{id}/files/reuse` | `ReuseDocument` | `DocumentRepository` |
@@ -161,6 +162,7 @@ Detailed sequence diagrams for every flow are in the
 | Change runtime settings | `GET`/`PUT`/`DELETE /settings/runtime` | `ReadRuntimeSettings`, `UpdateRuntimeSettings` | `RuntimeSettingsStore` |
 | Show a cited image | `GET /sessions/{id}/images/{n}` | `ReadSourceImage` | `DocumentRepository` |
 | Title a conversation | `POST /conversations/title` | `GenerateConversationTitle` | `ModelGateway` |
+| Suggest questions | `POST /sessions/{id}/suggestions` | `SuggestQuestions` | `DocumentRepository`, `ModelGateway` |
 | Health and capabilities | `/health/*`, `/capabilities` | `CheckReadiness`, `DescribeCapabilities` | `DocumentRepository` |
 
 ## 6. Cross-cutting concerns
@@ -185,7 +187,7 @@ reads answers from `/query/stream` as they are generated (stages, numbered
 sources, text, then the final result with cited source numbers), and registers a service
 worker that caches only the application shell — API traffic always goes to the
 network. See [ADR 06](.context/06_Conversation_Workspace.md),
-[ADR 07 (PWA)](.context/07_PWA_Offline_Shell.md), and
+[ADR 09 (PWA)](.context/09_PWA_Offline_Shell.md), and
 [frontend/BRAND.md](frontend/BRAND.md).
 
 ## 8. Extending ParsRAG

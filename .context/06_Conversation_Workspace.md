@@ -4,8 +4,8 @@ Date: 2026-09-16
 
 ## Context
 
-The repository replaced its Chainlit interface with React 18, TypeScript and
-Vite in commit `7c3662a`. FastAPI serves `frontend/dist`; the obsolete Python
+The repository replaced its Chainlit interface with React (18 then, 19 since),
+TypeScript and Vite in commit `7c3662a`. FastAPI serves `frontend/dist`; the obsolete Python
 frontend was removed after the migration. This ADR records that boundary and the
 refinement of the React interface. Backend strategies, repositories, query
 condensation and the three query modes remain the source of truth.

@@ -104,6 +104,19 @@ and this project uses Semantic Versioning.
   `request_failed` have messages, and reusing or deleting a document and the
   model settings show the server's reason.
 
+### Documentation
+
+- The ADRs describe the project as it is: pip with `requirements.lock` instead
+  of Poetry, `compose.yaml`, the e2e suite instead of Testcontainers, opt-in
+  live evaluation, JSON logs, the GitFlow-style branches without `staging`,
+  the actual CI jobs, and releases that build but do not publish images. The
+  PWA ADR is now number 09 (two were numbered 07), and `Reranker`,
+  `RuntimeSettingsStore` and `SuggestQuestions` are in the architecture
+  documents.
+- The live PDF evaluation indexes and asks through the same use cases as the
+  API, so it includes Persian normalization, page bridges, duplicate checks
+  and the answer language.
+
 ### Security
 
 - Model API requests re-check the host's addresses each time and do not

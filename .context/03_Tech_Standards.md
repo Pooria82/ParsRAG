@@ -29,8 +29,8 @@ Given the non-deterministic nature of LLMs, testing a RAG pipeline requires spec
 - **Coverage Expectation:** Minimum **85% global test coverage**, with 100% coverage on core domain models, routers, and strategy classes.
 - **RAG/LLM Testing Approach:**
   - **Unit Tests:** Mock the LLM and Qdrant responses using `unittest.mock`. Test the deterministic parts: routing logic, chunking algorithms, and prompt formatting. Ensure assertions validate the strict Pydantic `QueryResponse` structures, not just raw strings.
-  - **Integration Tests:** Use `Testcontainers` (or local docker-compose spin-ups) to test the actual FastAPI -> Qdrant connection without an LLM.
-  - **LLM Evaluation:** For end-to-end RAG testing, use an evaluation framework like `Ragas` or `TruLens` in a separate staging CI pipeline to measure *Faithfulness* (no hallucination) and *Answer Relevance*.
+  - **Integration Tests:** `backend/tests/e2e` (enabled with `PARSRAG_E2E=1`) runs real parsing, multilingual-e5 embeddings, reranking, Qdrant, and SSE streaming, with a deterministic model in place of the LLM. CI starts Qdrant as a GitHub Actions service container; Testcontainers is not used.
+  - **LLM Evaluation:** Live evaluation is opt-in and outside CI. `backend/tests/evaluation/run_pdf_evaluation.py` indexes private PDFs and asks questions through the same `IngestDocuments` and `AnswerQuery` use cases the API runs, then scores fact coverage, cited file and page, and refusals with `scoring.py`. Each run names the model, dataset snapshot, configuration, and date. Ragas-style faithfulness metrics are a later plan (roadmap Phase 19).
 
 ## 5. Project Directory Structure
 Based on our microservices architecture, the repository follows a strict Domain-Driven Design (DDD) layout:
@@ -69,8 +69,9 @@ ParsRAG/
 │   ├── src/                   # Components, state, API client, and styles
 │   ├── public/                # Local fonts and brand assets
 │   └── tests/                 # Deterministic frontend tests
-├── docker-compose.yml         # Defines backend, frontend, qdrant, and ollama
-├── pyproject.toml             # Poetry/Ruff/MyPy configurations
+├── compose.yaml               # app (FastAPI + built frontend), qdrant, optional ollama
+├── requirements*.txt, .lock   # pip dependencies and the tested pins (no Poetry)
+├── pyproject.toml             # Project metadata; Ruff, MyPy, pytest, coverage settings
 └── README.md
 ```
 
@@ -79,7 +80,7 @@ Errors must never leak stack traces to the user and must not crash the applicati
 - **Global Exception Handling:** FastAPI will utilize a centralized exception handler to catch unhandled exceptions, returning a clean, standard HTTP 500 JSON response.
 - **Custom Domain Exceptions:** Create specific exceptions inherited from a base `ParsRAGError` (e.g., `VectorDBConnectionError`, `LLMInferenceTimeoutError`, `EmptyDocumentError`).
 - **Logging:**
-  - Use the built-in Python `logging` module configured with a JSON formatter for production (for easy ingestion into ELK/Datadog) and colored console output for development.
+  - Use the built-in Python `logging` module. `backend/infrastructure/log_config.py` writes the `backend` and `parsrag` loggers to stdout as one JSON object per line (with the correlation ID), or as plain text when `ENVIRONMENT=development`; `LOG_LEVEL` sets the level.
   - **Traceability:** Every API request must generate a unique `correlation_id` passed through the entire LlamaIndex pipeline and logged alongside every INFO/ERROR message.
 
 ## 7. Security Practices

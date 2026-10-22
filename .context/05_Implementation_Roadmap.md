@@ -512,7 +512,7 @@ Each item names where the problem is and what it breaks.
   minutes; set a final stage in `finally`.
 - [x] Unify the Strict refusal text: `STRICT_REFUSAL_FA/EN` are unused and the
   gate and the prompt use different wording (`core/strategies/strict_rag.py`).
-- [ ] The evaluation runner (`backend/tests/evaluation/run_pdf_evaluation.py`)
+- [x] The evaluation runner (`backend/tests/evaluation/run_pdf_evaluation.py`)
   skips Persian normalization, page bridges, and duplicate checks; run it
   through the real ingestion use case.
 
@@ -572,7 +572,7 @@ Each item names where the problem is and what it breaks.
 - [x] `CONTRIBUTING.md` points to `.agents/AGENTS.md`, which is not in the
   repository; `EMBED_QUERY_PREFIX` and `EMBED_PASSAGE_PREFIX` (DATA.md) are not
   passed through `compose.yaml`.
-- [ ] Bring the ADRs in line with the project: `.context/03` (Poetry,
+- [x] Bring the ADRs in line with the project: `.context/03` (Poetry,
   `docker-compose.yml`, Testcontainers, Ragas, JSON logs), `.context/04` (GitHub
   Flow, `staging`, image publishing), the two files numbered 07, React 18 in ADR
   06, and the missing `Reranker`, `RuntimeSettingsStore`, and
