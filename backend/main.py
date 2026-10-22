@@ -127,7 +127,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="ParsRAG API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="ParsRAG API", version="1.1.1", lifespan=lifespan)
 
 trusted_origins = configured_browser_origins()
 app.add_middleware(
