@@ -1,5 +1,6 @@
 """BM25 keyword matches fused with vector search."""
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -155,7 +156,7 @@ def test_a_search_during_a_delete_does_not_keep_the_deleted_document(
     with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
         settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
 
-        def delete_after_a_concurrent_search(*args: object, **kwargs: object) -> object:
+        def delete_after_a_concurrent_search(*args: Any, **kwargs: Any) -> Any:
             repository.similarity_search("Katalon", top_k=2, session_id="s")
             return original_delete(*args, **kwargs)
 

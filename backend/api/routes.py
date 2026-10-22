@@ -199,9 +199,14 @@ def stream_query(
     _ready: None = Depends(require_runtime_ready),
     use_case: AnswerQuery = Depends(get_answer_query),  # noqa: B008
 ) -> StreamingResponse:
-    """Stream stages, numbered sources, answer text, and the final result (SSE)."""
+    """Stream stages, numbered sources, answer text, and the final result (SSE).
+
+    A full query capacity or an invalid document mention is answered with 429
+    or 400 before the stream starts.
+    """
+    events = use_case.stream(request)
     return StreamingResponse(
-        event_stream(use_case.stream(request)),
+        event_stream(events),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

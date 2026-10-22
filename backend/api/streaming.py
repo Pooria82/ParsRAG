@@ -46,9 +46,17 @@ def error_event(exc: Exception) -> str:
 
 
 def event_stream(events: Iterator[QueryEvent]) -> Iterator[str]:
-    """Frame use-case events as SSE and end with an error event on failure."""
+    """Frame use-case events as SSE and end with an error event on failure.
+
+    Closing this generator (client disconnect) closes ``events`` too, which
+    stops generation and frees the query slot.
+    """
     try:
         for event in events:
             yield sse(event.kind, event.data)
     except Exception as exc:  # noqa: BLE001 - reported to the client as an event.
         yield error_event(exc)
+    finally:
+        close = getattr(events, "close", None)
+        if close is not None:
+            close()

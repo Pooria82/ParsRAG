@@ -192,3 +192,75 @@ def test_strategies_stream_model_deltas() -> None:
     assert list(strategy.stream(PreparedAnswer(immediate="x"))) == []
     with pytest.raises(NotImplementedError):
         strategy.prepare("q", [])
+
+
+def test_route_answers_429_when_every_query_slot_is_busy() -> None:
+    """A full capacity is an HTTP error, not a 200 stream with an error event."""
+    limiter = WorkLimiter(1, "query")
+    app.dependency_overrides[get_answer_query] = lambda: _use_case(
+        StreamingStrategy(["a"]), limiter
+    )
+    try:
+        with limiter.slot():
+            response = TestClient(app).post(
+                "/query/stream",
+                json={"prompt": "سلام", "mode": "strict", "session_id": "session-1"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "busy"
+
+
+def test_route_answers_400_for_an_unknown_document_mention() -> None:
+    limiter = WorkLimiter(1, "query")
+    app.dependency_overrides[get_answer_query] = lambda: _use_case(
+        StreamingStrategy(["a"]), limiter
+    )
+    try:
+        response = TestClient(app).post(
+            "/query/stream",
+            json={
+                "prompt": "@{missing.pdf} چه می‌گوید؟",
+                "mode": "strict",
+                "session_id": "session-1",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    with limiter.slot():
+        pass  # The slot reserved for the rejected request was released.
+
+
+def test_a_stream_that_never_starts_frees_its_slot() -> None:
+    limiter = WorkLimiter(1, "query")
+    stream = _use_case(StreamingStrategy(["a"]), limiter).stream(_request())
+    stream.close()
+
+    with limiter.slot():
+        pass
+
+
+def test_a_disconnect_marks_the_query_failed_instead_of_generating() -> None:
+    progress = InMemoryQueryProgress()
+    use_case = AnswerQuery(
+        repository=InMemoryRepository(),
+        condenser_factory=Condenser,
+        strategy_resolver=lambda mode: StreamingStrategy(["a", "b"]),  # type: ignore[arg-type,return-value]
+        progress=progress,
+        limiter=WorkLimiter(1, "query"),
+    )
+    request = _request().model_copy(
+        update={"request_id": "4b3c1d1e-8a2f-4f6e-9c1b-2d3e4f5a6b7c"}
+    )
+    stream = use_case.stream(request)
+    while next(stream).kind != "token":
+        pass
+    assert progress.get_stage(str(request.request_id)) == "generating"
+
+    stream.close()
+
+    assert progress.get_stage(str(request.request_id)) == "failed"
