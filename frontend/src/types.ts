@@ -139,7 +139,6 @@ export interface AppSettings {
   theme: Theme;
   palette: Palette;
   defaultMode: RAGMode;
-  strictThreshold: number;
   dynamicDepth: boolean;
   topK: number;
   selectedModel: string;

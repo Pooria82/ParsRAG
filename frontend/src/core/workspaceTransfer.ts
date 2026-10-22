@@ -1,4 +1,4 @@
-import type { AppSettings, Citation, Language, Session } from '../types';
+import type { AppSettings, Citation, Language, Session, SessionDocument } from '../types';
 import { isRecord, parseSessions, parseSettings } from './state';
 
 /** Versioned envelope of a workspace backup file. */
@@ -31,9 +31,15 @@ export function parseBackup(text: string, origin?: string): { sessions: Session[
   return { sessions, settings };
 }
 
+/** Documents named in a backup are not on this server until it lists them. */
+function notOnServer(documents: SessionDocument[]): SessionDocument[] {
+  return documents.map(doc => doc.status === 'indexed' ? { ...doc, status: 'error', errorMessage: 'not_on_server' } : doc);
+}
+
 /**
  * Add imported conversations; a conversation already present is replaced only
  * when the imported copy is newer, and keeps this machine's document list.
+ * Documents of a new conversation show as missing until the server lists them.
  */
 export function mergeSessions(current: Session[], incoming: Session[]) {
   const byId = new Map(current.map(session => [session.id, session]));
@@ -41,7 +47,7 @@ export function mergeSessions(current: Session[], incoming: Session[]) {
   let updated = 0;
   for (const session of incoming) {
     const existing = byId.get(session.id);
-    if (!existing) { byId.set(session.id, session); added += 1; }
+    if (!existing) { byId.set(session.id, { ...session, documents: notOnServer(session.documents) }); added += 1; }
     else if (session.updatedAt > existing.updatedAt) {
       byId.set(session.id, { ...session, documents: existing.documents });
       updated += 1;

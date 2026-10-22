@@ -16,6 +16,13 @@ and this project uses Semantic Versioning.
 - Text files are split at Markdown headings or about 300 words, so sources
   name a section instead of the whole file.
 - Uploaded images keep a preview shown next to their source.
+- Streamed answers send a `ping` event every 15 seconds while the server
+  works, so the browser waits as long as the model needs (up to the server's
+  own timeouts) and gives up only on a connection that went quiet.
+- An unanswered question (stopped before any text, or interrupted) has a
+  Try again button.
+- Open tabs of the workspace share their changes instead of overwriting each
+  other's conversations.
 
 ### Improved
 
@@ -64,6 +71,38 @@ and this project uses Semantic Versioning.
   embedding model is ready, like questions and uploads.
 - Runtime settings are validated, saved, and applied as one step; a failed
   save changes nothing.
+- The message box accepts 12,000 characters, the API's limit, and a question
+  that is too long says so. A failed or unanswered turn is no longer sent as
+  history, and long turns are shortened, so one failure does not make the
+  next questions fail too.
+- Answers keep links, `snake_case` names and dollar amounts such as "$5"
+  instead of typesetting them as math.
+- Unsaved server-setting edits survive the 30-second health check and other
+  changes, and clearing a number field no longer switches it to Automatic.
+- Editing a question that never got an answer no longer attaches the new
+  answer to a later question; the answer is placed right after it.
+- A save that fell back to `localStorage` (IndexedDB failed) is loaded on the
+  next start instead of the older IndexedDB copy.
+- Keyboard shortcuts work with the Persian keyboard layout.
+- The unused browser setting `strictThreshold` is removed; the Strict
+  threshold is a server setting.
+- `npm run dev` proxies `/settings`, so server settings load in development.
+- Deleting a conversation or clearing all data works while the service is
+  offline; documents on the server are deleted when it is reachable again.
+  Conversations without documents never need the server.
+- Importing a backup applies its preferences, and its documents show as not
+  on this server until the server lists them.
+- A timeout or dropped connection keeps the text that already streamed, with
+  the reason below it, as Stop does.
+- Upload limits follow a server-settings change at once; answer-version
+  arrows point the reading direction in English; Strict mode with every
+  document unticked asks to select one; starter cards keep the chosen mode;
+  dragging from inside a dialog to outside no longer closes it; the rename
+  field is focused.
+- The backend codes `not_found`, `conflict`, `upstream_unavailable`,
+  `invalid_session`, `no_file`, `untrusted_host`, `service_error` and
+  `request_failed` have messages, and reusing or deleting a document and the
+  model settings show the server's reason.
 
 ### Security
 

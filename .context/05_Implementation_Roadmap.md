@@ -517,42 +517,42 @@ Each item names where the problem is and what it breaks.
   through the real ingestion use case.
 
 ### Task 16.3: Frontend correctness
-- [ ] The composer accepts 30,000 characters but the API accepts 12,000; the
+- [x] The composer accepts 30,000 characters but the API accepts 12,000; the
   error is generic and the long turn is resent as history, so the next
   questions fail too (`components/Composer.tsx`, `core/state.ts`,
   `services/api.ts`). Match the limit, map 422 errors, and mark the failed turn.
-- [ ] The math normalizer breaks links, `snake_case` words, and dollar amounts
+- [x] The math normalizer breaks links, `snake_case` words, and dollar amounts
   (`core/markdown.ts`): `[docs](…/my_page)` loses its link and "$5" loses its
   sign.
-- [ ] Unsaved server-setting edits are reset whenever the app re-renders, for
+- [x] Unsaved server-setting edits are reset whenever the app re-renders, for
   example on the 30-second health check (`components/SettingsModal.tsx`,
   `components/ServerSettings.tsx`).
-- [ ] Editing a prompt that never got an answer attaches the new answer to a
+- [x] Editing a prompt that never got an answer attaches the new answer to a
   later question (`App.tsx`, `core/state.ts`).
-- [ ] A save that fell back to `localStorage` is discarded on the next load in
+- [x] A save that fell back to `localStorage` is discarded on the next load in
   favour of the older IndexedDB copy, and two open tabs overwrite each other
   (`hooks/usePersistentWorkspace.ts`, `core/storage.ts`).
-- [ ] The 330-second stream timeout ignores the server's answer timeout (up to
+- [x] The 330-second stream timeout ignores the server's answer timeout (up to
   600 s); derive it from the runtime settings or send SSE heartbeats.
-- [ ] Keyboard shortcuts compare `event.key`, so they do not fire with the
+- [x] Keyboard shortcuts compare `event.key`, so they do not fire with the
   Persian keyboard layout; compare `event.code` (`core/shortcuts.ts`).
-- [ ] The Strict threshold in browser settings (`strictThreshold`) is never sent
+- [x] The Strict threshold in browser settings (`strictThreshold`) is never sent
   to the server; remove it or send it.
-- [ ] The Vite development proxy has no `/settings` route, so runtime settings
+- [x] The Vite development proxy has no `/settings` route, so runtime settings
   fail under `npm run dev` (`vite.config.ts`).
-- [ ] Deleting a conversation or clearing data fails while the backend is
+- [x] Deleting a conversation or clearing data fails while the backend is
   offline, even for conversations without documents.
-- [ ] Backup import drops the saved preferences and shows imported documents as
+- [x] Backup import drops the saved preferences and shows imported documents as
   indexed although they are not on this server (`core/workspaceTransfer.ts`).
-- [ ] A timeout or dropped connection discards text that already streamed;
+- [x] A timeout or dropped connection discards text that already streamed;
   keep it as Stop does.
-- [ ] Smaller issues: clearing a number field switches it to automatic;
+- [x] Smaller issues: clearing a number field switches it to automatic;
   upload limits are stale after a settings change until the next health check;
   answer-version arrows point the wrong way in English; Strict mode with every
   document unticked returns "no evidence" instead of asking to select one; an
   unanswered question has no retry; starter cards change the chosen mode;
   dragging out of a dialog closes it; the rename field is not focused.
-- [ ] Add interface messages for the backend codes `not_found`, `conflict`,
+- [x] Add interface messages for the backend codes `not_found`, `conflict`,
   `upstream_unavailable`, `invalid_session`, `no_file`, `untrusted_host`,
   `service_error`, and `request_failed`, and pass codes through on the reuse,
   delete, and model-settings paths (`i18n/errors.ts`).

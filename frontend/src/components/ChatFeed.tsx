@@ -7,10 +7,13 @@ import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
 import { SourceList } from './SourceList';
 import { repairModelMarkup } from '../core/markdown';
+import { answerTo } from '../core/state';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
   onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
+  /** Ask a question again that never got an answer (stopped or interrupted). */
+  onRetryQuestion: (messageId: string) => void;
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
   /** Text streamed so far; `messageId` when it replaces an answer being retried. */
@@ -30,9 +33,11 @@ function GroundingBadge({ language, grounding, sources }: { language: Language; 
   </span>;
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft, imageUrl }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onRetryQuestion, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft, imageUrl }: ChatFeedProps) {
   const liveDraft = isGenerating && streamingDraft?.content ? streamingDraft : undefined;
   const t = translations[language];
+  // Previous and next follow the reading direction.
+  const [PreviousIcon, NextIcon] = language === 'fa' ? [ChevronRight, ChevronLeft] : [ChevronLeft, ChevronRight];
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const previousCount = useRef(0);
@@ -81,6 +86,7 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
               <div className="message-actions user-actions" data-tour="prompt-actions">
                 <button onClick={() => void copy(message)} title={t.copyPrompt}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copyPrompt}</button>
                 <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
+                {!isGenerating && !answerTo(messages, message.id) && <button onClick={() => onRetryQuestion(message.id)} disabled={isBusy} title={t.retry}><RotateCcw size={15} />{t.retry}</button>}
               </div>
             </> : <>
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong>
@@ -110,9 +116,9 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                 {!message.error && <button onClick={() => void copy(message)} title={t.copy}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copy}</button>}
                 <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>
                 {message.variants && message.variants.length > 1 && <span className="variant-navigation" aria-label={t.responseVersions}>
-                  <button aria-label={t.previousResponse} disabled={isBusy || (message.activeVariant ?? 0) <= 0} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) - 1)}><ChevronRight size={15} /></button>
+                  <button aria-label={t.previousResponse} disabled={isBusy || (message.activeVariant ?? 0) <= 0} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) - 1)}><PreviousIcon size={15} /></button>
                   <output>{((message.activeVariant ?? 0) + 1).toLocaleString(language)} / {message.variants.length.toLocaleString(language)}</output>
-                  <button aria-label={t.nextResponse} disabled={isBusy || (message.activeVariant ?? 0) >= message.variants.length - 1} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) + 1)}><ChevronLeft size={15} /></button>
+                  <button aria-label={t.nextResponse} disabled={isBusy || (message.activeVariant ?? 0) >= message.variants.length - 1} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) + 1)}><NextIcon size={15} /></button>
                 </span>}
               </div>
             </>}

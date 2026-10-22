@@ -18,6 +18,14 @@ test('shows and accepts Command on Apple platforms and Control on Windows and Li
   assert.equal(resolveShortcut(key('O', { metaKey: true, shiftKey: true }), false, false), null);
 });
 
+test('shortcuts follow the physical key on a Persian layout', () => {
+  assert.equal(resolveShortcut(key('خ', { code: 'KeyO', ctrlKey: true, shiftKey: true }), false, false), 'newChat');
+  assert.equal(resolveShortcut(key('ک', { code: 'Semicolon', ctrlKey: true, shiftKey: true }), false, false), null);
+  assert.equal(resolveShortcut(key('و', { code: 'Comma', ctrlKey: true }), false, false), 'settings');
+  // A Latin layout keeps its own letters: Dvorak's "o" sits on the S key.
+  assert.equal(resolveShortcut(key('O', { code: 'KeyS', ctrlKey: true, shiftKey: true }), false, false), 'newChat');
+});
+
 test('shortcuts avoid unmodified text entry and unsupported modifier combinations', () => {
   assert.equal(resolveShortcut(key('/'), false, false), 'composer');
   assert.equal(resolveShortcut(key('/'), false, true), null);

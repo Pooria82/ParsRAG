@@ -5,7 +5,7 @@ import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
 
 interface WelcomeProps {
-  language: Language; composer: ReactNode; onSelectStarter: (text: string, index: number) => void;
+  language: Language; composer: ReactNode; onSelectStarter: (text: string) => void;
   /** Questions written from the conversation's own documents. */
   documentQuestions?: string[]; documentQuestionsLoading?: boolean;
   onSelectQuestion?: (question: string) => void;
@@ -39,7 +39,7 @@ export function Welcome({ language, composer, onSelectStarter, documentQuestions
         <div className="starter-grid">
           {t.starterPrompts.map((starter, index) => {
             const Icon = icons[index];
-            return <button className="starter-card" key={starter.title} onClick={() => onSelectStarter(starter.prompt, index)}>
+            return <button className="starter-card" key={starter.title} onClick={() => onSelectStarter(starter.prompt)}>
               <div className="starter-top"><span className={'starter-icon tone-' + index}><Icon size={19} /></span><ArrowUpLeft size={15} className="starter-arrow" /></div>
               <strong>{starter.title}</strong><span>{starter.desc}</span>
             </button>;

@@ -1,6 +1,8 @@
 """Streamed answers: event order, refusals, slot release, and errors."""
 
 import json
+import threading
+import time
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock
@@ -10,6 +12,7 @@ from fastapi.testclient import TestClient
 from llama_index.core.llms import ChatMessage
 
 from backend.api.dependencies import get_answer_query
+from backend.api.streaming import event_stream, sse
 from backend.core.domain.documents import ExtractedNode
 from backend.core.domain.enums import QueryMode
 from backend.core.domain.exceptions import CapacityExceededError
@@ -18,7 +21,7 @@ from backend.core.dto.output.query import PreparedAnswer
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.query_progress import InMemoryQueryProgress
 from backend.core.strategies.generation import GeneratingStrategy
-from backend.core.use_case.query.answer_query import AnswerQuery
+from backend.core.use_case.query.answer_query import AnswerQuery, QueryEvent
 from backend.main import app
 from backend.tests.core.use_case.fakes import InMemoryRepository
 
@@ -264,3 +267,34 @@ def test_a_disconnect_marks_the_query_failed_instead_of_generating() -> None:
     stream.close()
 
     assert progress.get_stage(str(request.request_id)) == "failed"
+
+
+def test_a_slow_stream_sends_pings_until_the_answer_starts() -> None:
+    """The browser keeps waiting while the model has not answered yet."""
+
+    def slow() -> Iterator[QueryEvent]:
+        time.sleep(0.2)
+        yield QueryEvent("token", {"text": "late"})
+
+    frames = list(event_stream(slow(), heartbeat_seconds=0.02))
+
+    assert frames[0].startswith("event: ping")
+    assert frames[-1] == sse("token", {"text": "late"})
+
+
+def test_a_closed_event_stream_closes_the_answer_events() -> None:
+    closed = threading.Event()
+
+    def endless() -> Iterator[QueryEvent]:
+        try:
+            while True:
+                time.sleep(0.01)
+                yield QueryEvent("token", {"text": "x"})
+        finally:
+            closed.set()
+
+    frames = event_stream(endless(), heartbeat_seconds=1)
+    assert next(frames).startswith("event: token")
+    frames.close()
+
+    assert closed.wait(2)
