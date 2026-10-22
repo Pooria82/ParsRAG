@@ -446,7 +446,7 @@ Found in a full review of the code, CI, and documentation on 2026-10-21.
 Each item names where the problem is and what it breaks.
 
 ### Task 16.1: Release blockers
-- [ ] Publish 1.1.1. The only supported version (1.1.x) still ships Pillow
+- [x] Publish 1.1.1. The only supported version (1.1.x) still ships Pillow
   12.3.0 with a critical advisory; the fix (Pillow 13.0.0) and the PowerPoint
   slide-number fix are only in `develop`.
 - [x] Configure logging from `LOG_LEVEL` in `backend/main.py`. Nothing sets up
@@ -457,24 +457,24 @@ Each item names where the problem is and what it breaks.
   the app keeps calling the host Ollama from `.env.example`.
 
 ### Task 16.2: Backend correctness
-- [ ] BM25 cache race (`infrastructure/database/qdrant_repo.py`,
+- [x] BM25 cache race (`infrastructure/database/qdrant_repo.py`,
   `keyword_index.py`): writes invalidate the cache before they change Qdrant, so
   a query in that window caches the old corpus, including deleted documents.
   Invalidate again after the write; prune the per-session version map.
-- [ ] `/query/stream` reports a full query slot (`busy`) or an invalid mention
+- [x] `/query/stream` reports a full query slot (`busy`) or an invalid mention
   as HTTP 200 plus an `error` event, because the slot and validation run inside
   the generator (`core/use_case/query/answer_query.py`). Check both before
   returning the `StreamingResponse`.
-- [ ] Strict evidence gate is skipped for any question containing «خلاصه»,
+- [x] Strict evidence gate is skipped for any question containing «خلاصه»,
   «موضوع», «کلیات» or «چه نوع» (`DOCUMENT_OVERVIEW_PATTERN` in
   `core/strategies/strict_rag.py`). Match only whole-document questions.
-- [ ] The stored API key is sent to a new base URL when the user changes the
+- [x] The stored API key is sent to a new base URL when the user changes the
   host without entering a key (`infrastructure/llm/factory.py`). Reuse it only
   for the same scheme, host, and port.
-- [ ] Session routes (files, images, reuse, delete) are not gated on readiness
+- [x] Session routes (files, images, reuse, delete) are not gated on readiness
   and can build the repository before the embedding model is set, which probes
   the wrong vector size (`api/dependencies.py`, `api/routes.py`).
-- [ ] Hybrid context trimming ranks reranker scores and cosine scores
+- [x] Hybrid context trimming ranks reranker scores and cosine scores
   together, so a top reranked chunk can be dropped for a weaker dense anchor
   (`core/strategies/hybrid_rag.py`, `core/service/context_budget.py`).
 - [ ] PowerPoint: a linked (not embedded) picture fails the whole deck, and
@@ -486,31 +486,31 @@ Each item names where the problem is and what it breaks.
   ingestion slot for a long time (`infrastructure/parsers/ocr.py`).
 - [ ] Catch `Image.DecompressionBombError`; an image that declares huge
   dimensions returns 500 instead of a notice.
-- [ ] Citation parsing counts math intervals such as `[1, 3]` as citations
+- [x] Citation parsing counts math intervals such as `[1, 3]` as citations
   (`core/service/citations.py`); skip math and code spans.
-- [ ] Runtime settings: the file, batch, and request-size check runs outside
+- [x] Runtime settings: the file, batch, and request-size check runs outside
   the store lock, `os.environ` changes before the file is saved, and model
   rebuilds run outside the lock (`core/use_case/system/runtime_settings.py`,
   `infrastructure/runtime_settings.py`). Apply, validate, and save atomically.
-- [ ] Resetting `PARSRAG_CPU_THREADS` to automatic leaves the old thread count
+- [x] Resetting `PARSRAG_CPU_THREADS` to automatic leaves the old thread count
   in PyTorch while Settings shows the default (`infrastructure/llm/factory.py`).
-- [ ] An invalid `STRICT_RAG_THRESHOLD` in `.env` makes every Strict query fail
+- [x] An invalid `STRICT_RAG_THRESHOLD` in `.env` makes every Strict query fail
   while Settings shows 0.75; parse it with a bounded helper.
-- [ ] The reranker download is retried on every query after a failure and has
+- [x] The reranker download is retried on every query after a failure and has
   no network timeout (`infrastructure/llm/reranker.py`).
-- [ ] Retries stack: the OpenAI SDK retries inside ParsRAG's own status retries
+- [x] Retries stack: the OpenAI SDK retries inside ParsRAG's own status retries
   (`max_retries=1` plus `MODEL_API_MAX_RETRIES`). Let one layer retry.
-- [ ] The model endpoint is validated once; later DNS changes and HTTP
+- [x] The model endpoint is validated once; later DNS changes and HTTP
   redirects are not checked (`infrastructure/llm/endpoint_policy.py`). Disable
   redirects and check the address at connect time.
 - [ ] HTML table cells are joined without a separator (`<td>Name</td><td>Ali`
   becomes `NameAli`), and a UTF-8 file with one bad byte is decoded as cp1256
   garbage (`infrastructure/parsers/document_parser.py`).
-- [ ] `max_tokens` is ignored for Ollama titles and suggestions; pass
+- [x] `max_tokens` is ignored for Ollama titles and suggestions; pass
   `num_predict` instead.
-- [ ] A disconnected stream leaves the progress stage at "generating" for five
+- [x] A disconnected stream leaves the progress stage at "generating" for five
   minutes; set a final stage in `finally`.
-- [ ] Unify the Strict refusal text: `STRICT_REFUSAL_FA/EN` are unused and the
+- [x] Unify the Strict refusal text: `STRICT_REFUSAL_FA/EN` are unused and the
   gate and the prompt use different wording (`core/strategies/strict_rag.py`).
 - [ ] The evaluation runner (`backend/tests/evaluation/run_pdf_evaluation.py`)
   skips Persian normalization, page bridges, and duplicate checks; run it
