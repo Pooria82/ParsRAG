@@ -477,14 +477,14 @@ Each item names where the problem is and what it breaks.
 - [x] Hybrid context trimming ranks reranker scores and cosine scores
   together, so a top reranked chunk can be dropped for a weaker dense anchor
   (`core/strategies/hybrid_rag.py`, `core/service/context_budget.py`).
-- [ ] PowerPoint: a linked (not embedded) picture fails the whole deck, and
+- [x] PowerPoint: a linked (not embedded) picture fails the whole deck, and
   text and pictures inside grouped shapes are not indexed
   (`infrastructure/parsers/document_parser.py`).
-- [ ] Word: content inside content controls (`w:sdt`) is not indexed.
-- [ ] OCR has no per-document deadline: one image can run eight Tesseract
+- [x] Word: content inside content controls (`w:sdt`) is not indexed.
+- [x] OCR has no per-document deadline: one image can run eight Tesseract
   passes and scanned PDF pages run one after another, holding the only
   ingestion slot for a long time (`infrastructure/parsers/ocr.py`).
-- [ ] Catch `Image.DecompressionBombError`; an image that declares huge
+- [x] Catch `Image.DecompressionBombError`; an image that declares huge
   dimensions returns 500 instead of a notice.
 - [x] Citation parsing counts math intervals such as `[1, 3]` as citations
   (`core/service/citations.py`); skip math and code spans.
@@ -503,7 +503,7 @@ Each item names where the problem is and what it breaks.
 - [x] The model endpoint is validated once; later DNS changes and HTTP
   redirects are not checked (`infrastructure/llm/endpoint_policy.py`). Disable
   redirects and check the address at connect time.
-- [ ] HTML table cells are joined without a separator (`<td>Name</td><td>Ali`
+- [x] HTML table cells are joined without a separator (`<td>Name</td><td>Ali`
   becomes `NameAli`), and a UTF-8 file with one bad byte is decoded as cp1256
   garbage (`infrastructure/parsers/document_parser.py`).
 - [x] `max_tokens` is ignored for Ollama titles and suggestions; pass
@@ -599,19 +599,19 @@ Each item names where the problem is and what it breaks.
 - [ ] List a session's files with Qdrant facets instead of scrolling every
   chunk, at least twice per question.
 - [ ] Give BM25 an inverted index instead of scanning every chunk per query.
-- [ ] OCR scanned PDF pages in parallel, as Office images already are, and skip
+- [x] OCR scanned PDF pages in parallel, as Office images already are, and skip
   the deskew search when the first reading is confident.
 - [ ] Frontend: memoize messages and markdown rendering, keep the draft out of
   the sessions state, and window long conversations; typing and streaming slow
   down in long chats.
 
 ### Task 17.3: Ingestion
-- [ ] Parse CSV and TSV as tables so they get row records and whole-table
+- [x] Parse CSV and TSV as tables so they get row records and whole-table
   answers.
-- [ ] Split plain-text files into line or heading sections so citations point
+- [x] Split plain-text files into line or heading sections so citations point
   somewhere more precise than "section 1".
-- [ ] Index PowerPoint speaker notes.
-- [ ] Keep an image preview for standalone image uploads, as for Word and
+- [x] Index PowerPoint speaker notes.
+- [x] Keep an image preview for standalone image uploads, as for Word and
   PowerPoint images.
 
 ### Task 17.4: Interface

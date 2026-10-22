@@ -571,6 +571,7 @@ also be changed in **Settings → Documents & speed**.
 | `OCR_MAX_IMAGES` | `200` | Images inside DOCX/PPTX read with OCR; later images are skipped with a notice |
 | `OCR_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb guard per image |
 | `OCR_TIMEOUT_SECONDS` | `45` | Per-image/page OCR timeout |
+| `OCR_DOCUMENT_TIMEOUT_SECONDS` | `900` | Total OCR time for one document; remaining pages and images are skipped with a notice |
 | `SOURCE_IMAGE_PREVIEWS` | `1` | Keep a WebP copy (at most 1280 px) of each image read with OCR, shown next to its source excerpt |
 
 ## Windows, macOS, and Linux

@@ -88,6 +88,10 @@ export const SETTING_TEXT: Record<string, { label: Text; hint: Text }> = {
     label: { fa: 'مهلت خواندن هر تصویر (ثانیه)', en: 'Time per image (seconds)' },
     hint: { fa: 'تصویری که بیشتر طول بکشد کنار گذاشته می‌شود.', en: 'An image that takes longer is skipped.' },
   },
+  OCR_DOCUMENT_TIMEOUT_SECONDS: {
+    label: { fa: 'مهلت کل خواندن یک سند (ثانیه)', en: 'Reading time per document (seconds)' },
+    hint: { fa: 'پس از آن، صفحه‌ها و تصویرهای باقی‌مانده با هشدار کنار گذاشته می‌شوند و بقیهٔ سند ایندکس می‌شود.', en: 'After this, the remaining pages and images are skipped with a notice and the rest is indexed.' },
+  },
   OCR_MIN_IMAGE_PIXELS: {
     label: { fa: 'کوچک‌ترین تصویر خواندنی (پیکسل)', en: 'Smallest image read (pixels)' },
     hint: { fa: 'آیکون‌ها و تصویرهای خیلی کوچک خوانده نمی‌شوند.', en: 'Icons and tiny pictures are skipped.' },

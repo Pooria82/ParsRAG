@@ -87,6 +87,7 @@ RUNTIME_SETTINGS: tuple[SettingSpec, ...] = (
     SettingSpec("OCR_MAX_PAGES", "documents", "int", "30", 1, 200),
     SettingSpec("OCR_MAX_IMAGES", "documents", "int", "200", 1, 1000),
     SettingSpec("OCR_TIMEOUT_SECONDS", "documents", "int", "45", 1, 300),
+    SettingSpec("OCR_DOCUMENT_TIMEOUT_SECONDS", "documents", "int", "900", 30, 7200),
     SettingSpec("OCR_MIN_IMAGE_PIXELS", "documents", "int", "10000", 1, 1_000_000),
     SettingSpec("SOURCE_IMAGE_PREVIEWS", "documents", "bool", "1"),
     # Performance
