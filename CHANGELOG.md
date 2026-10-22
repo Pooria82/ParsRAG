@@ -5,8 +5,35 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `OCR_DOCUMENT_TIMEOUT_SECONDS` (default 900, changeable in Settings) bounds
+  the OCR time of one document. Remaining pages and images are skipped with a
+  notice and the rest is indexed.
+- PowerPoint speaker notes are indexed with their slide.
+- CSV and TSV files are read as tables, with row records and whole-table
+  answers.
+- Text files are split at Markdown headings or about 300 words, so sources
+  name a section instead of the whole file.
+- Uploaded images keep a preview shown next to their source.
+
+### Improved
+
+- Scanned PDF pages are recognized several at a time, like images in Word and
+  PowerPoint, and near-certain OCR readings skip the skew search. On the
+  96-image final report the text is unchanged.
+
 ### Fixed
 
+- Text and pictures inside grouped PowerPoint shapes are indexed, and a
+  linked picture adds a notice instead of rejecting the whole deck.
+- Content inside Word content controls (forms, templates) is indexed; a
+  generated table of contents is skipped.
+- An image that declares more pixels than allowed is reported as an OCR
+  notice instead of a server error.
+- HTML table cells are separated instead of running together.
+- A UTF-8 file with a few stray bytes is read as UTF-8 instead of turning
+  into Windows-1256 mojibake.
 - A question asked while a document was being deleted could keep that
   document in keyword search until the next change.
 - `/query/stream` answers a full query capacity with 429 and an unknown
