@@ -7,6 +7,8 @@ import os
 import socket
 from urllib.parse import urlparse
 
+import httpx
+
 
 def _resolved_addresses(
     hostname: str, port: int | None
@@ -59,6 +61,41 @@ def validate_model_api_url(value: str) -> str:
     ):
         raise ValueError("Public model API endpoints must use HTTPS.")
     return normalized
+
+
+class GuardedTransport(httpx.HTTPTransport):
+    """Check the model host's addresses again on every request.
+
+    ``validate_model_api_url`` runs once, when the connection is saved. A host
+    whose DNS later points at a link-local (cloud metadata), multicast, or
+    reserved address is refused here instead of being contacted.
+    """
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        """Refuse a blocked address, then send the request."""
+        try:
+            addresses = _resolved_addresses(request.url.host, request.url.port)
+        except ValueError as exc:
+            raise httpx.ConnectError(str(exc), request=request) from exc
+        if not addresses or any(
+            _is_forbidden_address(address) for address in addresses
+        ):
+            raise httpx.ConnectError(
+                "The model API host resolves to a blocked network address.",
+                request=request,
+            )
+        return super().handle_request(request)
+
+
+def guarded_http_client(timeout: float) -> httpx.Client:
+    """HTTP client for model APIs: address check per request, no redirects.
+
+    Following a redirect would let the service send the prompt, and the API
+    key, to an address that was never validated.
+    """
+    return httpx.Client(
+        transport=GuardedTransport(), follow_redirects=False, timeout=timeout
+    )
 
 
 def model_api_is_external(value: str) -> bool:

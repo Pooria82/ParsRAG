@@ -23,6 +23,7 @@ from backend.infrastructure.llm.config_store import (
     save_model_configuration,
 )
 from backend.infrastructure.llm.endpoint_policy import (
+    guarded_http_client,
     model_api_is_external,
     require_allowed_ollama_url,
     validate_model_api_url,
@@ -340,6 +341,7 @@ def configure_model(
             # One retry layer: ParsRAG's status retries, not the SDK's as well.
             max_retries=0,
             status_retries=api_max_retries(),
+            http_client=guarded_http_client(llm_request_timeout()),
         )
         next_condense_llm = ReasoningFreeOpenAILike(
             model=model_name,
@@ -350,6 +352,7 @@ def configure_model(
             timeout=condense_request_timeout(),
             max_retries=0,
             status_retries=min(1, api_max_retries()),
+            http_client=guarded_http_client(condense_request_timeout()),
         )
         configuration = configuration.model_copy(
             update={"api_key": api_key, "base_url": base_url}

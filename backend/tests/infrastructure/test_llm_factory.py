@@ -520,3 +520,27 @@ def test_ollama_titles_are_capped_with_num_predict(
     )
     assert seen == [{"num_predict": factory._SHORT_ANSWER_TOKENS}]
     assert "num_predict" not in llm.additional_kwargs
+
+
+@patch("backend.infrastructure.llm.factory.Settings")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_api_models_use_the_guarded_http_client(
+    mock_get: MagicMock, mock_openai: MagicMock, mock_settings: MagicMock
+) -> None:
+    from backend.infrastructure.llm.endpoint_policy import GuardedTransport
+
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="m",
+            base_url="https://127.0.0.1/v1",
+            api_key="k",
+        ),
+        persist=False,
+    )
+
+    for call in mock_openai.call_args_list:
+        client = call.kwargs["http_client"]
+        assert client.follow_redirects is False
+        assert isinstance(client._transport, GuardedTransport)
