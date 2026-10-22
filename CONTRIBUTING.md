@@ -1,6 +1,7 @@
 # Contributing to ParsRAG
 
-Read `.agents/AGENTS.md` and the decisions in `.context/` before changing code.
+Read [ARCHITECTURE.md](ARCHITECTURE.md), [DATA.md](DATA.md), and the decisions in
+`.context/` before changing code.
 Create work from `develop`, keep commits focused, and use Conventional Commits.
 Never commit `.env`, API keys, indexed data, model weights, private documents, or
 artifacts from `scratch/` and `testData/`.
