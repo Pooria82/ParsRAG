@@ -18,10 +18,34 @@ import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
-import { answerGrounding, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, prepareTurnRegeneration, selectConversationBranch, validateUploads } from './core/state';
+import { answerGrounding, answerTo, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, placeAnswer, prepareTurnRegeneration, selectConversationBranch, STORAGE, validateUploads } from './core/state';
+import { flushPendingDeletions, parsePendingDeletions } from './core/storage';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
 import { citedNumbers } from './core/citations';
+
+/**
+ * Longest wait for any stream event. The server sends a ping every 15 seconds
+ * while it works, so this only ends a connection that has really gone quiet.
+ */
+const STREAM_IDLE_MS = 60000;
+
+/** The service could not be reached (as opposed to answering with an error). */
+function unreachable(error: unknown): boolean {
+  return (error instanceof ApiError && error.code === 'network')
+    || (error instanceof DOMException && ['TimeoutError', 'AbortError'].includes(error.name));
+}
+
+function readPendingDeletions(): string[] {
+  try { return parsePendingDeletions(localStorage.getItem(STORAGE.pendingDeletions)); } catch { return []; }
+}
+
+function writePendingDeletions(ids: string[]): void {
+  try {
+    if (ids.length) localStorage.setItem(STORAGE.pendingDeletions, JSON.stringify(ids));
+    else localStorage.removeItem(STORAGE.pendingDeletions);
+  } catch { /* The server copy stays until the conversation is deleted again. */ }
+}
 
 export function App() {
   const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
@@ -130,6 +154,19 @@ export function App() {
   }, [active.id, api, connection, uploadingId, updateSession]);
   useEffect(() => () => { queryRef.current?.controller.abort(); progressRef.current?.abort(); }, []);
 
+  // Delete on the server what was deleted here while it was unreachable.
+  useEffect(() => {
+    if (connection !== 'online') return;
+    const pending = readPendingDeletions();
+    if (!pending.length) return;
+    void flushPendingDeletions(pending, async id => {
+      try { await api.deleteSession(id, AbortSignal.timeout(15000)); } catch (error) {
+        // A refusal (for example 404: already gone) will not change by retrying.
+        if (!(error instanceof ApiError && error.status !== undefined && error.status < 500)) throw error;
+      }
+    }).then(remaining => writePendingDeletions([...remaining, ...readPendingDeletions().filter(id => !pending.includes(id))]));
+  }, [api, connection]);
+
   // Suggest questions from the documents of an empty conversation, once per document set.
   const activeSuggestionKey = suggestionKey(active, settings.language);
   useEffect(() => {
@@ -164,7 +201,7 @@ export function App() {
     setQueryProgress(undefined);
   };
 
-  /** Store an answer as a new message or as another version of the retried one. */
+  /** Store an answer as a new message (after its question) or as another version of the retried one. */
   const commitAnswer = (sessionId: string, variant: ResponseVariant, parentUserId: string, assistantId?: string) => {
     const messageId = assistantId ?? crypto.randomUUID();
     updateSession(sessionId, s => {
@@ -172,14 +209,24 @@ export function App() {
         return { ...s, messages: s.messages.map(message => message.id === assistantId ? appendResponseVariant(message, variant) : message), updatedAt: Date.now() };
       }
       const assistant: Message = { id: messageId, role: 'assistant', parentUserId, content: variant.content, citations: variant.citations, sources: variant.sources, grounding: variant.grounding, error: variant.error, timestamp: variant.timestamp, variants: [variant], activeVariant: 0 };
-      return { ...s, messages: [...s.messages, assistant], updatedAt: Date.now() };
+      return { ...s, messages: placeAnswer(s.messages, assistant), updatedAt: Date.now() };
     });
   };
+
+  /** Keep the text that already streamed as the answer, as Stop does. */
+  const commitPartial = (sessionId: string, partial: string, sourceNodes: unknown[], prompt: string, parentUserId: string, assistantId?: string) => {
+    const data = parseAnswer({ answer: partial, source_nodes: sourceNodes, cited: citedNumbers(partial, sourceNodes.length) });
+    commitAnswer(sessionId, { id: crypto.randomUUID(), content: partial, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, parentUserId, assistantId);
+  };
+  const addNote = (sessionId: string, content: string) => updateSession(sessionId, s => ({ ...s, messages: [...s.messages, { id: crypto.randomUUID(), role: 'system', content, timestamp: Date.now() }] }));
 
   const send = async (session: Session, prompt: string, target?: { userId: string; assistantId?: string; edit?: boolean }) => {
     if (!prompt.trim() || queryRef.current || uploadRef.current) return;
     if (session.ragMode === 'strict' && !session.documents.some(d => d.status === 'indexed')) {
       setNotice(t.uploadFirst); setDocumentsOpen(true); return;
+    }
+    if (session.ragMode === 'strict' && !session.documents.some(d => d.status === 'indexed' && d.enabled !== false)) {
+      setNotice(t.selectDocumentFirst); setDocumentsOpen(true); return;
     }
     const prepared = target ? prepareTurnRegeneration(session.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)) : null;
     const firstTurn = !target && session.messages.length === 0;
@@ -197,10 +244,9 @@ export function App() {
       title: s.messages.length ? s.title : fallbackTitle,
       updatedAt: Date.now(),
     }));
-    // The stream must stay alive: no event for longer than the server's worst
-    // case (rewrite + time to first token with one retry) aborts it.
+    // Any event, pings included, shows the connection is alive.
     let idle: ReturnType<typeof setTimeout> | undefined;
-    const touch = () => { clearTimeout(idle); idle = setTimeout(() => controller.abort('timeout'), 330000); };
+    const touch = () => { clearTimeout(idle); idle = setTimeout(() => controller.abort('timeout'), STREAM_IDLE_MS); };
     touch();
     let streamed = '';
     let streamedSources: unknown[] = [];
@@ -230,21 +276,24 @@ export function App() {
       }
     } catch (error: unknown) {
       const reason = controller.signal.reason;
+      const partial = streamed.trim();
       if (controller.signal.aborted && reason === 'user') {
         // Keep what was already written; the reader asked to stop, not to discard.
-        const partial = streamed.trim();
-        if (partial) {
-          const data = parseAnswer({ answer: partial, source_nodes: streamedSources, cited: citedNumbers(partial, streamedSources.length) });
-          commitAnswer(session.id, { id: crypto.randomUUID(), content: partial, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
-        }
-        updateSession(session.id, s => ({ ...s, messages: [...s.messages, { id: crypto.randomUUID(), role: 'system', content: t.stopped, timestamp: Date.now() }] }));
+        if (partial) commitPartial(session.id, partial, streamedSources, prompt, userMessage.id, target?.assistantId);
+        addNote(session.id, t.stopped);
         return;
       }
       if (controller.signal.aborted && reason !== 'timeout') return;
       const content = reason === 'timeout' ? t.timeout
         : error instanceof ApiError ? queryErrorMessage(error.code, settings.language) ?? t.queryFailed
           : error instanceof Error && error.message === 'invalid_response' ? t.invalidResponse : t.queryFailed;
-      commitAnswer(session.id, { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
+      if (partial) {
+        // A timeout or a dropped connection keeps the text that arrived, with the reason after it.
+        commitPartial(session.id, partial, streamedSources, prompt, userMessage.id, target?.assistantId);
+        addNote(session.id, content);
+      } else {
+        commitAnswer(session.id, { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
+      }
       void checkHealth();
     } finally {
       clearTimeout(idle);
@@ -300,9 +349,10 @@ export function App() {
       await api.reuseDocument(sessionId, sourceSessionId, name, AbortSignal.timeout(60000));
       updateSession(sessionId, session => ({ ...session, documents: session.documents.map(doc =>
         doc.name === name ? { ...doc, status: 'indexed' } : doc) }));
-    } catch {
+    } catch (error: unknown) {
       updateSession(sessionId, session => ({ ...session, documents: session.documents.filter(doc => doc.name !== name) }));
-      setUploadError({ sessionId, text: t.reuseDocumentFailed });
+      const reason = error instanceof ApiError && error.code !== 'request_failed' ? uploadErrorMessage(error.code, settings.language) : undefined;
+      setUploadError({ sessionId, text: reason ?? t.reuseDocumentFailed });
     } finally { uploadRef.current = false; setUploadingId(undefined); }
   };
 
@@ -311,7 +361,24 @@ export function App() {
     try {
       await api.deleteDocument(active.id, name, AbortSignal.timeout(15000));
       updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name), updatedAt: Date.now() }));
-    } catch { setUploadError({ sessionId: active.id, text: t.documentDeleteFailed }); }
+    } catch (error: unknown) {
+      const reason = error instanceof ApiError && error.code !== 'request_failed' ? uploadErrorMessage(error.code, settings.language) : undefined;
+      setUploadError({ sessionId: active.id, text: reason ?? t.documentDeleteFailed });
+    }
+  };
+
+  /**
+   * Delete a conversation on the server. Only documents live there; while the
+   * server is unreachable the deletion is queued and done when it is back.
+   */
+  const deleteOnServer = async (session: Session): Promise<void> => {
+    if (!session.documents.length) return;
+    try {
+      await api.deleteSession(session.id, AbortSignal.timeout(15000));
+    } catch (error) {
+      if (!unreachable(error)) throw error;
+      writePendingDeletions([...readPendingDeletions().filter(id => id !== session.id), session.id]);
+    }
   };
 
   const deleteSession = async (id: string): Promise<boolean> => {
@@ -319,9 +386,7 @@ export function App() {
     const session = sessionsRef.current.find(s => s.id === id);
     if (!session) return true;
     try {
-      if (session.documents.length || session.messages.length) {
-        await api.deleteSession(id, AbortSignal.timeout(15000));
-      }
+      await deleteOnServer(session);
       if (queryRef.current?.sessionId === id) { queryRef.current.controller.abort('deleted'); progressRef.current?.abort(); queryRef.current = null; setGeneratingId(undefined); setQueryProgress(undefined); }
       const remaining = sessionsRef.current.filter(s => s.id !== id);
       if (!remaining.length) remaining.push(createSession(settings.language, settings.defaultMode));
@@ -337,7 +402,7 @@ export function App() {
     const failures: string[] = [];
     for (const session of current) {
       try {
-        await api.deleteSession(session.id, AbortSignal.timeout(15000));
+        await deleteOnServer(session);
       } catch {
         failures.push(session.id);
       }
@@ -401,8 +466,8 @@ export function App() {
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
       {(notice || storageError) && <div className="notice" role="status"><AlertCircle size={17} /><span>{storageError ? t.storageFailed : notice}</span>{!storageError && <button className="icon-button" onClick={() => setNotice(null)} aria-label={t.dismiss}><X size={16} /></button>}</div>}
       {pwa.updateReady && <div className="notice pwa-update" role="status"><span>{t.pwaUpdateReady}</span><button className="button secondary" disabled={busy} onClick={pwa.activateUpdate}>{t.pwaApplyUpdate}</button></div>}
-      {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={(draft, index) => {
-        updateSession(active.id, s => ({ ...s, draft, ragMode: index === 2 ? 'llm-only' : 'hybrid' }));
+      {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={draft => {
+        updateSession(active.id, s => ({ ...s, draft }));
         setFocusToken(value => value + 1);
       }}
         documentQuestions={active.suggestions?.key === activeSuggestionKey ? active.suggestions.questions : undefined}
@@ -419,9 +484,10 @@ export function App() {
             const previous = assistant?.parentUserId ? active.messages.find(message => message.id === assistant.parentUserId) : active.messages.slice(0, assistantIndex).reverse().find(message => message.role === 'user');
             if (previous) void send(active, previous.content, { userId: previous.id, assistantId: messageId });
           }} onEditPrompt={(messageId, content) => {
-            const userIndex = active.messages.findIndex(message => message.id === messageId);
-            const assistant = active.messages.slice(userIndex + 1).find(message => message.role === 'assistant');
-            void send(active, content, { userId: messageId, assistantId: assistant?.id, edit: true });
+            void send(active, content, { userId: messageId, assistantId: answerTo(active.messages, messageId)?.id, edit: true });
+          }} onRetryQuestion={messageId => {
+            const question = active.messages.find(message => message.id === messageId);
+            if (question) void send(active, question.content, { userId: messageId });
           }} onSelectVariant={(messageId, variantIndex) => updateSession(active.id, session => ({
             ...session, messages: selectConversationBranch(session.messages, messageId, variantIndex), updatedAt: Date.now(),
           }))} />
@@ -448,6 +514,7 @@ export function App() {
       onStartGuide={() => setGuideOpen(true)}
       canInstall={pwa.canInstall} onInstall={() => void pwa.install()}
       onModelConfigured={setModelRuntime}
+      onRuntimeChanged={() => void checkHealth()}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);
         else if (updated.language && updated.language !== settings.language) transitionLanguage(updated.language);
@@ -459,6 +526,8 @@ export function App() {
         const backup = parseBackup(await file.text(), window.location.origin);
         const merged = mergeSessions(sessionsRef.current, backup.sessions);
         setSessions(merged.sessions);
+        // Preferences come along; this page keeps its own service address.
+        if (backup.settings) updateSettings({ ...backup.settings, backendUrl: settings.backendUrl });
         return { added: merged.added, updated: merged.updated };
       }} />
     <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} onStageChange={changeTourStage} activeStage={tourStage} />

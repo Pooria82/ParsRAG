@@ -106,7 +106,7 @@ export function Sidebar(props: SidebarProps) {
     <Dialog open={Boolean(edit)} onClose={closeEdit} title={edit?.action === 'rename' ? t.rename : t.deleteConfirmTitle} closeLabel={t.close} className="confirm-dialog">
       {edit?.action === 'rename' ? <form className="dialog-body" onSubmit={e => { e.preventDefault(); if (title.trim()) { props.onRenameSession(edit.session.id, title.trim()); setEdit(null); } }}>
         <label className="field-label" htmlFor="chat-title">{t.chatTitle}</label>
-        <input id="chat-title" className="text-input" autoFocus value={title} onChange={e => setTitle(e.target.value)} maxLength={100} />
+        <input id="chat-title" className="text-input" data-autofocus value={title} onChange={e => setTitle(e.target.value)} maxLength={100} />
         <div className="dialog-actions"><button type="button" className="button secondary" onClick={closeEdit}>{t.cancel}</button><button className="button primary" disabled={!title.trim()}><Check size={16} />{t.save}</button></div>
       </form> : <div className="dialog-body"><p>{t.deleteConfirmDesc}</p><p className="confirm-chat-title">{edit?.session.title}</p>
         {deleteError && <p className="inline-error" role="alert">{t.deleteFailed}</p>}

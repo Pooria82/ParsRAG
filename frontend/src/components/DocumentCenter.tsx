@@ -67,7 +67,7 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
             </span>
               {doc.status === 'indexed' && doc.notices?.map(notice => <p className="document-notice" key={notice}><AlertCircle size={12} />{noticeMessage(notice, language)}</p>)}
               {(doc.status === 'uploading' || doc.status === 'processing') && <UploadJourney status={doc.status} progress={doc.uploadProgress ?? 0} language={language} />}
-              {doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage || t.uploadFailed}</p>}
+              {doc.status === 'error' && <p>{doc.errorMessage === 'interrupted' ? t.interrupted : doc.errorMessage === 'not_on_server' ? t.notOnServer : doc.errorMessage || t.uploadFailed}</p>}
             </div>
             {doc.status === 'indexed' && <input type="checkbox" checked={doc.enabled !== false}
               onChange={() => onToggleDocument(doc.name)} aria-label={t.docSelected + ': ' + doc.name} />}

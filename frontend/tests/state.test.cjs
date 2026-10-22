@@ -134,7 +134,8 @@ test('builds all three API modes with scoped documents and clean conversational 
     assert.equal(payload.prompt, 'پیگیری');
     assert.equal(payload.top_k, 9);
     assert.deepEqual(payload.file_filter, mode === 'llm-only' ? null : ['a.pdf']);
-    assert.equal(payload.chat_history.length, 1);
+    // The question whose answer failed is not sent as history either.
+    assert.equal(payload.chat_history.length, 0);
   }
   session.documents[0].enabled = false;
   assert.deepEqual(buildQuery(session, DEFAULT_SETTINGS, 'hi').file_filter, []);

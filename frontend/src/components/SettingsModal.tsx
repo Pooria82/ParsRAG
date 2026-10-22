@@ -20,6 +20,8 @@ interface SettingsModalProps {
   /** Restore conversations from a backup file; resolves with the counts merged. */
   onImportBackup?: (file: File) => Promise<{ added: number; updated: number }>;
   onModelConfigured?: (configuration: ModelConfiguration) => void;
+  /** Server settings changed (upload limits among them). */
+  onRuntimeChanged?: () => void;
   onStartGuide: () => void;
   canInstall?: boolean; onInstall?: () => void;
   guided?: boolean;
@@ -27,7 +29,7 @@ interface SettingsModalProps {
   guidedProvider?: ModelProvider;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onRuntimeChanged, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
   const backupInput = useRef<HTMLInputElement>(null);
   const [backupStatus, setBackupStatus] = useState<{ kind: 'done' | 'error'; text: string } | null>(null);
   const t = translations[settings.language];
@@ -63,7 +65,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     return () => controller.abort();
   }, [open, guided, modelApi]);
   const serverSettings = (groups: Array<'model' | 'retrieval' | 'documents' | 'performance'>) => runtime
-    ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={setRuntime} />
+    ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={updated => { setRuntime(updated); onRuntimeChanged?.(); }} />
     : runtimeError ? <p className="info-note"><CircleHelp size={18} />{RUNTIME_TEXT[settings.language].loadError}</p> : null;
   const modelName = activeProvider === 'api' ? apiModelName : ollamaModelName;
   const setModelName = (value: string) => provider === 'api' ? setApiModelName(value) : setOllamaModelName(value);
