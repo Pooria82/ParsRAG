@@ -45,7 +45,33 @@ def test_runtime_is_failed_after_the_last_retry(
     )
     sleeps: list[float] = []
 
-    main._initialize_runtime(delays=(1, 2), sleep=sleeps.append)
+    main._initialize_runtime(delays=(1, 2), sleep=sleeps.append, max_attempts=3)
 
     assert state.status() == "failed"
     assert sleeps == [1, 2]
+
+
+def test_a_failed_runtime_keeps_retrying_and_recovers(
+    state: RuntimeState, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After the delays run out, the last delay repeats until a start succeeds."""
+    setup = MagicMock(side_effect=[RuntimeError("down")] * 5 + [None])
+    monkeypatch.setattr(main, "setup_llm_and_embeddings", setup)
+    repository = MagicMock()
+    repository.is_ready.return_value = True
+    monkeypatch.setattr(dependencies, "_shared_document_repository", lambda: repository)
+    statuses: list[str] = []
+
+    def sleep(seconds: float) -> None:
+        statuses.append(f"{state.status()}:{seconds}")
+
+    main._initialize_runtime(delays=(1, 2), sleep=sleep, max_attempts=10)
+
+    assert state.status() == "ready"
+    assert statuses == [
+        "preparing:1",
+        "preparing:2",
+        "failed:2",
+        "failed:2",
+        "failed:2",
+    ]
