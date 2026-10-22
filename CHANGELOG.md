@@ -5,6 +5,45 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- A question asked while a document was being deleted could keep that
+  document in keyword search until the next change.
+- `/query/stream` answers a full query capacity with 429 and an unknown
+  `@{file}` with 400 before streaming, instead of 200 plus an error event. A
+  client that disconnects marks the query failed instead of leaving it at
+  "generating" for five minutes.
+- Documents-only mode no longer skips its evidence check for ordinary
+  questions that contain words such as «خلاصه», «موضوع» or «چه نوع»; only
+  questions about the document itself, or a bare request to summarize, do.
+- The documents-only refusal is the same sentence in the evidence check and
+  in the prompt, in the question's language. An invalid
+  `STRICT_RAG_THRESHOLD` falls back to the default instead of failing every
+  documents-only question.
+- Brackets inside math and code, such as the interval `[1, 3]`, are no
+  longer counted as citations.
+- Hybrid mode trims the context in its ranked order; mixing reranker and
+  cosine scores could drop the best reranked passage.
+- A stored API key is only sent to the server it was entered for; changing
+  the API address without a new key no longer sends the old one.
+- API requests have one retry layer (`MODEL_API_MAX_RETRIES`); the OpenAI SDK
+  no longer retries on top of it.
+- Conversation titles and suggested questions are capped on Ollama too.
+- Resetting CPU threads to automatic restores the startup value.
+- A failed reranker download waits five minutes before the next attempt
+  instead of being retried on every Hybrid question, and the download has a
+  timeout.
+- Listing, previewing, reusing and deleting documents wait until the
+  embedding model is ready, like questions and uploads.
+- Runtime settings are validated, saved, and applied as one step; a failed
+  save changes nothing.
+
+### Security
+
+- Model API requests re-check the host's addresses each time and do not
+  follow redirects, so a DNS change or redirect cannot reach link-local
+  (cloud metadata), multicast, or reserved addresses.
+
 ## [1.1.1] - 2026-10-22
 
 ### Changed

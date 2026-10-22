@@ -199,9 +199,14 @@ def stream_query(
     _ready: None = Depends(require_runtime_ready),
     use_case: AnswerQuery = Depends(get_answer_query),  # noqa: B008
 ) -> StreamingResponse:
-    """Stream stages, numbered sources, answer text, and the final result (SSE)."""
+    """Stream stages, numbered sources, answer text, and the final result (SSE).
+
+    A full query capacity or an invalid document mention is answered with 429
+    or 400 before the stream starts.
+    """
+    events = use_case.stream(request)
     return StreamingResponse(
-        event_stream(use_case.stream(request)),
+        event_stream(events),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -219,6 +224,7 @@ def read_query_progress(
 @router.get("/sessions/{session_id}/files", response_model=list[str])
 def get_session_files(
     session_id: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ListSessionFiles = Depends(get_list_session_files),  # noqa: B008
 ) -> list[str]:
     """Retrieves all distinct filenames indexed for a given session."""
@@ -230,6 +236,7 @@ def read_source_image(
     session_id: str,
     image: int,
     filename: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ReadSourceImage = Depends(get_read_source_image),  # noqa: B008
 ) -> Response:
     """Return the preview of image ``image`` in ``filename`` (WebP)."""
@@ -246,6 +253,7 @@ def read_source_image(
 def reuse_session_document(
     session_id: str,
     request: ReuseDocumentRequest,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ReuseDocument = Depends(get_reuse_document),  # noqa: B008
 ) -> ReusedDocumentResponse:
     """Reuse a prior session's indexed vectors without storing raw upload bytes."""
@@ -268,6 +276,7 @@ def suggest_session_questions(
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)
 def delete_session(
     session_id: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: DeleteSession = Depends(get_delete_session),  # noqa: B008
 ) -> MessageResponse:
     """Deletes all indexed vectors and documents for a given session."""
@@ -278,6 +287,7 @@ def delete_session(
 def delete_session_document(
     session_id: str,
     request: DeleteDocumentRequest,
+    _ready: None = Depends(require_runtime_ready),
     use_case: DeleteDocument = Depends(get_delete_document),  # noqa: B008
 ) -> MessageResponse:
     """Deletes one indexed document without affecting the rest of the session."""

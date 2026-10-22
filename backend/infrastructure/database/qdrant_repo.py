@@ -244,6 +244,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to save nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)
 
     def save_images(
         self, session_id: str, filename: str, images: Mapping[int, bytes]
@@ -655,6 +657,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to reuse document vectors: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(target_session_id)
 
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes associated with a specific session ID.
@@ -688,6 +692,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to delete session nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)
 
     def delete_document(self, session_id: str, filename: str) -> None:
         """Deletes every chunk for one document in a session."""
@@ -723,3 +729,5 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to delete document nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)

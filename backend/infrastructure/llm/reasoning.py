@@ -143,9 +143,10 @@ def _filtered_chat_stream(stream: ChatResponseGen) -> ChatResponseGen:
 class ReasoningFreeOpenAILike(OpenAILike):  # type: ignore[misc]
     """``OpenAILike`` client whose answers never include reasoning blocks.
 
-    It also retries fast server-side failures (HTTP 5xx and 429) beyond the
-    client's single retry. Timeouts are not retried here, so a slow request
-    still fits the browser's wait.
+    It also retries fast server-side failures (HTTP 5xx and 429); the OpenAI
+    SDK's own retries are turned off, so this is the only retry layer.
+    Timeouts are not retried here, so a slow request still fits the browser's
+    wait.
     """
 
     status_retries: int = Field(default=4, ge=0, le=8)

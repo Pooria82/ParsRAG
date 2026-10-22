@@ -145,6 +145,7 @@ def test_private_api_without_key_is_verified_through_models_endpoint(
     import backend.infrastructure.llm.factory as factory
 
     monkeypatch.setattr(factory, "_api_key", None)
+    monkeypatch.setattr(factory, "_api_keys", {})
     response = configure_model(
         ModelConfigurationRequest(
             provider=ModelProvider.API,
@@ -434,3 +435,112 @@ def test_ollama_thinking_is_off_unless_enabled(
     answer_call, condense_call = mock_ollama.call_args_list
     assert answer_call.kwargs["thinking"] is expected
     assert condense_call.kwargs["thinking"] is expected
+
+
+@patch("backend.infrastructure.llm.factory.Settings")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_a_stored_key_is_not_sent_to_a_different_server(
+    mock_get: MagicMock,
+    mock_openai: MagicMock,
+    mock_settings: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changing the API address without a key must not leak the old key."""
+    import backend.infrastructure.llm.factory as factory
+
+    monkeypatch.setattr(factory, "_api_keys", {})
+    first = ModelConfigurationRequest(
+        provider=ModelProvider.API,
+        model_name="m",
+        base_url="https://openrouter.ai/api/v1",
+        api_key="openrouter-key",
+        disclosure_acknowledged=True,
+    )
+    with patch("backend.infrastructure.llm.endpoint_policy.socket.getaddrinfo") as dns:
+        dns.return_value = [(None, None, None, None, ("104.18.2.115", 443))]
+        configure_model(first, persist=False)
+        configure_model(
+            first.model_copy(
+                update={"base_url": "https://other.example/v1", "api_key": None}
+            ),
+            persist=False,
+        )
+        assert mock_get.call_args.kwargs["headers"] == {}
+        assert mock_openai.call_args.kwargs["api_key"] == ""
+
+        configure_model(first.model_copy(update={"api_key": None}), persist=False)
+    assert mock_get.call_args.kwargs["headers"] == {
+        "Authorization": "Bearer openrouter-key"
+    }
+
+
+@patch("backend.infrastructure.llm.factory.Settings")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_the_sdk_does_not_retry_on_top_of_status_retries(
+    mock_get: MagicMock, mock_openai: MagicMock, mock_settings: MagicMock
+) -> None:
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="m",
+            base_url="https://127.0.0.1/v1",
+            api_key="k",
+        ),
+        persist=False,
+    )
+
+    answer_client = mock_openai.call_args_list[0].kwargs
+    assert answer_client["max_retries"] == 0
+    assert answer_client["status_retries"] >= 1
+
+
+def test_ollama_titles_are_capped_with_num_predict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ollama ignores max_tokens, so the cap is passed as its num_predict option."""
+    from llama_index.core import Settings
+    from llama_index.llms.ollama import Ollama  # type: ignore[import-untyped]
+
+    import backend.infrastructure.llm.factory as factory
+
+    seen: list[dict[str, object]] = []
+
+    def complete(self: Ollama, prompt: str, **kwargs: object) -> str:
+        seen.append(dict(self.additional_kwargs))
+        return "Project timeline"
+
+    monkeypatch.setattr(Ollama, "complete", complete)
+    llm = Ollama(model="gemma3:4b", base_url="http://127.0.0.1:11434")
+    monkeypatch.setattr(Settings, "_llm", llm)
+
+    assert factory.generate_conversation_title("when is the deadline?", "en") == (
+        "Project timeline"
+    )
+    assert seen == [{"num_predict": factory._SHORT_ANSWER_TOKENS}]
+    assert "num_predict" not in llm.additional_kwargs
+
+
+@patch("backend.infrastructure.llm.factory.Settings")
+@patch("backend.infrastructure.llm.factory.ReasoningFreeOpenAILike")
+@patch("backend.infrastructure.llm.factory.httpx.get")
+def test_api_models_use_the_guarded_http_client(
+    mock_get: MagicMock, mock_openai: MagicMock, mock_settings: MagicMock
+) -> None:
+    from backend.infrastructure.llm.endpoint_policy import GuardedTransport
+
+    configure_model(
+        ModelConfigurationRequest(
+            provider=ModelProvider.API,
+            model_name="m",
+            base_url="https://127.0.0.1/v1",
+            api_key="k",
+        ),
+        persist=False,
+    )
+
+    for call in mock_openai.call_args_list:
+        client = call.kwargs["http_client"]
+        assert client.follow_redirects is False
+        assert isinstance(client._transport, GuardedTransport)

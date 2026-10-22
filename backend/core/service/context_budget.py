@@ -43,9 +43,17 @@ def model_context_window(llm: Any) -> int:
 
 
 def fit_to_context(
-    nodes: list[ExtractedNode], *, context_window: int, fixed_prompt: str
+    nodes: list[ExtractedNode],
+    *,
+    context_window: int,
+    fixed_prompt: str,
+    ranked: bool = False,
 ) -> list[ExtractedNode]:
-    """Keep the highest-scoring chunks that fit, in their original order.
+    """Keep the most important chunks that fit, in their original order.
+
+    Importance is the score, or the list position when ``ranked`` is true.
+    Hybrid mode passes a ranked list because it mixes reranker scores with
+    cosine scores, which are not on the same scale.
 
     ``fixed_prompt`` is the prompt without the context (rules, question).
     At least one chunk is kept; it is shortened when it alone does not fit.
@@ -55,8 +63,12 @@ def fit_to_context(
     budget = (
         context_window - answer_reserve(context_window) - estimate_tokens(fixed_prompt)
     )
-    by_priority = sorted(
-        range(len(nodes)), key=lambda index: nodes[index].score or 0.0, reverse=True
+    by_priority = (
+        list(range(len(nodes)))
+        if ranked
+        else sorted(
+            range(len(nodes)), key=lambda index: nodes[index].score or 0.0, reverse=True
+        )
     )
     kept: set[int] = set()
     used = 0

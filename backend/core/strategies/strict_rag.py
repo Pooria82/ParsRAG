@@ -1,3 +1,5 @@
+import logging
+import math
 import os
 import re
 import unicodedata
@@ -36,7 +38,10 @@ from backend.core.strategies.prompt_rules import (
     FORMATTING_RULES,
     LANGUAGE_RULES,
     answer_language_rule,
+    question_language,
 )
+
+logger = logging.getLogger("parsrag.operations")
 
 STRICT_REFUSAL_FA = "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
 STRICT_REFUSAL_EN = "I do not know based on the provided documents."
@@ -50,9 +55,10 @@ GROUNDING RULES (documents-only mode):
 3. You may state conclusions that follow directly from the context, such as what kind of document it is, its main topic, or a comparison the user asks for, as long as you cite the excerpts they rest on.
 4. When the question asks several things, answer each one. If the context answers only some of them, answer those, then say plainly which part the documents do not cover.
 5. Only when nothing in the context is relevant to the question, reply with exactly one sentence:
-   - Persian: "بر اساس اسناد ارائه شده، پاسخی برای این سوال در متن یافت نشد."
-   - English: "I do not know based on the provided documents."
-6. OCR text may contain recognition errors. Read past obvious noise, but never invent a missing word, number, or relationship to repair it.
+"""
+    + f'   - Persian: "{STRICT_REFUSAL_FA}"\n'
+    + f'   - English: "{STRICT_REFUSAL_EN}"\n'
+    + """6. OCR text may contain recognition errors. Read past obvious noise, but never invent a missing word, number, or relationship to repair it.
 
 """
     + CODE_VERIFICATION_RULES
@@ -116,13 +122,81 @@ _QUERY_STOPWORDS = {
 
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+# Words that name the document itself. A summary or topic word only makes a
+# question about the whole document when it is tied to one of these, or when
+# the request is nothing but "summarize" / "what is the main topic".
+_DOCUMENT_NOUN = (
+    r"(?:سند|اسناد|فایل(?:[\s\u200c]*ها)?|گزارش|متن|مقاله|نوشته|کتاب|ارائه"
+    r"|اسلاید(?:[\s\u200c]*ها)?|pdf|پی[\s\u200c]*دی[\s\u200c]*اف)"
+)
+_THIS = r"(?:(?:این|کل|همه(?:[\s\u200c]*ی)?)\s*)?"
+_SUMMARY_WORD = r"(?:خلاصه|چکیده|جمع[\s\u200c]*بندی|کلیات)"
 DOCUMENT_OVERVIEW_PATTERN = re.compile(
-    r"(درباره\s*(?:چیست|چه|ی\s*چیست)|موضوع(?:\s*اصلی)?|خلاصه|چکیده|جمع[\s\u200c]*بندی"
-    r"|کلیات|چه\s*نوع|نوع\s*(?:سند|فایل)|محتوای\s*(?:کلی|اصلی)"
-    r"|\b(?:summar(?:y|ize|ise)|overview|main\s+topic|what\s+is\s+(?:this|the)\s+"
-    r"(?:document|file|paper|report|pdf)\s+about|what\s+kind\s+of\s+document)\b)",
+    "|".join(
+        (
+            # «این سند درباره چیست؟»، «فایل در مورد چه است»
+            _THIS
+            + _DOCUMENT_NOUN
+            + r"[\s\u200c]*(?:ها)?\s*(?:درباره|در\s*(?:مورد|باره))"
+            r"[\s\u200c]*(?:ی)?\s*(?:چیست|چه)",
+            # «موضوع اصلی این فایل»، «محتوای کلی گزارش»
+            r"(?:موضوع|محتوا|محتوای)(?:[\s\u200c]*(?:اصلی|کلی))?[\s\u200c]*(?:ی|\u0654)?\s*"
+            + _THIS
+            + _DOCUMENT_NOUN,
+            # «خلاصه‌ای از این گزارش»، «چکیده مقاله»
+            _SUMMARY_WORD
+            + r"[\s\u200c]*(?:ای|ی|\u0654)?\s*(?:از\s*)?"
+            + _THIS
+            + _DOCUMENT_NOUN,
+            # «گزارش را خلاصه کن»
+            _DOCUMENT_NOUN + r"\s*(?:را|رو)\s*(?:خلاصه|جمع[\s\u200c]*بندی)",
+            # «این فایل چه نوع سندی است؟»، «نوع این سند»
+            r"چه\s*نوع\s*(?:سندی|فایلی|متنی|گزارشی|" + _DOCUMENT_NOUN + r")",
+            r"نوع\s*" + _THIS + _DOCUMENT_NOUN,
+            # A bare request: «خلاصه کن»، «یک خلاصه بده»
+            r"^\W*(?:لطفا|لطفاً)?\s*(?:یک\s*)?"
+            + _SUMMARY_WORD
+            + r"[\s\u200c]*(?:ای|اش|ش)?\s*(?:کن|بده|بنویس|بگو)?\W*$",
+            r"^\W*موضوع(?:[\s\u200c]*اصلی)?\s*(?:چیست|چه\s*است|کدام\s*است)\W*$",
+            # English
+            r"\bsummar(?:y|ize|ise)\s+(?:of\s+)?(?:(?:this|the|these|all|each)\s+)?"
+            r"(?:documents?|files?|reports?|papers?|pdfs?|slides?|texts?)\b",
+            r"\bsummar(?:ize|ise)\s+(?:it|this|them)\b",
+            r"^\W*(?:please\s+)?summar(?:ize|ise)\W*$",
+            r"\b(?:overview|main\s+topic)\s+of\s+(?:this|the|these)\s+"
+            r"(?:documents?|files?|reports?|papers?)\b",
+            r"^\W*what\s+is\s+the\s+main\s+topic\W*$",
+            r"\bwhat\s+(?:is|are)\s+(?:this|the|these)\s+"
+            r"(?:documents?|files?|papers?|reports?|pdfs?)\s+about\b",
+            r"\bwhat\s+kind\s+of\s+(?:document|file)\b",
+        )
+    ),
     re.IGNORECASE,
 )
+
+
+def configured_threshold() -> float:
+    """Return ``STRICT_RAG_THRESHOLD`` between 0 and 1, or the default.
+
+    An invalid value used to make every documents-only question fail while
+    Settings showed the default; it now falls back to the default with a
+    warning.
+    """
+    raw = os.getenv("STRICT_RAG_THRESHOLD", "").strip()
+    if not raw:
+        return DEFAULT_STRICT_THRESHOLD
+    try:
+        value = float(raw)
+    except ValueError:
+        value = math.nan
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "STRICT_RAG_THRESHOLD=%r is not a number between 0 and 1; using %s",
+            raw,
+            DEFAULT_STRICT_THRESHOLD,
+        )
+        return DEFAULT_STRICT_THRESHOLD
+    return value
 
 
 def is_document_overview_question(query: str) -> bool:
@@ -180,9 +254,7 @@ class StrictRAGStrategy(GeneratingStrategy):
                 or ``RAG_TOP_K`` when set, otherwise adaptive depth is used.
         """
         self.repo = repo
-        self.threshold = float(
-            os.getenv("STRICT_RAG_THRESHOLD", "").strip() or DEFAULT_STRICT_THRESHOLD
-        )
+        self.threshold = configured_threshold()
         self.default_top_k = (
             default_top_k
             if default_top_k is not None
@@ -279,9 +351,14 @@ class StrictRAGStrategy(GeneratingStrategy):
         nodes = nodes or evidence
 
         # 3. Threshold Check
+        persian = question_language(query) == "fa"
         if not nodes:
             return PreparedAnswer(
-                immediate="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
+                immediate=(
+                    "هیچ سند مرتبطی یافت نشد."
+                    if persian
+                    else "No relevant documents found."
+                ),
                 outcome="no_documents",
             )
 
@@ -294,14 +371,18 @@ class StrictRAGStrategy(GeneratingStrategy):
             and not _has_lexical_evidence(query, evidence, self.threshold)
         ):
             return PreparedAnswer(
-                immediate="بر اساس اسناد ارائه شده، پاسخی برای این سوال ندارم. (I do not know based on the provided documents.)",
+                immediate=STRICT_REFUSAL_FA if persian else STRICT_REFUSAL_EN,
                 outcome="no_evidence",
             )
         if document_segments and not has_tagged_evidence(
             nodes, document_segments, self.threshold
         ):
             return PreparedAnswer(
-                immediate="برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد. (Insufficient evidence across the mentioned documents.)",
+                immediate=(
+                    "برای پاسخ بر اساس همه اسناد اشاره‌شده، شواهد کافی پیدا نشد."
+                    if persian
+                    else "Insufficient evidence across the mentioned documents."
+                ),
                 outcome="partial_evidence",
             )
 

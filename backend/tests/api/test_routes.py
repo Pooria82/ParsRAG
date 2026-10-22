@@ -528,3 +528,38 @@ def test_source_image_preview_is_served_as_webp() -> None:
     assert found.headers["content-type"] == "image/webp"
     assert found.content == b"RIFFwebp"
     assert missing.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("get", "/sessions/s1/files", None),
+        ("get", "/sessions/s1/images/1?filename=a.docx", None),
+        (
+            "post",
+            "/sessions/s1/files/reuse",
+            {"source_session_id": "s0", "filename": "a.pdf"},
+        ),
+        ("delete", "/sessions/s1", None),
+        ("delete", "/sessions/s1/files", {"filename": "a.pdf"}),
+    ],
+)
+def test_session_routes_wait_for_the_embedding_model(
+    method: str, path: str, body: dict[str, str] | None
+) -> None:
+    """Building the repository before the embedding model probes the wrong size."""
+    runtime_state.mark_failed()
+    try:
+        with patch("backend.api.dependencies._shared_document_repository") as build:
+            response = client.request(
+                method.upper(),
+                path,
+                json=body,
+                headers={"Origin": "http://localhost:3000"},
+            )
+    finally:
+        runtime_state.mark_ready()
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "not_ready"
+    build.assert_not_called()
