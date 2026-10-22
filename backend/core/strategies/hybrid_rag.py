@@ -30,6 +30,7 @@ from backend.core.strategies.prompt_rules import (
     FORMATTING_RULES,
     LANGUAGE_RULES,
     answer_language_rule,
+    question_language,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = (
@@ -243,7 +244,11 @@ class HybridRAGStrategy(GeneratingStrategy):
 
         if not extracted_nodes:
             return PreparedAnswer(
-                immediate="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
+                immediate=(
+                    "هیچ سند مرتبطی یافت نشد."
+                    if question_language(query) == "fa"
+                    else "No relevant documents found."
+                ),
                 outcome="no_documents",
             )
 
@@ -279,6 +284,9 @@ class HybridRAGStrategy(GeneratingStrategy):
                 fixed_prompt=self.prompt_template.format(
                     context_str="", query=query, answer_language=answer_language
                 ),
+                # Anchors, then reranked order, then part evidence: the list is
+                # already in priority order, and its scores mix two scales.
+                ranked=True,
             )
         )
         context_str = format_multi_doc_context(final_source_nodes)
