@@ -255,3 +255,27 @@ def test_an_uploaded_image_keeps_a_preview(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert parsed.sections[0].metadata == {"page": 1, "image": 1}
     assert parsed.images[1][:4] == b"RIFF"
+
+
+def test_a_generated_table_of_contents_is_not_indexed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OCR_ENABLED", "0")
+    document = Document()
+    document.add_paragraph("Body text about the release")
+    toc = parse_xml(
+        f"<w:sdt {nsdecls('w')}><w:sdtPr><w:docPartObj>"
+        '<w:docPartGallery w:val="Table of Contents"/></w:docPartObj></w:sdtPr>'
+        "<w:sdtContent><w:p><w:r><w:t>Chapter 1 Introduction 7</w:t></w:r></w:p>"
+        "</w:sdtContent></w:sdt>"
+    )
+    document.element.body.insert(0, toc)
+    output = BytesIO()
+    document.save(output)
+
+    text = " ".join(
+        s.text for s in parse_document_file(output.getvalue(), "r.docx").sections
+    )
+
+    assert "Body text about the release" in text
+    assert "Chapter 1 Introduction 7" not in text

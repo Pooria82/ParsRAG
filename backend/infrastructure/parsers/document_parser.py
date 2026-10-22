@@ -301,20 +301,29 @@ def _parse_docx_sections(
 
 _SDT = qn("w:sdt")
 _SDT_CONTENT = qn("w:sdtContent")
+_DOC_PART_GALLERY = f"{qn('w:sdtPr')}/{qn('w:docPartObj')}/{qn('w:docPartGallery')}"
 
 
 def _body_blocks(container: Any) -> Iterator[Any]:
     """Paragraphs and tables in reading order, including those in content controls.
 
     Templates and forms wrap their body in ``w:sdt`` blocks; reading only the
-    top-level paragraphs and tables indexed nothing for them.
+    top-level paragraphs and tables indexed nothing for them. A generated table
+    of contents is also a ``w:sdt``; its heading-and-page-number lines would
+    match questions without answering them, so it is skipped.
     """
     for child in container.iterchildren():
-        if child.tag == _SDT:
+        if child.tag != _SDT:
+            yield child
+        elif not _is_table_of_contents(child):
             for content in child.iterchildren(_SDT_CONTENT):
                 yield from _body_blocks(content)
-        else:
-            yield child
+
+
+def _is_table_of_contents(control: Any) -> bool:
+    gallery = control.find(_DOC_PART_GALLERY)
+    value = gallery.get(qn("w:val"), "") if gallery is not None else ""
+    return str(value).lower().startswith("table of contents")
 
 
 def _docx_image_readings(
