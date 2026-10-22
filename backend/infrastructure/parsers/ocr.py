@@ -4,7 +4,8 @@ import os
 import re
 import statistics
 import subprocess
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from io import BytesIO
 from math import ceil, isfinite
 from typing import Protocol
@@ -58,6 +59,8 @@ _BIDI_CONTROLS = dict.fromkeys(
 # Below this mean word confidence the page is re-read as one uniform block,
 # which recovers lines that automatic layout analysis drops on Persian pages.
 _CONFIDENT_RECOGNITION = 75.0
+# Readings at least this confident skip orientation and skew correction.
+_SKIP_GEOMETRY_CONFIDENCE = 90.0
 # Skews below this are handled by Tesseract itself; a deskewed reading must
 # also be this much more confident, since rotating again blurs the glyphs.
 _MIN_DESKEW_DEGREES = 2.0
@@ -101,6 +104,9 @@ class OCRSettings:
     correct_orientation: bool = False
     # Limit Tesseract to one thread when several images are read in parallel.
     single_thread: bool = False
+    # Total OCR time for one document; ``deadline`` is set when it starts.
+    document_seconds: int = 900
+    deadline: float | None = None
 
     @classmethod
     def from_environment(cls) -> "OCRSettings":
@@ -121,7 +127,25 @@ class OCRSettings:
             ),
             correct_orientation=os.getenv("OCR_ORIENTATION", "1").strip().lower()
             not in {"0", "false", "no", "off"},
+            document_seconds=_environment_int(
+                "OCR_DOCUMENT_TIMEOUT_SECONDS", 900, 30, 7200
+            ),
         )
+
+    def with_deadline(self) -> "OCRSettings":
+        """Start the document's OCR clock (``OCR_DOCUMENT_TIMEOUT_SECONDS``).
+
+        ``OCR_TIMEOUT_SECONDS`` bounds one Tesseract run, but one image can
+        take up to eight runs and a scan has many pages, so a document could
+        hold the only ingestion slot for hours. After the deadline, remaining
+        pages and images are skipped with a notice and extra passes stop.
+        """
+        return replace(self, deadline=time.monotonic() + self.document_seconds)
+
+    @property
+    def expired(self) -> bool:
+        """Whether the document's OCR time is used up."""
+        return self.deadline is not None and time.monotonic() >= self.deadline
 
 
 def normalize_ocr_text(value: str) -> str:
@@ -155,17 +179,34 @@ def extract_page_text(
         OCRError: If Tesseract returns a non-zero exit status.
     """
     active = settings or OCRSettings.from_environment()
+    return recognize_page_png(render_page_png(page, active), active)
+
+
+def render_page_png(page: RasterizablePage, settings: OCRSettings) -> bytes:
+    """Render one PDF page as a grayscale PNG for Tesseract.
+
+    PyMuPDF is not thread-safe, so pages are rendered on the parsing thread
+    and only recognition runs in parallel.
+
+    Raises:
+        OCRError: The page is too large or has invalid dimensions.
+    """
     width = float(page.rect.width)  # type: ignore[attr-defined]
     height = float(page.rect.height)  # type: ignore[attr-defined]
     if not isfinite(width) or not isfinite(height) or width <= 0 or height <= 0:
         raise OCRError("The PDF page dimensions are invalid for OCR.")
-    pixels = ceil(width * active.dpi / 72) * ceil(height * active.dpi / 72)
-    if pixels > active.max_image_pixels:
+    pixels = ceil(width * settings.dpi / 72) * ceil(height * settings.dpi / 72)
+    if pixels > settings.max_image_pixels:
         raise OCRError("The PDF page exceeds the configured OCR pixel limit.")
-    pixmap = page.get_pixmap(dpi=active.dpi, colorspace=pymupdf.csGRAY, alpha=False)
+    pixmap = page.get_pixmap(dpi=settings.dpi, colorspace=pymupdf.csGRAY, alpha=False)
     # Tesseract binarizes internally; contrast stretching before it erased
     # whole Persian pages in benchmarks, so only grayscale is applied.
-    return _run_tesseract(pixmap.tobytes("png"), active)
+    return bytes(pixmap.tobytes("png"))
+
+
+def recognize_page_png(image: bytes, settings: OCRSettings) -> str:
+    """Recognize a rendered page; safe to call from several threads."""
+    return _run_tesseract(image, settings)
 
 
 def _tsv_text(output: str) -> tuple[str, float]:
@@ -233,6 +274,12 @@ def _correct_geometry(
     for weak readings; a deskewed reading must be clearly more confident,
     because Tesseract already copes with small skews.
     """
+    if settings.expired:
+        return text, confidence
+    if text and confidence >= _SKIP_GEOMETRY_CONFIDENCE:
+        # A near-certain reading gains nothing from the 24 rotations of the
+        # skew search; readings around 80 still improve when deskewed.
+        return text, confidence
     try:
         source = Image.open(BytesIO(image))
         source.load()
@@ -425,9 +472,15 @@ def extract_image_text(image_bytes: bytes, settings: OCRSettings | None = None) 
                 if oriented.mode in {"RGBA", "LA"} or "transparency" in oriented.info
                 else oriented.convert("RGB")
             )
+    except Image.DecompressionBombError as exc:
+        # Pillow refuses images that declare far more pixels than it allows
+        # before our own limit is checked; treat both the same way.
+        raise OCRError("The image exceeds the configured OCR pixel limit.") from exc
     except (UnidentifiedImageError, OSError) as exc:
         raise ValueError("The file is not a valid image.") from exc
     text = _run_tesseract(output.getvalue(), active)
+    if active.expired:
+        return text
     try:
         return merge_readings(text, _sparse_reading(flattened, active))
     except OCRUnavailableError:
