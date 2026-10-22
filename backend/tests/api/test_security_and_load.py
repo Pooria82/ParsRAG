@@ -209,8 +209,18 @@ def test_ingest_session_id_sanitization(malicious_session: str) -> None:
 async def test_concurrent_queries_no_race_condition(
     mock_get_strategy: MagicMock,
     mock_condenser_cls: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Send 10 simultaneous asynchronous requests to /query and assert all succeed."""
+    """Send 10 simultaneous asynchronous requests to /query and assert all succeed.
+
+    Each answer must belong to its own request. The query limiter is widened
+    so that capacity (tested separately) does not turn overlapping requests
+    into 429s.
+    """
+    import backend.api.dependencies as dependencies
+    from backend.core.runtime.capacity import WorkLimiter
+
+    monkeypatch.setattr(dependencies, "query_limiter", WorkLimiter(10, "query"))
     mock_condenser = MagicMock()
     mock_condenser.condense.side_effect = lambda q, h: f"condensed_{q}"
     mock_condenser_cls.return_value = mock_condenser
