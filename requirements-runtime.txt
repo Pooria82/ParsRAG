@@ -7,7 +7,7 @@ llama-index-core>=0.14.25,<0.15.0
 llama-index-llms-ollama
 llama-index-embeddings-huggingface
 qdrant-client>=1.19.1
-pymupdf>=1.28.2
+pymupdf>=2.0
 pydantic>=2.13.5
 flashrank>=0.2.10
 python-docx>=1.2.0
