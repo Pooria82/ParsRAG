@@ -7,7 +7,7 @@ export type Palette = 'evergreen' | 'ocean' | 'indigo' | 'sienna';
 export type ModelProvider = 'api' | 'ollama';
 export type QueryStage = 'understanding' | 'retrieving' | 'generating' | 'complete' | 'failed';
 
-export type RuntimeSettingGroup = 'model' | 'retrieval' | 'documents' | 'performance';
+export type RuntimeSettingGroup = 'model' | 'retrieval' | 'documents' | 'performance' | 'updates';
 
 /** A server setting that applies without a restart (see GET /settings/runtime). */
 export interface RuntimeSetting {
@@ -39,6 +39,21 @@ export interface ModelConfiguration {
   /** The server's own Ollama URL, offered when switching from an API. */
   ollama_base_url?: string | null;
 }
+
+/** A release newer than the running one (`GET /updates`). */
+export interface ReleaseSummary { version: string; url: string; published_at?: string | null; notes_fa: string; notes_en: string }
+
+export interface UpdateStatus {
+  enabled: boolean;
+  current_version: string;
+  latest_version?: string | null;
+  update_available: boolean;
+  checked_at?: string | null;
+  releases: ReleaseSummary[];
+}
+
+/** What changed in one installed version (`GET /release-notes`). */
+export interface ReleaseNote { version: string; notes: string }
 
 /** Whether the active model service answers right now (`GET /models/status`). */
 export type ModelConnectionState = 'ready' | 'unreachable' | 'model_missing' | 'auth_failed';

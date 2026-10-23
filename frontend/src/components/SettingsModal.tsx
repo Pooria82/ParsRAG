@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CircleHelp, Database, Download, FileUp, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
-import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode, RuntimeSettings } from '../types';
+import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode, RuntimeSettingGroup, RuntimeSettings, UpdateStatus } from '../types';
+import { APP_VERSION } from '../core/appVersion';
 import { ServerSettings } from './ServerSettings';
 import { GROUP_TEXT, RUNTIME_TEXT } from '../i18n/runtimeSettings';
 import { translations } from '../i18n/translations';
@@ -22,6 +23,11 @@ interface SettingsModalProps {
   onModelConfigured?: (configuration: ModelConfiguration) => void;
   /** Server settings changed (upload limits among them). */
   onRuntimeChanged?: () => void;
+  /** The running version and the last update check. */
+  updateStatus?: UpdateStatus | null;
+  /** Ask GitHub again now; resolves with the new status, or null when it failed. */
+  onCheckUpdates?: () => Promise<UpdateStatus | null>;
+  onOpenUpdate?: () => void;
   onStartGuide: () => void;
   canInstall?: boolean; onInstall?: () => void;
   guided?: boolean;
@@ -29,7 +35,7 @@ interface SettingsModalProps {
   guidedProvider?: ModelProvider;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onRuntimeChanged, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onRuntimeChanged, updateStatus, onCheckUpdates, onOpenUpdate, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
   const backupInput = useRef<HTMLInputElement>(null);
   const [backupStatus, setBackupStatus] = useState<{ kind: 'done' | 'error'; text: string } | null>(null);
   const t = translations[settings.language];
@@ -56,6 +62,15 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const modelApi = useMemo(() => new ParsRagApiClient(settings.backendUrl), [settings.backendUrl]);
   const [runtime, setRuntime] = useState<RuntimeSettings | null>(null);
   const [runtimeError, setRuntimeError] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<'idle' | 'checking' | 'latest' | 'failed'>('idle');
+  const checkUpdates = async () => {
+    if (!onCheckUpdates) return;
+    setUpdateCheck('checking');
+    const status = await onCheckUpdates();
+    if (!status) setUpdateCheck('failed');
+    else if (status.update_available) { setUpdateCheck('idle'); onOpenUpdate?.(); }
+    else setUpdateCheck(status.enabled ? 'latest' : 'idle');
+  };
   useEffect(() => {
     if (!open || guided) return;
     const controller = new AbortController(); setRuntimeError(false);
@@ -64,7 +79,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     });
     return () => controller.abort();
   }, [open, guided, modelApi]);
-  const serverSettings = (groups: Array<'model' | 'retrieval' | 'documents' | 'performance'>) => runtime
+  const serverSettings = (groups: RuntimeSettingGroup[]) => runtime
     ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={updated => { setRuntime(updated); onRuntimeChanged?.(); }} />
     : runtimeError ? <p className="info-note"><CircleHelp size={18} />{RUNTIME_TEXT[settings.language].loadError}</p> : null;
   const modelName = activeProvider === 'api' ? apiModelName : ollamaModelName;
@@ -147,6 +162,18 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         <div className="setting-field guide-setting" data-tour="settings-guide"><span><strong>{t.guideReplay}</strong><small>{t.guideReplayHint}</small></span>
           <button className="button secondary" onClick={() => { onClose(); onStartGuide(); }}><CircleHelp size={16} />{t.guideStart}</button>
         </div>
+        <section className="update-setting" aria-label={t.aboutTitle}>
+          <h3>{t.aboutTitle}</h3>
+          <p dir="auto">{t.versionLabel.replace('{version}', updateStatus?.current_version ?? APP_VERSION)}</p>
+          {serverSettings(['updates'])}
+          {onCheckUpdates && <div className="update-check">
+            <button type="button" className="button secondary" disabled={updateCheck === 'checking' || updateStatus?.enabled === false} onClick={() => void checkUpdates()}>
+              <RefreshCw size={15} className={updateCheck === 'checking' ? 'spin' : undefined} />{t.checkUpdates}</button>
+            {updateStatus?.enabled === false ? <small>{t.updatesOff}</small>
+              : updateCheck === 'latest' ? <small role="status"><Check size={13} />{t.upToDate}</small>
+                : updateCheck === 'failed' ? <small className="inline-error" role="alert">{t.updateCheckFailed}</small> : null}
+          </div>}
+        </section>
         <section className="shortcut-guide" data-tour="settings-shortcuts" aria-label={t.shortcutTitle}>
           <h3><Keyboard size={17} />{t.shortcutTitle}</h3><p>{t.shortcutHint}</p>
           <dl>{SHORTCUTS.map(shortcut => <div key={shortcut.action}><dt>{t.shortcutActions[shortcut.action]}</dt><dd><kbd dir="ltr">{shortcutLabel(shortcut.action, applePlatform)}</kbd></dd></div>)}</dl>

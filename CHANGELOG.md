@@ -7,6 +7,26 @@ and this project uses Semantic Versioning.
 
 ### Added
 
+- Update check: once a day the server asks GitHub (anonymously) for newer
+  releases (`GET /updates`, `UPDATE_CHECK_ENABLED`, on by default and in
+  Settings). The sidebar offers the latest one, and its window lists the
+  changes of every newer release in Persian or English, asks for a backup of
+  the conversations, and gives one command:
+  `scripts/update.ps1` (Windows) or `scripts/update.sh`.
+- The update scripts back up `.env`, the Qdrant data, and the model settings,
+  go straight to the latest release tag, rebuild with the same Compose files
+  and profile, wait until the service is ready, and start the previous
+  version again if the rebuild fails.
+- After an update the app shows what changed in every version since the last
+  one seen (`GET /release-notes`, from `release-notes/<version>.<fa|en>.md`),
+  and an open page loads the new interface by itself: the page and the service
+  worker are served with `Cache-Control: no-cache`, hashed assets are cached
+  for a year, and a waiting interface is activated when nothing is running.
+- One version for the project in `VERSION`, read by the backend and the
+  frontend build; `scripts/set_version.py` copies it to `pyproject.toml`,
+  `package.json`, `package-lock.json`, and `CITATION.cff`, and a test keeps
+  them in step.
+
 - `OCR_DOCUMENT_TIMEOUT_SECONDS` (default 900, changeable in Settings) bounds
   the OCR time of one document. Remaining pages and images are skipped with a
   notice and the rest is indexed.

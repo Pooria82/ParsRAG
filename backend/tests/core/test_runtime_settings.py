@@ -225,6 +225,7 @@ def test_settings_api_reads_changes_and_resets(tmp_path: Path) -> None:
         "retrieval",
         "documents",
         "performance",
+        "updates",
     }
     assert changed.status_code == 200
     images = next(

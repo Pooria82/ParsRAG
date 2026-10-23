@@ -15,7 +15,7 @@ import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { usePwa } from './hooks/usePwa';
 import { ApiError, ParsRagApiClient } from './services/api';
-import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, ModelConnectionState, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
+import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, ModelConnectionState, QueryStage, ReleaseNote, UpdateStatus, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
 import { answerGrounding, answerTo, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, placeAnswer, prepareTurnRegeneration, selectConversationBranch, STORAGE, validateUploads } from './core/state';
@@ -23,6 +23,10 @@ import { flushPendingDeletions, parsePendingDeletions } from './core/storage';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
 import { citedNumbers } from './core/citations';
+import { APP_VERSION } from './core/appVersion';
+import { isNewerVersion, notesToShow, offeredUpdate, UPDATE_STORAGE } from './core/updates';
+import { UpdateDialog } from './components/UpdateDialog';
+import { WhatsNewDialog } from './components/WhatsNewDialog';
 
 /**
  * Longest wait for any stream event. The server sends a ping every 15 seconds
@@ -34,6 +38,14 @@ const STREAM_IDLE_MS = 60000;
 function unreachable(error: unknown): boolean {
   return (error instanceof ApiError && error.code === 'network')
     || (error instanceof DOMException && ['TimeoutError', 'AbortError'].includes(error.name));
+}
+
+function readStored(key: string, storage: () => Storage = () => localStorage): string | null {
+  try { return storage().getItem(key); } catch { return null; }
+}
+
+function writeStored(key: string, value: string, storage: () => Storage = () => localStorage): void {
+  try { storage().setItem(key, value); } catch { /* Shown again next time; nothing breaks. */ }
 }
 
 function readPendingDeletions(): string[] {
@@ -65,6 +77,10 @@ export function App() {
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
   const [modelState, setModelState] = useState<ModelConnectionState | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [skippedUpdate, setSkippedUpdate] = useState(() => readStored(UPDATE_STORAGE.skippedUpdate));
+  const [whatsNew, setWhatsNew] = useState<{ version: string; notes: ReleaseNote[] } | null>(null);
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
   const [focusToken, setFocusToken] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
@@ -128,6 +144,8 @@ export function App() {
             setModelRuntime(configuration);
             setIngestionCapabilities(capabilities.ingestion);
             setModelState(model);
+            // Served from the server's daily check; offline it simply stays unknown.
+            void api.updates(false, controller.signal).then(setUpdateStatus).catch(() => undefined);
           } catch { setModelRuntime(undefined); setModelState(null); }
         }
       }
@@ -157,6 +175,40 @@ export function App() {
     return () => { controller.abort(); clearTimeout(timeout); };
   }, [active.id, api, connection, uploadingId, updateSession]);
   useEffect(() => () => { queryRef.current?.controller.abort(); progressRef.current?.abort(); }, []);
+
+  const serverVersion = updateStatus?.current_version;
+  // The server was updated while this page was open: load the new interface.
+  // A tab reloads once per version, so a mismatch can never loop.
+  useEffect(() => {
+    if (!serverVersion || !isNewerVersion(serverVersion, APP_VERSION) || busy) return;
+    const session = () => sessionStorage;
+    if (readStored(UPDATE_STORAGE.reloadedFor, session) === serverVersion) return;
+    writeStored(UPDATE_STORAGE.reloadedFor, serverVersion, session);
+    window.location.reload();
+  }, [serverVersion, busy]);
+  // A new interface is ready in the background: switch to it when idle, so
+  // nobody has to clear the cache. The page already runs it after an update.
+  useEffect(() => {
+    if (pwa.updateReady && !busy) pwa.activateUpdate(serverVersion !== APP_VERSION);
+  }, [pwa.updateReady, busy, serverVersion]);
+  // After an update, show once what changed in every version since the last one seen.
+  useEffect(() => {
+    if (!serverVersion || serverVersion !== APP_VERSION) return;
+    const seen = readStored(UPDATE_STORAGE.seenVersion);
+    const show = notesToShow(seen, serverVersion, sessionsRef.current.some(session => session.messages.length > 0));
+    if (!show) { if (seen !== serverVersion) writeStored(UPDATE_STORAGE.seenVersion, serverVersion); return; }
+    const controller = new AbortController();
+    void api.releaseNotes(show.since, settings.language, controller.signal).then(notes => {
+      if (notes.length) setWhatsNew({ version: serverVersion, notes });
+      else writeStored(UPDATE_STORAGE.seenVersion, serverVersion);
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [serverVersion, api, settings.language]);
+  const closeWhatsNew = () => {
+    if (whatsNew) writeStored(UPDATE_STORAGE.seenVersion, whatsNew.version);
+    setWhatsNew(null);
+  };
+  const exportBackup = () => downloadText(`parsrag-backup-${new Date().toISOString().slice(0, 10)}.json`, createBackup(sessionsRef.current, settings), 'application/json');
 
   // Delete on the server what was deleted here while it was unreachable.
   useEffect(() => {
@@ -464,12 +516,13 @@ export function App() {
       language={settings.language} theme={settings.theme}
       onToggleTheme={origin => transitionTheme(settings.theme === 'dark' ? 'light' : 'dark', origin)}
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
-      connection={connection} modelRuntime={modelRuntime} modelState={modelState} onRetryConnection={checkHealth} uploadingSessionId={uploadingId} />
+      connection={connection} modelRuntime={modelRuntime} modelState={modelState} onRetryConnection={checkHealth}
+      updateVersion={offeredUpdate(updateStatus, skippedUpdate)} onOpenUpdate={() => setUpdateOpen(true)} uploadingSessionId={uploadingId} />
     <main className="workspace">
       <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
       {(notice || storageError) && <div className="notice" role="status"><AlertCircle size={17} /><span>{storageError ? t.storageFailed : notice}</span>{!storageError && <button className="icon-button" onClick={() => setNotice(null)} aria-label={t.dismiss}><X size={16} /></button>}</div>}
-      {pwa.updateReady && <div className="notice pwa-update" role="status"><span>{t.pwaUpdateReady}</span><button className="button secondary" disabled={busy} onClick={pwa.activateUpdate}>{t.pwaApplyUpdate}</button></div>}
+      {pwa.updateReady && <div className="notice pwa-update" role="status"><span>{t.pwaUpdateReady}</span><button className="button secondary" disabled={busy} onClick={() => pwa.activateUpdate()}>{t.pwaApplyUpdate}</button></div>}
       {active.messages.length === 0 ? <Welcome language={settings.language} composer={composer} onSelectStarter={draft => {
         updateSession(active.id, s => ({ ...s, draft }));
         setFocusToken(value => value + 1);
@@ -525,7 +578,12 @@ export function App() {
         else updateSettings(updated);
       }} busy={busy}
       onClearAllData={clearAllData}
-      onExportBackup={() => downloadText(`parsrag-backup-${new Date().toISOString().slice(0, 10)}.json`, createBackup(sessionsRef.current, settings), 'application/json')}
+      onExportBackup={exportBackup}
+      updateStatus={updateStatus}
+      onCheckUpdates={async () => {
+        try { const status = await api.updates(true); setUpdateStatus(status); return status; } catch { return null; }
+      }}
+      onOpenUpdate={() => { setSettingsOpen(false); setUpdateOpen(true); }}
       onImportBackup={async file => {
         const backup = parseBackup(await file.text(), window.location.origin);
         const merged = mergeSessions(sessionsRef.current, backup.sessions);
@@ -534,6 +592,10 @@ export function App() {
         if (backup.settings) updateSettings({ ...backup.settings, backendUrl: settings.backendUrl });
         return { added: merged.added, updated: merged.updated };
       }} />
+    {updateStatus?.update_available && <UpdateDialog open={updateOpen} status={updateStatus} language={settings.language}
+      onClose={() => setUpdateOpen(false)} onBackup={exportBackup}
+      onSkip={version => { writeStored(UPDATE_STORAGE.skippedUpdate, version); setSkippedUpdate(version); }} />}
+    {whatsNew && <WhatsNewDialog notes={whatsNew.notes} currentVersion={whatsNew.version} language={settings.language} onClose={closeWhatsNew} />}
     <WorkspaceTour open={guideOpen} language={settings.language} onClose={closeGuide} onStageChange={changeTourStage} activeStage={tourStage} />
   </div>;
 }

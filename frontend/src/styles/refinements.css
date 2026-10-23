@@ -168,3 +168,28 @@
 .advanced-settings{margin-top:22px;border:1px solid var(--line);border-radius:10px;padding:10px 14px}.advanced-settings>summary{cursor:pointer;font-size:13px;font-weight:500;padding:4px 0}.advanced-settings .server-settings-group:first-child{border-top:0;margin-top:4px;padding-top:4px}.advanced-settings .server-settings-group h3{display:none}
 .server-settings>.server-settings-group:first-child{border-top:0;margin-top:0;padding-top:0}
 .server-setting-input .text-input:disabled{background:var(--surface-soft);color:var(--secondary);cursor:not-allowed;opacity:1}
+
+/* Updates: the sidebar badge, the update dialog, and the notes after an update. */
+.update-badge{display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px;padding:8px 11px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--accent);font-size:11px;font-weight:600;text-align:start}
+.update-badge:hover{background:color-mix(in srgb,var(--accent) 15%,var(--surface))}
+.update-steps{display:grid;gap:14px;margin:0;padding-inline-start:20px}
+.update-steps li p{margin:3px 0 8px;color:var(--muted);font-size:12px;line-height:1.8}
+.update-steps small{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+.update-command{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-hover)}
+.update-command code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-size:12px}
+.update-command[aria-disabled]{opacity:.55}
+.update-releases{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+.update-releases h3,.whats-new-version h3{margin:0 0 8px;font-size:13px}
+.update-releases article+article{margin-top:14px}
+.update-releases header{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+.update-releases header a{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-size:11px}
+.release-notes{font-size:13px;line-height:1.9}
+.release-notes ul{margin:6px 0;padding-inline-start:20px}
+.release-notes h3{margin:12px 0 4px;font-size:13px}
+.whats-new-version+.whats-new-version{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.update-dialog .dialog-surface,.whats-new-dialog .dialog-surface{max-height:min(86vh,760px);overflow-y:auto}
+.update-setting{display:grid;gap:8px}
+.update-setting h3{margin:0;font-size:14px}
+.update-setting p{margin:0;color:var(--muted);font-size:12px}
+.update-check{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.update-check small{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:11px}
