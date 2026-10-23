@@ -1,8 +1,12 @@
 """Outbound DTOs for model connections and model-backed helpers."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from backend.core.domain.enums import ModelProvider
+
+ModelConnectionState = Literal["ready", "unreachable", "model_missing", "auth_failed"]
 
 
 class ModelConfigurationResponse(BaseModel):
@@ -15,6 +19,19 @@ class ModelConfigurationResponse(BaseModel):
     disclosure_acknowledged: bool = False
     # The server's own Ollama URL, offered when switching from an API to Ollama.
     ollama_base_url: str | None = None
+
+
+class ModelStatusResponse(BaseModel):
+    """Whether the active model service answers right now.
+
+    ``ready``: it answers (and Ollama has the model). ``unreachable``: Ollama is
+    not running or the API cannot be reached. ``model_missing``: Ollama runs
+    without the selected model. ``auth_failed``: the API rejected the key.
+    """
+
+    provider: ModelProvider
+    model_name: str
+    status: ModelConnectionState
 
 
 class QuestionSuggestionResponse(BaseModel):

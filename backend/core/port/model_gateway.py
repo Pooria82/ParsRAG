@@ -3,7 +3,11 @@
 from typing import Literal, Protocol
 
 from backend.core.dto.input.model import ModelConfigurationRequest
-from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.dto.output.model import (
+    ModelConfigurationResponse,
+    ModelStatusResponse,
+    OllamaModel,
+)
 
 
 class ModelGateway(Protocol):
@@ -21,6 +25,10 @@ class ModelGateway(Protocol):
         self, configuration: ModelConfigurationRequest
     ) -> ModelConfigurationResponse:
         """Verify, persist, and activate a model connection."""
+        ...
+
+    def connection_status(self) -> ModelStatusResponse:
+        """Check, briefly, whether the active model service answers."""
         ...
 
     def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:

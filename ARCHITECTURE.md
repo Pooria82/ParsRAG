@@ -158,7 +158,7 @@ Detailed sequence diagrams for every flow are in the
 | Follow progress | `GET /queries/{id}/progress` | `ReadQueryProgress` | `ProgressTracker` |
 | Reuse a document | `POST /sessions/{id}/files/reuse` | `ReuseDocument` | `DocumentRepository` |
 | List or delete documents | `GET`/`DELETE /sessions/{id}...` | `ListSessionFiles`, `DeleteDocument`, `DeleteSession` | `DocumentRepository` |
-| Configure the model | `GET`/`PUT /models/configuration`, `GET /models/ollama` | `ReadModelConfiguration`, `ConfigureModel`, `ListOllamaModels` | `ModelGateway` |
+| Configure the model | `GET`/`PUT /models/configuration`, `GET /models/ollama`, `GET /models/status` | `ReadModelConfiguration`, `ConfigureModel`, `ListOllamaModels`, `CheckModelConnection` | `ModelGateway` |
 | Change runtime settings | `GET`/`PUT`/`DELETE /settings/runtime` | `ReadRuntimeSettings`, `UpdateRuntimeSettings` | `RuntimeSettingsStore` |
 | Show a cited image | `GET /sessions/{id}/images/{n}` | `ReadSourceImage` | `DocumentRepository` |
 | Title a conversation | `POST /conversations/title` | `GenerateConversationTitle` | `ModelGateway` |

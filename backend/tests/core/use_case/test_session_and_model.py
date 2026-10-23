@@ -21,10 +21,15 @@ from backend.core.dto.input.model import (
     ConversationTitleRequest,
     ModelConfigurationRequest,
 )
-from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.dto.output.model import (
+    ModelConfigurationResponse,
+    ModelStatusResponse,
+    OllamaModel,
+)
 from backend.core.runtime.capacity import WorkLimiter
 from backend.core.runtime.readiness import RuntimeState
 from backend.core.runtime.session_locks import SessionLocks
+from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
     GenerateConversationTitle,
@@ -67,6 +72,14 @@ class FakeGateway:
         if self.fail:
             raise ModelConnectionError("unreachable")
         return CONFIGURATION
+
+    def connection_status(self) -> ModelStatusResponse:
+        """Report the fixed model as unreachable when failing."""
+        return ModelStatusResponse(
+            provider=CONFIGURATION.provider,
+            model_name=CONFIGURATION.model_name,
+            status="unreachable" if self.fail else "ready",
+        )
 
     def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
         """List one model or fail."""
@@ -265,3 +278,10 @@ def test_generic_model_failures_keep_generic_codes() -> None:
         ListOllamaModels(FakeGateway(fail=True)).execute()
     assert configured.value.code == "invalid_request"
     assert listed.value.code == "upstream_unavailable"
+
+
+def test_model_connection_reports_the_gateway_status() -> None:
+    assert CheckModelConnection(FakeGateway()).execute().status == "ready"
+    assert (
+        CheckModelConnection(FakeGateway(fail=True)).execute().status == "unreachable"
+    )

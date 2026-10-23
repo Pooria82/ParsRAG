@@ -15,7 +15,7 @@ import { useLanguageTransition } from './hooks/useLanguageTransition';
 import { usePersistentWorkspace } from './hooks/usePersistentWorkspace';
 import { usePwa } from './hooks/usePwa';
 import { ApiError, ParsRagApiClient } from './services/api';
-import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
+import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, ModelConnectionState, QueryStage, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
 import { answerGrounding, answerTo, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, placeAnswer, prepareTurnRegeneration, selectConversationBranch, STORAGE, validateUploads } from './core/state';
@@ -64,6 +64,7 @@ export function App() {
   const [suggesting, setSuggesting] = useState<string>();
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
+  const [modelState, setModelState] = useState<ModelConnectionState | null>(null);
   const [ingestionCapabilities, setIngestionCapabilities] = useState<IngestionCapabilities>(DEFAULT_INGESTION_CAPABILITIES);
   const [focusToken, setFocusToken] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
@@ -119,12 +120,15 @@ export function App() {
         setConnection(status);
         if (status === 'online') {
           try {
-            const [configuration, capabilities] = await Promise.all([
+            const [configuration, capabilities, model] = await Promise.all([
               api.modelConfiguration(controller.signal), api.capabilities(controller.signal),
+              // The app can be ready while Ollama is stopped or the API refuses the key.
+              api.modelStatus(controller.signal).catch(() => null),
             ]);
             setModelRuntime(configuration);
             setIngestionCapabilities(capabilities.ingestion);
-          } catch { setModelRuntime(undefined); }
+            setModelState(model);
+          } catch { setModelRuntime(undefined); setModelState(null); }
         }
       }
     } catch {
@@ -460,7 +464,7 @@ export function App() {
       language={settings.language} theme={settings.theme}
       onToggleTheme={origin => transitionTheme(settings.theme === 'dark' ? 'light' : 'dark', origin)}
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
-      connection={connection} modelRuntime={modelRuntime} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
+      connection={connection} modelRuntime={modelRuntime} modelState={modelState} onRetryConnection={checkHealth} uploadingSessionId={uploadingId} />
     <main className="workspace">
       <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />
@@ -513,7 +517,7 @@ export function App() {
     <SettingsModal open={settingsOpen} guided={guideOpen} guidedTab={guideOpen ? tourStage.settingsTab : undefined} guidedProvider={guideOpen ? tourStage.provider : undefined} settings={settings} onClose={() => setSettingsOpen(false)}
       onStartGuide={() => setGuideOpen(true)}
       canInstall={pwa.canInstall} onInstall={() => void pwa.install()}
-      onModelConfigured={setModelRuntime}
+      onModelConfigured={configuration => { setModelRuntime(configuration); void checkHealth(); }}
       onRuntimeChanged={() => void checkHealth()}
       onUpdateSettings={updated => {
         if (updated.theme && updated.theme !== settings.theme) transitionTheme(updated.theme);

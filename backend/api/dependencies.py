@@ -24,6 +24,7 @@ from backend.core.strategies.hybrid_rag import HybridRAGStrategy
 from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
+from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
     GenerateConversationTitle,
@@ -216,6 +217,11 @@ def get_delete_document(
 ) -> DeleteDocument:
     """Build the single-document deletion use case."""
     return DeleteDocument(repo, session_locks)
+
+
+def get_check_model_connection() -> CheckModelConnection:
+    """Build the model connection check use case."""
+    return CheckModelConnection(model_gateway)
 
 
 def get_read_model_configuration() -> ReadModelConfiguration:
