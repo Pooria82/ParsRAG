@@ -32,6 +32,17 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- Answers are written in the language of the question, also when the
+  documents are in the other language. A follow-up such as «چطور تمدید
+  می‌شوند؟» about English documents was rewritten as an English question, and
+  the answer language was taken from that rewrite; with gemma3:4b all five
+  such test questions were answered in the wrong language, and now all five
+  are right. The prompt asks to translate what it uses and starts the answer
+  in the question's language. A question without words (a formula) is
+  answered in the interface language, which the browser now sends.
+- Your questions sit on the side their language starts from: Persian on the
+  right and English on the left, in either interface language. They were on
+  the opposite side.
 - Text and pictures inside grouped PowerPoint shapes are indexed, and a
   linked picture adds a notice instead of rejecting the whole deck.
 - Content inside Word content controls (forms, templates) is indexed; a

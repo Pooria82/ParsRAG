@@ -22,6 +22,7 @@ from backend.core.runtime.correlation import current_correlation_id
 from backend.core.service.text_normalization import normalize_persian
 from backend.core.strategies.generation import build_response
 from backend.core.strategies.multi_doc_utils import parse_tagged_segments
+from backend.core.strategies.prompt_rules import question_language
 
 logger = logging.getLogger("parsrag.operations")
 
@@ -39,6 +40,7 @@ class _ExecuteOptions(TypedDict, total=False):
 
     progress: ProgressCallback
     document_segments: list[tuple[str, str]]
+    answer_language: str
 
 
 class AnswerQuery:
@@ -222,8 +224,17 @@ class AnswerQuery:
         request_id: str | None,
         segments: list[tuple[str, str]] | None = None,
     ) -> _ExecuteOptions:
-        """Collect the progress callback and explicit document segments."""
-        options: _ExecuteOptions = {}
+        """Collect the progress callback, document segments, and answer language.
+
+        The answer language comes from the question as asked: the rewritten
+        question may be in another language (follow-ups about English
+        documents), and its language must not decide the answer's.
+        """
+        options: _ExecuteOptions = {
+            "answer_language": question_language(
+                request.prompt, request.language or "fa"
+            )
+        }
         if request_id:
             options["progress"] = lambda stage: self._progress.set_stage(
                 request_id, stage

@@ -9,6 +9,7 @@ from backend.core.strategies.prompt_rules import (
     FORMATTING_RULES,
     LANGUAGE_RULES,
     answer_language_rule,
+    question_language,
 )
 
 LLM_ONLY_PROMPT_TEMPLATE = (
@@ -23,8 +24,7 @@ You are a helpful assistant. Answer the user's question directly from your gener
 
 Query: {query}
 
-{answer_language}
-Answer:"""
+{answer_language}"""
 )
 
 
@@ -49,6 +49,7 @@ class LLMOnlyStrategy(GeneratingStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> PreparedAnswer:
         """Build the model-only prompt; nothing is retrieved.
 
@@ -60,12 +61,16 @@ class LLMOnlyStrategy(GeneratingStrategy):
             file_filter (list[str] | None, optional): Ignored in this strategy.
             progress (ProgressCallback | None, optional): Reports model generation.
             document_segments: Ignored in this strategy.
+            answer_language: ``"fa"`` or ``"en"``; by default the language of ``query``.
 
         Returns:
             PreparedAnswer: The prompt; the question is already condensed.
         """
         return PreparedAnswer(
             prompt=self.prompt_template.format(
-                query=query, answer_language=answer_language_rule(query)
+                query=query,
+                answer_language=answer_language_rule(
+                    answer_language or question_language(query)
+                ),
             )
         )

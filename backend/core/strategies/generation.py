@@ -45,6 +45,7 @@ class GeneratingStrategy:
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> PreparedAnswer:
         """Retrieve evidence and build the prompt (implemented per mode)."""
         raise NotImplementedError
@@ -58,6 +59,7 @@ class GeneratingStrategy:
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> QueryResponse:
         """Prepare, then generate the whole answer in one model call."""
         prepared = self.prepare(
@@ -68,6 +70,7 @@ class GeneratingStrategy:
             file_filter=file_filter,
             progress=progress,
             document_segments=document_segments,
+            answer_language=answer_language,
         )
         if prepared.prompt is None:
             return build_response(prepared)

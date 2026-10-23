@@ -379,4 +379,5 @@ def test_query_route_with_file_filter(
         session_id="session-123",
         top_k=None,
         file_filter=["file2.docx"],
+        answer_language="en",
     )
