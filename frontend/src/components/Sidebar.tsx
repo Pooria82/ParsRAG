@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, FileDown, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, Search, Settings2, Sun, Trash2 } from 'lucide-react';
+import { Check, FileDown, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, RotateCw, Search, Settings2, Sun, Trash2 } from 'lucide-react';
 import { conversationMarkdown, downloadText, exportFilename } from '../core/workspaceTransfer';
 import type { Language, ModelConfiguration, ModelConnectionState, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
@@ -13,7 +13,7 @@ interface SidebarProps {
   onDeleteSession: (id: string) => Promise<boolean>; onRenameSession: (id: string, title: string) => void;
   language: Language; theme: Theme; onToggleTheme: (origin: { x: number; y: number }) => void;
   onOpenSettings: () => void; isOpen: boolean; isMobile: boolean; onClose: () => void;
-  connection: 'checking' | 'preparing' | 'online' | 'offline'; onRetryConnection: () => void;
+  connection: 'checking' | 'preparing' | 'online' | 'offline'; onRetryConnection: () => void | Promise<void>;
   modelRuntime?: ModelConfiguration;
   /** Whether the model service answers; the app can be ready while it does not. */
   modelState?: ModelConnectionState | null;
@@ -24,6 +24,14 @@ interface SidebarProps {
 export function Sidebar(props: SidebarProps) {
   const { sessions, activeSessionId, onSelectSession, onNewChat, language, theme, isOpen, isMobile } = props;
   const t = translations[language];
+  const [retrying, setRetrying] = useState(false);
+  /** Spin the icon while the check runs, and long enough to be seen. */
+  const retry = () => {
+    if (retrying) return;
+    setRetrying(true);
+    void Promise.all([Promise.resolve(props.onRetryConnection()).catch(() => undefined), new Promise(resolve => setTimeout(resolve, 700))])
+      .finally(() => setRetrying(false));
+  };
   const modelProblem = props.connection !== 'online' || !props.modelState || props.modelState === 'ready' ? undefined
     : props.modelState === 'model_missing' ? t.modelMissing : props.modelState === 'auth_failed' ? t.modelAuthFailed
       : props.modelRuntime?.provider === 'api' ? t.modelUnreachableApi : t.modelUnreachableOllama;
@@ -88,7 +96,7 @@ export function Sidebar(props: SidebarProps) {
         <span className="status-dot" /><span><strong>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? modelProblem ?? t.backendOnline : t.backendOffline}</strong>
           {props.connection === 'online' && props.modelRuntime ? <small><bdi>{props.modelRuntime.provider === 'ollama' ? t.modelProviderOllama : t.modelProviderApi}</bdi><i aria-hidden="true">·</i><bdi dir="ltr">{props.modelRuntime.model_name}</bdi></small> : null}
         </span>
-        {(props.connection === 'offline' || modelProblem) && <button onClick={props.onRetryConnection} title={t.retryConnection} aria-label={t.retryConnection}>↻</button>}
+        {(props.connection === 'offline' || modelProblem || retrying) && <button className="retry-connection" onClick={retry} disabled={retrying} aria-busy={retrying || undefined} title={t.retryConnection} aria-label={t.retryConnection}><RotateCw size={15} className={retrying ? 'spin' : undefined} /></button>}
       </div>
       <div className="sidebar-footer">
         <button className="settings-button" data-tour="settings" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>

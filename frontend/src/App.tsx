@@ -464,7 +464,7 @@ export function App() {
       language={settings.language} theme={settings.theme}
       onToggleTheme={origin => transitionTheme(settings.theme === 'dark' ? 'light' : 'dark', origin)}
       onOpenSettings={() => setSettingsOpen(true)} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)}
-      connection={connection} modelRuntime={modelRuntime} modelState={modelState} onRetryConnection={() => void checkHealth()} uploadingSessionId={uploadingId} />
+      connection={connection} modelRuntime={modelRuntime} modelState={modelState} onRetryConnection={checkHealth} uploadingSessionId={uploadingId} />
     <main className="workspace">
       <Header title={active.title} language={settings.language} isSidebarOpen={sidebarOpen} isEmpty={!active.messages.length} onNewChat={newChat}
         documentCount={active.documents.length} onToggleSidebar={() => setSidebarOpen(value => !value)} onOpenDocuments={() => setDocumentsOpen(true)} />

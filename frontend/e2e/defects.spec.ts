@@ -172,7 +172,11 @@ test('"Service ready" needs the model service too', async ({ page }) => {
   await expect(status).toHaveAttribute('data-status', 'degraded');
 
   model = 'ready';
-  await status.getByRole('button', { name: 'Check again' }).click();
+  const retry = status.getByRole('button', { name: 'Check again' });
+  await retry.click();
+  // The icon spins while the check runs, so the click visibly does something.
+  await expect(retry.locator('svg')).toHaveClass(/spin/);
+  await expect(retry).toBeDisabled();
   await expect(status).toContainText('Service ready');
   await expect(status).toHaveAttribute('data-status', 'online');
 });

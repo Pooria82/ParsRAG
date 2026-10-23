@@ -37,7 +37,8 @@ and this project uses Semantic Versioning.
   the selected model installed; an API reachable and accepting the key, at
   most every 10 seconds), and the sidebar says "Ollama is not reachable",
   "This model is not installed in Ollama", "The model API is not reachable"
-  or "The API key was rejected" instead, with a Check again button.
+  or "The API key was rejected" instead, with a Check again button whose
+  icon spins while the check runs.
 - Answers are written in the language of the question, also when the
   documents are in the other language. A follow-up such as «چطور تمدید
   می‌شوند؟» about English documents was rewritten as an English question, and
