@@ -1,4 +1,4 @@
-# Installable Workspace and Offline Shell
+# ADR 09: Installable Workspace and Offline Shell
 
 ParsRAG can be installed as a progressive web app from the local web origin.
 The manifest provides a stable identity, standalone display, and raster icons

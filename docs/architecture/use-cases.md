@@ -28,6 +28,7 @@ flowchart LR
         CM[ConfigureModel]
         LOM[ListOllamaModels]
         GCT[GenerateConversationTitle]
+        SQ[SuggestQuestions]
     end
     subgraph system
         CR[CheckReadiness]
@@ -40,7 +41,9 @@ flowchart LR
     RQP --> ProgressTracker
     LSF & RSI & RD & DD & DS --> DocumentRepository
     RRS & URS --> RuntimeSettingsStore
-    RMC & CM & LOM & GCT --> ModelGateway
+    RMC & CM & LOM & GCT & SQ --> ModelGateway
+    SQ --> DocumentRepository
+    QueryStrategy -.-> Reranker
     CR --> DocumentRepository
 ```
 
@@ -62,6 +65,7 @@ flowchart LR
 | `UpdateRuntimeSettings` | `PUT`/`DELETE /settings/runtime` | `RuntimeSettingsUpdate` | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | Persists overrides; rebuilds model clients when their settings change |
 | `ReadSourceImage` | `GET /sessions/{id}/images/{n}` | session, filename, image number | WebP bytes | `DocumentRepository` | — |
 | `GenerateConversationTitle` | `POST /conversations/title` | `ConversationTitleRequest` | `ConversationTitleResponse` | `ModelGateway` | query limiter |
+| `SuggestQuestions` | `POST /sessions/{id}/suggestions` | session ID, `QuestionSuggestionRequest` | `QuestionSuggestionResponse` (up to three questions) | `DocumentRepository`, `ModelGateway` | query limiter |
 | `CheckReadiness` | `GET /health/ready` | — | status string | `DocumentRepository` (lazy) | readiness state |
 | `DescribeCapabilities` | `GET /capabilities` | — | `AppCapabilitiesResponse` | — | upload policy |
 
