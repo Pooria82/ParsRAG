@@ -1,4 +1,4 @@
-import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelProvider, OllamaModel, QueryStage, RuntimeSettings } from '../types';
+import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelConnectionState, ModelProvider, OllamaModel, QueryStage, RuntimeSettings } from '../types';
 
 /** A failed request with the server's stable error code ('network' when unreachable). */
 export class ApiError extends Error {
@@ -248,6 +248,16 @@ export class ParsRagApiClient {
     const response = await fetch(this.url('/models/configuration'), { signal });
     if (!response.ok) throw new ApiError('request_failed', response.status);
     return response.json() as Promise<ModelConfiguration>;
+  }
+
+  /** Whether the active model service answers; null from a server without the check. */
+  async modelStatus(signal?: AbortSignal): Promise<ModelConnectionState | null> {
+    const response = await fetch(this.url('/models/status'), { signal });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    const payload: unknown = await response.json();
+    const status = typeof payload === 'object' && payload !== null && 'status' in payload ? payload.status : null;
+    return status === 'ready' || status === 'unreachable' || status === 'model_missing' || status === 'auth_failed' ? status : null;
   }
 
   async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string; disclosure_acknowledged?: boolean }, signal?: AbortSignal): Promise<ModelConfiguration> {

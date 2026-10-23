@@ -1,6 +1,9 @@
 import json
 import os
 import re
+import threading
+import time
+from collections.abc import Callable
 from threading import RLock
 from typing import Literal
 from urllib.parse import urlsplit
@@ -15,7 +18,12 @@ from llama_index.llms.ollama import Ollama  # type: ignore
 
 from backend.core.domain.enums import ModelProvider
 from backend.core.dto.input.model import ModelConfigurationRequest
-from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.dto.output.model import (
+    ModelConfigurationResponse,
+    ModelConnectionState,
+    ModelStatusResponse,
+    OllamaModel,
+)
 from backend.core.service.retrieval_optimizer import RetrievalOptimizer
 from backend.infrastructure.embedding_profile import active_embedding_profile
 from backend.infrastructure.llm.config_store import (
@@ -400,6 +408,75 @@ def _verify_openai_compatible_connection(base_url: str, api_key: str | None) -> 
         follow_redirects=False,
     )
     response.raise_for_status()
+
+
+# Seconds a connection check is reused: every open tab checks every 30 seconds.
+MODEL_STATUS_TTL_SECONDS = 10.0
+_status_cache: tuple[tuple[object, ...], float, ModelConnectionState] | None = None
+_status_lock = threading.Lock()
+
+
+def model_connection_status(
+    clock: Callable[[], float] = time.monotonic,
+) -> ModelStatusResponse:
+    """Check whether the active model service answers, reusing a recent result.
+
+    Ollama must answer ``/api/tags`` and list the selected model. An API must
+    answer ``/models`` without rejecting the key; any other answer below 500
+    (some servers have no model list) counts as reachable.
+    """
+    global _status_cache
+    with _configuration_lock:
+        configuration = _configuration
+        api_key = _api_key
+    key = (
+        configuration.provider,
+        configuration.base_url,
+        configuration.model_name,
+        bool(api_key),
+    )
+    with _status_lock:
+        cached = _status_cache
+    if cached and cached[0] == key and clock() - cached[1] < MODEL_STATUS_TTL_SECONDS:
+        status = cached[2]
+    else:
+        status = _check_connection(configuration, api_key)
+        with _status_lock:
+            _status_cache = (key, clock(), status)
+    return ModelStatusResponse(
+        provider=configuration.provider,
+        model_name=configuration.model_name,
+        status=status,
+    )
+
+
+def _check_connection(
+    configuration: ModelConfigurationRequest, api_key: str | None
+) -> ModelConnectionState:
+    if configuration.provider is ModelProvider.OLLAMA:
+        try:
+            installed = {
+                model.name for model in list_ollama_models(configuration.base_url)
+            }
+        except (httpx.HTTPError, ValueError, OSError):
+            return "unreachable"
+        wanted = configuration.model_name
+        return (
+            "ready"
+            if wanted in installed or f"{wanted}:latest" in installed
+            else "model_missing"
+        )
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        with guarded_http_client(5.0) as client:
+            response = client.get(
+                f"{configuration.base_url.rstrip('/')}/models", headers=headers
+            )
+    except (httpx.HTTPError, ValueError, OSError):
+        return "unreachable"
+    if response.status_code in (401, 403):
+        return "auth_failed"
+    return "unreachable" if response.status_code >= 500 else "ready"
 
 
 def list_ollama_models(base_url: str) -> list[OllamaModel]:

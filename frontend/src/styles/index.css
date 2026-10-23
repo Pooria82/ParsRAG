@@ -100,7 +100,7 @@ a{color:var(--accent);text-underline-offset:3px}
 .connection-status>span:nth-child(2){display:grid;gap:3px;min-width:0;flex:1}.connection-status strong{font-weight:600;color:var(--secondary)}
 .connection-status small{display:flex;align-items:center;gap:5px;min-width:0;color:var(--muted);font-size:9px}.connection-status small bdi:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.connection-status small i{font-style:normal;opacity:.55}
 .status-dot{width:7px;height:7px;margin-top:5px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px color-mix(in srgb,var(--muted) 12%,transparent)}
-[data-status='online'] .status-dot{background:var(--accent)}[data-status='offline'] .status-dot{background:var(--warning)}
+[data-status='online'] .status-dot{background:var(--accent)}[data-status='offline'] .status-dot,[data-status='degraded'] .status-dot{background:var(--warning)}
 .connection-status[data-status='checking'] .status-dot,.connection-status[data-status='preparing'] .status-dot{animation:status-pulse 1.5s ease-in-out infinite}.connection-status button{margin-inline-start:auto;font-size:17px;height:26px;width:28px;border-radius:6px}.connection-status button:hover{background:var(--surface-hover)}
 @keyframes status-pulse{50%{opacity:.35;transform:scale(.72)}}
 .sidebar-footer{display:flex;align-items:center;border-top:1px solid var(--line);padding-top:11px}

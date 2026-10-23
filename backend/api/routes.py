@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
+    get_check_model_connection,
     get_check_readiness,
     get_configure_model,
     get_delete_document,
@@ -47,12 +48,14 @@ from backend.core.dto.output.ingestion import IngestResponse
 from backend.core.dto.output.model import (
     ConversationTitleResponse,
     ModelConfigurationResponse,
+    ModelStatusResponse,
     OllamaModel,
     QuestionSuggestionResponse,
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
 from backend.core.dto.output.runtime_settings import RuntimeSettingsResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
+from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
     GenerateConversationTitle,
@@ -135,6 +138,14 @@ def read_model_configuration(
     use_case: ReadModelConfiguration = Depends(get_read_model_configuration),  # noqa: B008
 ) -> ModelConfigurationResponse:
     """Returns the active model connection without exposing secrets."""
+    return use_case.execute()
+
+
+@router.get("/models/status", response_model=ModelStatusResponse)
+def read_model_status(
+    use_case: CheckModelConnection = Depends(get_check_model_connection),  # noqa: B008
+) -> ModelStatusResponse:
+    """Report whether the active model service answers (checked at most every 10 s)."""
     return use_case.execute()
 
 

@@ -40,6 +40,9 @@ export interface ModelConfiguration {
   ollama_base_url?: string | null;
 }
 
+/** Whether the active model service answers right now (`GET /models/status`). */
+export type ModelConnectionState = 'ready' | 'unreachable' | 'model_missing' | 'auth_failed';
+
 export interface OllamaModel { name: string; size?: number | null }
 
 export interface IngestionCapabilities {

@@ -32,6 +32,12 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- "Service ready" no longer appears while the model cannot answer. A new
+  `GET /models/status` checks the active model service (Ollama running with
+  the selected model installed; an API reachable and accepting the key, at
+  most every 10 seconds), and the sidebar says "Ollama is not reachable",
+  "This model is not installed in Ollama", "The model API is not reachable"
+  or "The API key was rejected" instead, with a Check again button.
 - Answers are written in the language of the question, also when the
   documents are in the other language. A follow-up such as «چطور تمدید
   می‌شوند؟» about English documents was rewritten as an English question, and

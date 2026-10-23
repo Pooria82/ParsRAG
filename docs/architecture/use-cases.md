@@ -27,6 +27,7 @@ flowchart LR
         RMC[ReadModelConfiguration]
         CM[ConfigureModel]
         LOM[ListOllamaModels]
+        CMC[CheckModelConnection]
         GCT[GenerateConversationTitle]
         SQ[SuggestQuestions]
     end
@@ -41,7 +42,7 @@ flowchart LR
     RQP --> ProgressTracker
     LSF & RSI & RD & DD & DS --> DocumentRepository
     RRS & URS --> RuntimeSettingsStore
-    RMC & CM & LOM & GCT & SQ --> ModelGateway
+    RMC & CM & LOM & CMC & GCT & SQ --> ModelGateway
     SQ --> DocumentRepository
     QueryStrategy -.-> Reranker
     CR --> DocumentRepository
@@ -60,6 +61,7 @@ flowchart LR
 | `DeleteSession` | `DELETE /sessions/{id}` | session ID | `MessageResponse` | `DocumentRepository` | session lock |
 | `ReadModelConfiguration` | `GET /models/configuration` | — | `ModelConfigurationResponse` | `ModelGateway` | — |
 | `ConfigureModel` | `PUT /models/configuration` | `ModelConfigurationRequest` | `ModelConfigurationResponse` | `ModelGateway` | — |
+| `CheckModelConnection` | `GET /models/status` | — | `ModelStatusResponse` (`ready`, `unreachable`, `model_missing`, `auth_failed`) | `ModelGateway` | — |
 | `ListOllamaModels` | `GET /models/ollama` | base URL | `list[OllamaModel]` | `ModelGateway` | — |
 | `ReadRuntimeSettings` | `GET /settings/runtime` | — | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | — |
 | `UpdateRuntimeSettings` | `PUT`/`DELETE /settings/runtime` | `RuntimeSettingsUpdate` | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | Persists overrides; rebuilds model clients when their settings change |

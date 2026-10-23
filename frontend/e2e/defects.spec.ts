@@ -160,3 +160,19 @@ for (const [language, prompt, side] of [
     await page.screenshot({ path: `test-results/bubble-${language}-${side}.png` });
   });
 }
+
+test('"Service ready" needs the model service too', async ({ page }) => {
+  await open(page);
+  let model = 'unreachable';
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/models/status', route => route.fulfill({ json: { provider: 'ollama', model_name: 'gemma3:4b', status: model } }));
+  await page.goto('/');
+  const status = page.locator('.connection-status');
+  await expect(status).toContainText('Ollama is not reachable; start it');
+  await expect(status).toHaveAttribute('data-status', 'degraded');
+
+  model = 'ready';
+  await status.getByRole('button', { name: 'Check again' }).click();
+  await expect(status).toContainText('Service ready');
+  await expect(status).toHaveAttribute('data-status', 'online');
+});

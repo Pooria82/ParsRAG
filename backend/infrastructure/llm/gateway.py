@@ -7,7 +7,11 @@ import httpx
 from backend.core.domain.enums import ModelProvider
 from backend.core.domain.exceptions import ModelConnectionError, OllamaConnectionError
 from backend.core.dto.input.model import ModelConfigurationRequest
-from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.dto.output.model import (
+    ModelConfigurationResponse,
+    ModelStatusResponse,
+    OllamaModel,
+)
 from backend.infrastructure.llm import factory
 from backend.infrastructure.llm.endpoint_policy import OllamaURLNotAllowedError
 
@@ -44,6 +48,10 @@ class LlamaIndexModelGateway:
             raise ModelConnectionError("Model configuration failed.") from exc
         except (ValueError, TypeError, OSError) as exc:
             raise ModelConnectionError("Model configuration failed.") from exc
+
+    def connection_status(self) -> ModelStatusResponse:
+        """Check, briefly, whether the active model service answers."""
+        return factory.model_connection_status()
 
     def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
         """List installed models from an allowed Ollama service.
