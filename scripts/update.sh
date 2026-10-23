@@ -10,10 +10,14 @@
 # same Compose files, and wait until the service is ready. If the rebuild
 # fails, the previous version is started again.
 set -eu
+# Git Bash on Windows would rewrite the container paths below (/data, /backup).
+export MSYS_NO_PATHCONV=1
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
+# A host path Docker understands (C:/... under Git Bash on Windows).
+host_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 fail() { printf 'ParsRAG update stopped: %s\n' "$1" >&2; exit 1; }
 
 for tool in git docker; do
@@ -70,7 +74,7 @@ if [ -n "$volumes" ]; then
   echo "Backing up the documents index and settings (the service stops for a moment)..."
   docker compose "$@" stop app qdrant
   for volume in $volumes; do
-    if ! docker run --rm --user 0 --entrypoint tar -v "$volume:/data:ro" -v "$backup:/backup" "$image" \
+    if ! docker run --rm --user 0 --entrypoint tar -v "$volume:/data:ro" -v "$(host_path "$backup"):/backup" "$image" \
         -czf "/backup/$volume.tar.gz" -C /data .; then
       docker compose "$@" up -d >/dev/null 2>&1 || true
       fail "the backup failed, so nothing was updated."
