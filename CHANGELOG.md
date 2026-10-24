@@ -5,6 +5,19 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Documentation
+
+- `SECURITY.md`, `DATA.md`, ADRs 03 and 07, and the README describe 1.1.2 as it
+  is:
+  - the daily update check as the only outbound request besides model
+    traffic, and how to turn it off;
+  - the update scripts and their `backups/` folder, which holds a copy of
+    `.env` and so must be kept private;
+  - API keys sent only to their own host, and model API address checks;
+  - `PARSRAG_ALLOWED_HOSTS` adding to loopback;
+  - the new file formats, the OCR time limit per document, and deleting
+    while offline.
+
 ## [1.1.2] - 2026-10-24
 
 ### Added

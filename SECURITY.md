@@ -24,9 +24,10 @@ untrusted network without an authenticated reverse proxy is outside the supporte
 security boundary.
 
 The API answers only to loopback host names (`localhost`, `127.0.0.1`, `::1`)
-unless `PARSRAG_ALLOWED_HOSTS` lists others. This blocks DNS rebinding, where a
-web page points its own domain at 127.0.0.1 to read documents or replace the
-model endpoint. Browser requests that change state must also come from the
+and to the names `PARSRAG_ALLOWED_HOSTS` adds; loopback always stays allowed
+(the container health check and the update script use it). This blocks DNS
+rebinding, where a web page points its own domain at 127.0.0.1 to read
+documents or replace the model endpoint. Browser requests that change state must also come from the
 application's own origin or from `PARSRAG_ALLOWED_ORIGINS`.
 
 ### Local model endpoints
@@ -49,6 +50,45 @@ On Linux, the containers can reach it only if it listens on another address:
   Anyone who reaches the port can run the models and use the GPU. If you use
   it, restrict port 11434 with a firewall to Docker's subnets and use it only
   on a trusted private network.
+
+### Model API endpoints and keys
+
+- **Address checks:**
+  - An OpenAI-compatible API URL must be plain HTTP(S), without credentials,
+    query, or fragment.
+  - Public endpoints must use HTTPS.
+  - Every request re-checks the host's addresses and refuses link-local
+    (cloud metadata), multicast, and reserved targets.
+  - Redirects are never followed, so neither a DNS change nor a redirect can
+    send the prompt or the key elsewhere.
+- **Keys:**
+  - Each API key is held for one host (scheme, host, port) and is only ever
+    sent to it. The key in `.env` (`MODEL_API_KEY`) belongs to
+    `MODEL_API_BASE_URL`. A connection saved for another host, including at
+    startup, gets no key rather than that one.
+  - An external API cannot be saved without a key for its host.
+  - Keys stay in process memory or the environment and are never written to
+    browser storage, logs, API responses, or the saved model configuration.
+
+### Update check and update scripts
+
+- **The daily check:**
+  - Once a day the server asks GitHub for the public release list
+    (`api.github.com`) and the release notes of newer versions
+    (`raw.githubusercontent.com`).
+  - The requests carry nothing about the installation except the running
+    version in the `User-Agent`; GitHub sees the address they come from.
+  - Turn the check off in Settings or with `UPDATE_CHECK_ENABLED=0`.
+  - `PARSRAG_UPDATE_REPOSITORY` points it at a fork; it only selects which
+    public repository is read.
+- **The scripts** (`scripts/update.ps1`, `scripts/update.sh`):
+  - They run on the host with the user's own `git` and `docker`, refuse a copy
+    with changed tracked files, and check out a release tag of the clone's
+    `origin`.
+  - Before changing anything they copy `.env` and the Qdrant and model-settings
+    volumes to `backups/`. That copy of `.env` holds any API key it contains,
+    so treat `backups/` as secret. It is excluded from git and from the Docker
+    build context.
 
 ### Runtime settings
 

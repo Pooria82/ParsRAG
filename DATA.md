@@ -25,9 +25,12 @@ covered in [ARCHITECTURE.md](ARCHITECTURE.md); trust boundaries in
 | Interface preferences, active conversation | Frontend | Browser `localStorage` | No |
 | Non-secret model settings | `ConfigureModel` | `app_config` volume (JSON) | No |
 | Runtime setting overrides | `UpdateRuntimeSettings` (Settings in the app) | `app_config` volume (`runtime-settings.json`) | No |
-| API key | Environment or settings form | Process memory | Only to the configured model endpoint, as a credential |
+| API key | Environment or settings form | Process memory | Only to the host it belongs to, as a credential (the `.env` key belongs to `MODEL_API_BASE_URL`) |
 | Prompt and retrieved excerpts | `AnswerQuery` | Not persisted by the backend | Only when an API model is selected (disclosed in the UI) |
 | Logs | Request middleware | Container stdout | No; method, path, status, duration, and correlation ID only |
+| Pending server deletions | Frontend, when a conversation is deleted while the service is unreachable | Browser `localStorage` (conversation IDs only) | No; sent to this service when it is back |
+| Update check | Server, once a day | Last result in process memory; seen and skipped versions in browser `localStorage` | Anonymous requests to GitHub for the release list and notes, with the running version in the `User-Agent`; off with `UPDATE_CHECK_ENABLED=0` |
+| Update backups | `scripts/update.ps1` / `update.sh` | `backups/<date>-v<version>/` on the host: `.env` (with any API key), archives of the Qdrant and model-settings volumes | No |
 
 ## 2. Ingestion pipeline (ETL)
 
@@ -62,13 +65,17 @@ flowchart LR
 | --- | --- | --- |
 | PDF | Page | `page` |
 | DOCX | Paragraphs under the same heading, grouped up to about 180 words and prefixed with the heading path (`Title › Heading 1 › …`); tables separately, also with the path. Embedded images are OCR'd in place | `paragraph` (+ `paragraph_end`) or `section` |
-| PPTX | Slide, including tables | `slide` |
-| Images | Whole image (OCR) | `page` = 1 |
-| Text, Markdown, JSON, CSV, HTML/XML, YAML, config, logs, code | Whole file or normalized blocks | `section` |
+| PPTX | Slide, including tables, grouped shapes, and speaker notes | `slide` |
+| Images | Whole image (OCR), with a preview kept | `page` = 1, `image` = 1 |
+| CSV, TSV | One table with row records | `table` = 1 |
+| Text, Markdown | Markdown headings, otherwise blocks of about 300 words | `section` |
+| JSON, HTML/XML, YAML, config, logs, code | Whole file or normalized blocks (HTML table cells kept apart) | `section` |
 
 OCR (Tesseract, `fas+eng`) runs only when native text is missing or sparse: for
 scanned PDF pages, standalone images, and images embedded in DOCX/PPTX. It is
-bounded by page count, image count, pixel count, and a per-page timeout. Pages
+bounded by page count, image count, pixel count, a per-page timeout, and a
+total time per document (`OCR_DOCUMENT_TIMEOUT_SECONDS`, 900 s); scanned PDF
+pages are read several at a time. Pages
 and images past those bounds, or ones OCR cannot read, are skipped: the rest of
 the document is indexed and the upload response lists a notice code
 (`ocr_page_limit`, `ocr_image_limit`, `ocr_partial`) that the interface shows
@@ -102,7 +109,8 @@ a random UUID.
 
 **Reuse without re-ingestion.** `ReuseDocument` copies an indexed file's points
 into another session in bounded pages. No upload, parse, OCR, or embedding is
-repeated, and the copies are independent afterwards.
+repeated, and the copies are independent afterwards. A document whose content
+is already in the target conversation is refused with `duplicate_content`.
 
 ## 3. Vector storage model
 
@@ -219,9 +227,10 @@ recorded in [ADR 02](.context/02_Architecture_and_Patterns.md).
 | Action | Effect |
 | --- | --- |
 | Delete one document | Removes its points and image previews from that session only |
-| Delete a conversation | Deletes the session's points and image previews, then the browser record |
+| Delete a conversation | Deletes the session's points and image previews, then the browser record. While the service is unreachable the browser record goes at once and the server deletion is queued until it is back; a conversation without documents needs no server call |
 | Clear all data | Deletes every known session in Qdrant before clearing browser storage, and reports partial failures |
 | Change embedding model | New collection; re-upload documents |
+| Update with the update script | `.env` and the Qdrant and model-settings volumes are archived to `backups/` first; browser conversations stay in the browser (download a backup from the update window) |
 
 There is no automatic expiry. **Settings → Model & connection → Conversation
 backup** downloads every conversation, its answer sources, and the interface
@@ -255,4 +264,5 @@ and chunk text.
 | `RERANK_CACHE_DIR` | `~/.cache/flashrank` | Persistent reranker cache (Compose: the `model_cache` volume) |
 | `PARSRAG_MAX_FILES_PER_SESSION` | `10` | Documents per conversation |
 | `PARSRAG_MAX_FILE_BYTES` / `PARSRAG_MAX_BATCH_BYTES` | 100 MiB / 500 MiB | Upload budgets |
-| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_ORIENTATION` (1), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS` | see README | OCR bounds and page orientation/skew correction |
+| `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_DPI` (200), `OCR_ORIENTATION` (1), `OCR_MAX_PAGES`, `OCR_MAX_IMAGES`, `OCR_MAX_IMAGE_PIXELS`, `OCR_TIMEOUT_SECONDS`, `OCR_DOCUMENT_TIMEOUT_SECONDS` (900) | see README | OCR bounds, the total OCR time per document, and page orientation/skew correction |
+| `UPDATE_CHECK_ENABLED` / `PARSRAG_UPDATE_REPOSITORY` | `1` / `Pooria82/ParsRAG` | Daily anonymous check of GitHub releases, and the repository it reads |

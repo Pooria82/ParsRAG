@@ -87,7 +87,7 @@ Errors must never leak stack traces to the user and must not crash the applicati
 Security must be implemented defensively at every system boundary.
 - **Input Validation:** All incoming API requests and uploaded files MUST be rigorously validated using Pydantic before processing.
 - **Path Traversal Prevention:** Uploaded filenames must be sanitized (`werkzeug.utils.secure_filename` or similar) to prevent path traversal attacks.
-- **Explicit Egress:** No telemetry is permitted. Model traffic may leave the workstation only when the user explicitly selects API mode and accepts the disclosure; parsing, embeddings, and vector storage remain local.
+- **Explicit Egress:** No telemetry is permitted. Model traffic may leave the workstation only when the user explicitly selects API mode and accepts the disclosure; parsing, embeddings, and vector storage remain local. The only other outbound request is the daily update check: an anonymous read of the public GitHub release list and notes, with no data about the user or documents, which the user can turn off (`UPDATE_CHECK_ENABLED`).
 - **Prompt Injection:** Employ defensive system prompts to mitigate user prompt injection attempting to leak organizational documents out of context.
 
 ## 8. Database Optimization & Scalability
