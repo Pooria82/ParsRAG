@@ -449,6 +449,12 @@ Each item names where the problem is and what it breaks.
 - [x] Publish 1.1.1. The only supported version (1.1.x) still ships Pillow
   12.3.0 with a critical advisory; the fix (Pillow 13.0.0) and the PowerPoint
   slide-number fix are only in `develop`.
+- [x] Publish 1.1.2 (2026-10-24):
+  - the update check and the update scripts;
+  - the answer language and the prompt side;
+  - the model and key status;
+  - the parser, frontend, and review fixes;
+  - `filelock` for CVE-2026-112940.
 - [x] Configure logging from `LOG_LEVEL` in `backend/main.py`. Nothing sets up
   a handler, so the request log in `api/middleware.py` and the operation logs
   in the use cases are dropped, and `LOG_LEVEL`/`ENVIRONMENT` have no effect.
