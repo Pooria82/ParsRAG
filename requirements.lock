@@ -1,6 +1,6 @@
 # Direct dependency constraints tested on Python 3.12 / Windows in October 2026.
 # Install with: pip install -r requirements.txt -c requirements.lock
-fastapi==0.143.0
+fastapi==0.156.2
 uvicorn==0.54.0
 python-dotenv==1.2.4
 python-multipart==0.0.32
@@ -12,15 +12,16 @@ llama-index-embeddings-huggingface==0.7.0
 # Transitive pins: transformers 5.19 cannot import with PyTorch 2.6 (AMD image).
 sentence-transformers==6.1.0
 transformers==5.18.0
+filelock==4.2.1
 qdrant-client==1.19.1
-pymupdf==1.28.2
-pydantic==2.13.5
+pymupdf==2.0
+pydantic==2.14.1
 flashrank==0.2.10
 python-docx==1.2.0
 llama-index-llms-openai-like==0.8.0
 python-pptx==1.0.2
 pillow==13.0.0
-ruff==0.17.0
+ruff==0.17.1
 mypy==2.4.0
 pytest==9.1.1
 pytest-asyncio==1.4.0

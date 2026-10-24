@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 SettingKind = Literal["int", "float", "bool", "text", "bytes"]
-SettingGroup = Literal["model", "retrieval", "documents", "performance"]
+SettingGroup = Literal["model", "retrieval", "documents", "performance", "updates"]
 
 MEBIBYTE = 1024 * 1024
 _TRUE = {"1", "true", "yes", "on"}
@@ -43,6 +43,8 @@ class SettingSpec:
 
 
 RUNTIME_SETTINGS: tuple[SettingSpec, ...] = (
+    # Updates: one anonymous request a day for the public release list.
+    SettingSpec("UPDATE_CHECK_ENABLED", "updates", "bool", "1"),
     # Model
     SettingSpec("OLLAMA_CONTEXT_LENGTH", "model", "int", "8192", 2048, 131072),
     SettingSpec("OLLAMA_THINK", "model", "bool", "0"),
@@ -87,6 +89,7 @@ RUNTIME_SETTINGS: tuple[SettingSpec, ...] = (
     SettingSpec("OCR_MAX_PAGES", "documents", "int", "30", 1, 200),
     SettingSpec("OCR_MAX_IMAGES", "documents", "int", "200", 1, 1000),
     SettingSpec("OCR_TIMEOUT_SECONDS", "documents", "int", "45", 1, 300),
+    SettingSpec("OCR_DOCUMENT_TIMEOUT_SECONDS", "documents", "int", "900", 30, 7200),
     SettingSpec("OCR_MIN_IMAGE_PIXELS", "documents", "int", "10000", 1, 1_000_000),
     SettingSpec("SOURCE_IMAGE_PREVIEWS", "documents", "bool", "1"),
     # Performance

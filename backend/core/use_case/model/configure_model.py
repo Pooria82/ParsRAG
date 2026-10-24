@@ -3,6 +3,7 @@
 from backend.core.domain.exceptions import (
     InvalidInputError,
     ModelConnectionError,
+    ModelKeyMissingError,
     OllamaConnectionError,
 )
 from backend.core.dto.input.model import ModelConfigurationRequest
@@ -30,5 +31,7 @@ class ConfigureModel:
         except ModelConnectionError as exc:
             raise InvalidInputError(
                 "The model connection could not be verified or saved.",
-                code=exc.code if isinstance(exc, OllamaConnectionError) else None,
+                code=exc.code
+                if isinstance(exc, OllamaConnectionError | ModelKeyMissingError)
+                else None,
             ) from exc

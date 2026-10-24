@@ -1,5 +1,6 @@
 """Port for runtime settings that override ``.env`` without a restart."""
 
+from collections.abc import Callable
 from typing import Protocol
 
 
@@ -22,6 +23,14 @@ class RuntimeSettingsStore(Protocol):
         """Return the settings changed in the app."""
         ...
 
-    def apply(self, changes: dict[str, str | None]) -> None:
-        """Activate and persist changes; None returns a setting to ``.env``."""
+    def apply(
+        self,
+        changes: dict[str, str | None],
+        validate: Callable[[dict[str, str]], None] | None = None,
+    ) -> None:
+        """Validate, persist, then activate changes as one step.
+
+        None returns a setting to ``.env``. ``validate`` receives the values
+        that would be in effect and may raise to reject the whole change.
+        """
         ...

@@ -238,6 +238,7 @@ def test_query_success(
         session_id="session-123",
         top_k=None,
         file_filter=None,
+        answer_language="en",
     )
 
 
@@ -342,6 +343,7 @@ def test_query_with_custom_top_k(
         session_id="session-123",
         top_k=20,
         file_filter=None,
+        answer_language="en",
     )
 
 
@@ -528,3 +530,69 @@ def test_source_image_preview_is_served_as_webp() -> None:
     assert found.headers["content-type"] == "image/webp"
     assert found.content == b"RIFFwebp"
     assert missing.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("get", "/sessions/s1/files", None),
+        ("get", "/sessions/s1/images/1?filename=a.docx", None),
+        (
+            "post",
+            "/sessions/s1/files/reuse",
+            {"source_session_id": "s0", "filename": "a.pdf"},
+        ),
+        ("delete", "/sessions/s1", None),
+        ("delete", "/sessions/s1/files", {"filename": "a.pdf"}),
+    ],
+)
+def test_session_routes_wait_for_the_embedding_model(
+    method: str, path: str, body: dict[str, str] | None
+) -> None:
+    """Building the repository before the embedding model probes the wrong size."""
+    runtime_state.mark_failed()
+    try:
+        with patch("backend.api.dependencies._shared_document_repository") as build:
+            response = client.request(
+                method.upper(),
+                path,
+                json=body,
+                headers={"Origin": "http://localhost:3000"},
+            )
+    finally:
+        runtime_state.mark_ready()
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "not_ready"
+    build.assert_not_called()
+
+
+@patch("backend.api.dependencies.CondenseQuestionPipeline")
+@patch("backend.api.dependencies.get_query_strategy")
+def test_answer_language_follows_the_question_not_its_rewrite(
+    mock_get_strategy: MagicMock, mock_condenser_cls: MagicMock
+) -> None:
+    """A Persian question rewritten in English (English documents) is answered in Persian."""
+    mock_condenser_cls.return_value.condense.return_value = "What does the report say?"
+    mock_strategy = MagicMock()
+    mock_strategy.execute.return_value = QueryResponse(answer="پاسخ", source_nodes=[])
+    mock_get_strategy.return_value = mock_strategy
+
+    for prompt, interface, expected in [
+        ("گزارش دربارهٔ آن چه می‌گوید؟", "en", "fa"),
+        ("What does it say?", "fa", "en"),
+        ("2 + 2 = ?", "en", "en"),
+        ("2 + 2 = ?", "fa", "fa"),
+    ]:
+        mock_strategy.execute.reset_mock()
+        response = client.post(
+            "/query",
+            json={
+                "prompt": prompt,
+                "mode": "hybrid",
+                "session_id": "session-123",
+                "language": interface,
+            },
+        )
+        assert response.status_code == 200
+        assert mock_strategy.execute.call_args.kwargs["answer_language"] == expected

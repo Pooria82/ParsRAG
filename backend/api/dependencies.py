@@ -6,6 +6,7 @@ override any collaborator without patching route internals.
 """
 
 import os
+import time
 from collections.abc import Generator
 from functools import lru_cache
 
@@ -24,6 +25,7 @@ from backend.core.strategies.hybrid_rag import HybridRAGStrategy
 from backend.core.strategies.llm_only import LLMOnlyStrategy
 from backend.core.strategies.strict_rag import StrictRAGStrategy
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
+from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
     GenerateConversationTitle,
@@ -40,8 +42,10 @@ from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
 from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
+from backend.core.use_case.system.check_for_updates import CheckForUpdates
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.read_release_notes import ReadReleaseNotes
 from backend.core.use_case.system.runtime_settings import (
     ReadRuntimeSettings,
     UpdateRuntimeSettings,
@@ -60,6 +64,9 @@ from backend.infrastructure.runtime_settings import (
     EnvironmentSettingsStore,
     runtime_settings_path,
 )
+from backend.infrastructure.updates.github_releases import GitHubReleaseFeed
+from backend.infrastructure.updates.release_notes import LocalReleaseNotes
+from backend.infrastructure.version import app_version
 
 # Overrides saved in the app are active before any setting is read.
 runtime_settings_store = EnvironmentSettingsStore(
@@ -71,8 +78,20 @@ _REQUEST_OVERHEAD_BYTES = 10 * 1024 * 1024
 
 
 def max_request_bytes() -> int:
-    """The HTTP body ceiling, including multipart overhead."""
-    default = UploadPolicy.from_environment().max_batch_bytes + _REQUEST_OVERHEAD_BYTES
+    """The HTTP body ceiling, including multipart overhead.
+
+    Without ``PARSRAG_MAX_REQUEST_BYTES`` it follows the batch limit in
+    ``.env``: a lower limit saved in the app must not shrink the ceiling at the
+    next start, or raising the limit again would be refused.
+    """
+    startup_batch = runtime_settings_store.env_values().get("PARSRAG_MAX_BATCH_BYTES")
+    try:
+        batch = max(
+            int(startup_batch or 0), UploadPolicy.from_environment().max_file_bytes
+        )
+    except ValueError:
+        batch = UploadPolicy.from_environment().max_batch_bytes
+    default = (batch or 500 * 1024 * 1024) + _REQUEST_OVERHEAD_BYTES
     try:
         return int(os.getenv("PARSRAG_MAX_REQUEST_BYTES", str(default)))
     except ValueError:
@@ -218,6 +237,11 @@ def get_delete_document(
     return DeleteDocument(repo, session_locks)
 
 
+def get_check_model_connection() -> CheckModelConnection:
+    """Build the model connection check use case."""
+    return CheckModelConnection(model_gateway)
+
+
 def get_read_model_configuration() -> ReadModelConfiguration:
     """Build the model configuration read use case."""
     return ReadModelConfiguration(model_gateway)
@@ -253,3 +277,28 @@ def get_describe_capabilities() -> DescribeCapabilities:
 def get_check_readiness() -> CheckReadiness:
     """Build the readiness use case around the shared repository."""
     return CheckReadiness(runtime_state, lambda: _shared_document_repository())
+
+
+def _update_check_enabled() -> bool:
+    """``UPDATE_CHECK_ENABLED``: on unless set to 0, false, no, or off."""
+    value = os.getenv("UPDATE_CHECK_ENABLED", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+# One checker for the process, so its daily result is shared by every request.
+update_checker = CheckForUpdates(
+    GitHubReleaseFeed(app_version()),
+    app_version(),
+    enabled=_update_check_enabled,
+    clock=time.monotonic,
+)
+
+
+def get_check_for_updates() -> CheckForUpdates:
+    """Return the shared update checker."""
+    return update_checker
+
+
+def get_read_release_notes() -> ReadReleaseNotes:
+    """Build the release-notes reader for the running version."""
+    return ReadReleaseNotes(LocalReleaseNotes(), app_version())

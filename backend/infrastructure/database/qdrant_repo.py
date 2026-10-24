@@ -244,6 +244,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to save nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)
 
     def save_images(
         self, session_id: str, filename: str, images: Mapping[int, bytes]
@@ -562,6 +564,34 @@ class QdrantRepository(DocumentRepository):
                 f"Failed to retrieve session files in Qdrant: {exc}"
             ) from exc
 
+    def document_digest(self, session_id: str, filename: str) -> str | None:
+        """Return the SHA-256 recorded for one document of a session."""
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qmodels.Filter(
+                    must=[
+                        qmodels.FieldCondition(
+                            key="session_id", match=qmodels.MatchValue(value=session_id)
+                        ),
+                        qmodels.FieldCondition(
+                            key="filename", match=qmodels.MatchValue(value=filename)
+                        ),
+                    ]
+                ),
+                limit=1,
+                with_payload=["content_sha256"],
+                with_vectors=False,
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to read the document digest in Qdrant: {exc}"
+            ) from exc
+        if not points or not points[0].payload:
+            return None
+        digest = points[0].payload.get("content_sha256")
+        return digest if isinstance(digest, str) else None
+
     def find_document_by_content(
         self, session_id: str, content_sha256: str
     ) -> str | None:
@@ -655,6 +685,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to reuse document vectors: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(target_session_id)
 
     def delete_session(self, session_id: str) -> None:
         """Deletes all nodes associated with a specific session ID.
@@ -688,6 +720,8 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to delete session nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)
 
     def delete_document(self, session_id: str, filename: str) -> None:
         """Deletes every chunk for one document in a session."""
@@ -723,3 +757,5 @@ class QdrantRepository(DocumentRepository):
             raise VectorDBConnectionError(
                 f"Failed to delete document nodes in Qdrant: {exc}"
             ) from exc
+        finally:
+            self._keywords.invalidate(session_id)

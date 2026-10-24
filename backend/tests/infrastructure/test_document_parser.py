@@ -53,7 +53,16 @@ def test_pdf_sections_keep_page_numbers(mock_fitz_open: MagicMock) -> None:
     mock_doc.close.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@pytest.fixture(autouse=True)
+def rendered_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock PDF pages cannot be rasterized; OCR tests patch recognition."""
+    monkeypatch.setattr(
+        "backend.infrastructure.parsers.document_parser.render_page_png",
+        lambda page, settings: b"png",
+    )
+
+
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_scanned_pdf_uses_ocr_when_enabled(
     mock_fitz_open: MagicMock,
@@ -76,7 +85,7 @@ def test_scanned_pdf_uses_ocr_when_enabled(
     mock_extract_page_text.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_garbled_text_layers_are_replaced_by_ocr(
     mock_fitz_open: MagicMock,
@@ -98,7 +107,7 @@ def test_garbled_text_layers_are_replaced_by_ocr(
     document.close.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_mixed_pdf_only_ocrs_scanned_pages(
     mock_fitz_open: MagicMock,
@@ -124,7 +133,7 @@ def test_mixed_pdf_only_ocrs_scanned_pages(
     mock_extract_page_text.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_sparse_pdf_text_layer_does_not_hide_image_evidence(
     mock_open: MagicMock,
@@ -147,7 +156,7 @@ def test_sparse_pdf_text_layer_does_not_hide_image_evidence(
     mock_extract.assert_called_once()
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_pdf_ocr_page_limit_is_enforced(
     mock_fitz_open: MagicMock,
@@ -229,7 +238,7 @@ def test_missing_tesseract_skips_images_with_a_notice() -> None:
     assert notices == ["ocr_unavailable"]
 
 
-@patch("backend.infrastructure.parsers.document_parser.extract_page_text")
+@patch("backend.infrastructure.parsers.document_parser.recognize_page_png")
 @patch("backend.infrastructure.parsers.document_parser.pymupdf.open")
 def test_missing_tesseract_keeps_text_pages_of_a_pdf(
     mock_fitz_open: MagicMock,
@@ -387,7 +396,10 @@ def test_textual_formats_are_parsed(
     sections = parse_document_sections(payload, filename)
 
     assert expected in sections[0].text
-    assert sections[0].metadata == {"section": 1}
+    expected_metadata = (
+        {"table": 1} if filename.endswith((".csv", ".tsv")) else {"section": 1}
+    )
+    assert sections[0].metadata == expected_metadata
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_image_text")
@@ -400,7 +412,7 @@ def test_standalone_image_uses_ocr(
 
     sections = parse_document_sections(b"image", "scan.png")
 
-    assert sections == [ParsedSection("متن روی تصویر", {"page": 1})]
+    assert sections == [ParsedSection("متن روی تصویر", {"page": 1, "image": 1})]
 
 
 @patch("backend.infrastructure.parsers.document_parser.extract_image_text")

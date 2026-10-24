@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CircleHelp, Database, Download, FileUp, KeyRound, Keyboard, Moon, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
-import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode, RuntimeSettings } from '../types';
+import type { AppSettings, ModelConfiguration, ModelProvider, OllamaModel, RAGMode, RuntimeSettingGroup, RuntimeSettings, UpdateStatus } from '../types';
+import { APP_VERSION } from '../core/appVersion';
 import { ServerSettings } from './ServerSettings';
 import { GROUP_TEXT, RUNTIME_TEXT } from '../i18n/runtimeSettings';
 import { translations } from '../i18n/translations';
@@ -20,6 +21,13 @@ interface SettingsModalProps {
   /** Restore conversations from a backup file; resolves with the counts merged. */
   onImportBackup?: (file: File) => Promise<{ added: number; updated: number }>;
   onModelConfigured?: (configuration: ModelConfiguration) => void;
+  /** Server settings changed (upload limits among them). */
+  onRuntimeChanged?: () => void;
+  /** The running version and the last update check. */
+  updateStatus?: UpdateStatus | null;
+  /** Ask GitHub again now; resolves with the new status, or null when it failed. */
+  onCheckUpdates?: () => Promise<UpdateStatus | null>;
+  onOpenUpdate?: () => void;
   onStartGuide: () => void;
   canInstall?: boolean; onInstall?: () => void;
   guided?: boolean;
@@ -27,7 +35,7 @@ interface SettingsModalProps {
   guidedProvider?: ModelProvider;
 }
 
-export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
+export function SettingsModal({ open = true, onClose, settings, onUpdateSettings, onClearAllData, onExportBackup, onImportBackup, busy, onModelConfigured, onRuntimeChanged, updateStatus, onCheckUpdates, onOpenUpdate, onStartGuide, canInstall, onInstall, guided = false, guidedTab, guidedProvider }: SettingsModalProps) {
   const backupInput = useRef<HTMLInputElement>(null);
   const [backupStatus, setBackupStatus] = useState<{ kind: 'done' | 'error'; text: string } | null>(null);
   const t = translations[settings.language];
@@ -48,12 +56,22 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [apiKey, setApiKey] = useState('');
   const [apiDisclosureAccepted, setApiDisclosureAccepted] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
+  const [keyHosts, setKeyHosts] = useState<string[] | null>(null);
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'saved' | 'error'>('idle');
   const [modelError, setModelError] = useState<string | null>(null);
   const modelApi = useMemo(() => new ParsRagApiClient(settings.backendUrl), [settings.backendUrl]);
   const [runtime, setRuntime] = useState<RuntimeSettings | null>(null);
   const [runtimeError, setRuntimeError] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<'idle' | 'checking' | 'latest' | 'failed'>('idle');
+  const checkUpdates = async () => {
+    if (!onCheckUpdates) return;
+    setUpdateCheck('checking');
+    const status = await onCheckUpdates();
+    if (!status) setUpdateCheck('failed');
+    else if (status.update_available) { setUpdateCheck('idle'); onOpenUpdate?.(); }
+    else setUpdateCheck(status.enabled ? 'latest' : 'idle');
+  };
   useEffect(() => {
     if (!open || guided) return;
     const controller = new AbortController(); setRuntimeError(false);
@@ -62,8 +80,8 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     });
     return () => controller.abort();
   }, [open, guided, modelApi]);
-  const serverSettings = (groups: Array<'model' | 'retrieval' | 'documents' | 'performance'>) => runtime
-    ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={setRuntime} />
+  const serverSettings = (groups: RuntimeSettingGroup[]) => runtime
+    ? <ServerSettings api={modelApi} language={settings.language} runtime={runtime} groups={groups} onChange={updated => { setRuntime(updated); onRuntimeChanged?.(); }} />
     : runtimeError ? <p className="info-note"><CircleHelp size={18} />{RUNTIME_TEXT[settings.language].loadError}</p> : null;
   const modelName = activeProvider === 'api' ? apiModelName : ollamaModelName;
   const setModelName = (value: string) => provider === 'api' ? setApiModelName(value) : setOllamaModelName(value);
@@ -80,7 +98,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         if (config.ollama_base_url && settings.ollamaBaseUrl === DEFAULT_SETTINGS.ollamaBaseUrl) setOllamaModelUrl(config.ollama_base_url);
       }
       else { setOllamaModelName(config.model_name); setOllamaModelUrl(config.base_url); }
-      setKeyConfigured(config.api_key_configured);
+      setKeyConfigured(config.api_key_configured); setKeyHosts(config.api_key_hosts ?? null);
       setApiDisclosureAccepted(config.disclosure_acknowledged);
       if (!guided) onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
         ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
@@ -88,6 +106,10 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     }).catch(() => { /* Keep editable defaults when an older or offline service cannot expose configuration. */ });
     return () => controller.abort();
   }, [open, activeTab, modelApi, guided]);
+  // A key is only sent to the host it belongs to: say whether the typed address has one.
+  const apiHost = (() => { try { return new URL(apiModelUrl).hostname.toLowerCase(); } catch { return ''; } })();
+  const keyAvailable = keyHosts ? keyHosts.includes(apiHost) : keyConfigured;
+  const otherKeyHosts = keyHosts && !keyAvailable && keyHosts.length ? keyHosts.join(settings.language === 'fa' ? '، ' : ', ') : '';
   const settingsError = (error: unknown) => modelSettingsErrorMessage(error instanceof ApiError ? error.code : undefined, settings.language);
   const loadOllamaModels = async (quiet = false) => {
     if (!quiet) { setModelStatus('loading'); setModelError(null); }
@@ -145,6 +167,18 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         <div className="setting-field guide-setting" data-tour="settings-guide"><span><strong>{t.guideReplay}</strong><small>{t.guideReplayHint}</small></span>
           <button className="button secondary" onClick={() => { onClose(); onStartGuide(); }}><CircleHelp size={16} />{t.guideStart}</button>
         </div>
+        <section className="update-setting" aria-label={t.aboutTitle}>
+          <h3>{t.aboutTitle}</h3>
+          <p dir="auto">{t.versionLabel.replace('{version}', updateStatus?.current_version ?? APP_VERSION)}</p>
+          {serverSettings(['updates'])}
+          {onCheckUpdates && <div className="update-check">
+            <button type="button" className="button secondary" disabled={updateCheck === 'checking' || updateStatus?.enabled === false} onClick={() => void checkUpdates()}>
+              <RefreshCw size={15} className={updateCheck === 'checking' ? 'spin' : undefined} />{t.checkUpdates}</button>
+            {updateStatus?.enabled === false ? <small>{t.updatesOff}</small>
+              : updateCheck === 'latest' ? <small role="status"><Check size={13} />{t.upToDate}</small>
+                : updateCheck === 'failed' ? <small className="inline-error" role="alert">{t.updateCheckFailed}</small> : null}
+          </div>}
+        </section>
         <section className="shortcut-guide" data-tour="settings-shortcuts" aria-label={t.shortcutTitle}>
           <h3><Keyboard size={17} />{t.shortcutTitle}</h3><p>{t.shortcutHint}</p>
           <dl>{SHORTCUTS.map(shortcut => <div key={shortcut.action}><dt>{t.shortcutActions[shortcut.action]}</dt><dd><kbd dir="ltr">{shortcutLabel(shortcut.action, applePlatform)}</kbd></dd></div>)}</dl>
@@ -178,7 +212,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           if (activeProvider === 'api' && !apiDisclosureAccepted) { setModelStatus('error'); setModelError(t.apiConsentRequired); return; }
           setModelStatus('loading'); setModelError(null);
           void modelApi.configureModel({ provider: activeProvider, model_name: modelName.trim(), base_url: modelUrl.trim(), disclosure_acknowledged: activeProvider === 'api' && apiDisclosureAccepted, ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
-            setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved');
+            setKeyConfigured(config.api_key_configured); setKeyHosts(config.api_key_hosts ?? null); setApiKey(''); setModelStatus('saved');
             onModelConfigured?.(config);
             onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
               ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
@@ -193,7 +227,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           <div className="setting-field" data-tour="settings-model-name"><label htmlFor="model-name">{t.modelName}</label>{activeProvider === 'ollama' && models.length > 0
             ? <ChoiceMenu<string> label={t.modelName} value={ollamaModelName} options={ollamaOptions} onChange={setOllamaModelName} disabled={modelStatus === 'loading'} />
             : <input key={'name-' + activeProvider} className="text-input model-field-swap localized-placeholder" id="model-name" dir="ltr" value={modelName} placeholder={t.modelNamePlaceholder} required onChange={event => setModelName(event.target.value)} />}</div>
-          {activeProvider === 'api' && <><div className="setting-field" data-tour="settings-api-key"><label htmlFor="api-key">{t.apiKey}</label><p className="credential-state" data-state={keyConfigured ? 'configured' : 'missing'} role="status">{keyConfigured ? <ShieldCheck size={15} /> : <KeyRound size={15} />}<span><strong>{keyConfigured ? t.apiKeyAvailable : t.apiKeyMissing}</strong><small>{keyConfigured ? t.apiKeyAvailableHint : t.apiKeyMissingHint}</small></span></p><input className="text-input localized-placeholder" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
+          {activeProvider === 'api' && <><div className="setting-field" data-tour="settings-api-key"><label htmlFor="api-key">{t.apiKey}</label><p className="credential-state" data-state={keyAvailable ? 'configured' : 'missing'} role="status">{keyAvailable ? <ShieldCheck size={15} /> : <KeyRound size={15} />}<span><strong>{keyAvailable ? t.apiKeyAvailable : t.apiKeyMissing}</strong><small>{keyAvailable ? t.apiKeyAvailableHint : t.apiKeyMissingHint}{otherKeyHosts && <> {t.apiKeyOtherHost.replace('{hosts}', otherKeyHosts)}</>}</small></span></p><input className="text-input localized-placeholder" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyAvailable ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
             <label className="api-disclosure" data-tour="settings-api-disclosure"><input type="checkbox" checked={apiDisclosureAccepted} onChange={event => setApiDisclosureAccepted(event.target.checked)} /><span><strong>{t.remoteApiDisclosureTitle}</strong><small>{t.remoteApiDisclosure}</small></span></label></>}
           <div className="model-actions" data-tour="settings-model-actions">{activeProvider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button primary model-save" disabled={busy || modelStatus === 'loading' || !modelName.trim()}>{modelStatus === 'loading' ? t.saving : t.saveModel}</button></div>
           {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && modelError && <p className="inline-error" role="alert">{modelError}</p>}
@@ -228,7 +262,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           {!clearConfirm ? <button className="button danger-outline" disabled={busy} onClick={() => setClearConfirm(true)}><Trash2 size={16} />{t.clearAllData}</button>
             : <div className="clear-confirm"><strong>{t.clearAllConfirm}</strong><div className="dialog-actions"><button className="button secondary" disabled={clearStatus === 'loading'} onClick={() => { setClearConfirm(false); setClearStatus('idle'); }}>{t.cancel}</button><button className="button danger" disabled={busy || clearStatus === 'loading'} onClick={() => {
               setClearStatus('loading');
-              void onClearAllData().then(onClose).catch(() => setClearStatus('error'));
+              void onClearAllData().then(() => { setClearStatus('idle'); setClearConfirm(false); onClose(); }).catch(() => setClearStatus('error'));
             }}>{clearStatus === 'loading' ? t.saving : t.clear}</button></div>{clearStatus === 'error' && <p className="inline-error" role="alert">{t.clearAllFailed}</p>}</div>}
         </div>
       </>}

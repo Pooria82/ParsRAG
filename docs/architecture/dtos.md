@@ -45,7 +45,7 @@ flowchart LR
 
 | DTO | Module | Fields and constraints | Used by |
 | --- | --- | --- | --- |
-| `QueryRequest` | `query.py` | `prompt` 1–12,000 chars; `chat_history` ≤ 20 `ChatMessage`; `mode` `strict`/`hybrid`/`llm-only` (underscores accepted); `request_id` UUID?; `session_id` ≤ 64 safe chars, required unless LLM-only; `top_k` 1–50?; `file_filter` ≤ 50 names of 1–255 chars? | `AnswerQuery` |
+| `QueryRequest` | `query.py` | `prompt` 1–12,000 chars; `chat_history` ≤ 20 `ChatMessage`; `mode` `strict`/`hybrid`/`llm-only` (underscores accepted); `language` `fa`/`en`? (answer language of a question without words); `request_id` UUID?; `session_id` ≤ 64 safe chars, required unless LLM-only; `top_k` 1–50?; `file_filter` ≤ 50 names of 1–255 chars? | `AnswerQuery` |
 | `ChatMessage` | `query.py` | `role` `user`/`assistant`; `content` 1–12,000 chars | `QueryRequest` |
 | `IngestDocumentsCommand` | `ingestion.py` | `session_id`; `files: list[IncomingFile]` | `IngestDocuments` |
 | `IncomingFile` | `ingestion.py` | `filename` (may be missing); `stream` read in bounded chunks | `IngestDocumentsCommand` |

@@ -1,8 +1,10 @@
 """Use case: answer a question in the requested trust and grounding mode."""
 
 import logging
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Literal, TypedDict
 
 from llama_index.core.llms import ChatMessage as LlamaChatMessage
@@ -20,6 +22,7 @@ from backend.core.runtime.correlation import current_correlation_id
 from backend.core.service.text_normalization import normalize_persian
 from backend.core.strategies.generation import build_response
 from backend.core.strategies.multi_doc_utils import parse_tagged_segments
+from backend.core.strategies.prompt_rules import question_language
 
 logger = logging.getLogger("parsrag.operations")
 
@@ -37,6 +40,7 @@ class _ExecuteOptions(TypedDict, total=False):
 
     progress: ProgressCallback
     document_segments: list[tuple[str, str]]
+    answer_language: str
 
 
 class AnswerQuery:
@@ -82,30 +86,44 @@ class AnswerQuery:
             self._progress.set_stage(request_id, "complete")
         return response
 
-    def stream(self, request: QueryRequest) -> Generator[QueryEvent, None, None]:
+    def stream(self, request: QueryRequest) -> "QueryEventStream":
         """Answer the request as events: stages, sources, text deltas, result.
 
-        The query slot is held while the caller iterates and is released when
-        the stream ends or the caller stops reading (client disconnect), which
-        also stops generation.
+        The query slot is reserved and document mentions are checked before
+        this returns, so the HTTP layer can still answer 429 or 400 instead of
+        starting a stream. The slot is held while the caller iterates and is
+        released when the stream ends or is dropped (client disconnect), which
+        also stops generation and marks the progress stage as failed.
 
         Raises:
             InvalidInputError: A document mention is invalid for the session.
             CapacityExceededError: Every query slot is busy.
         """
         request_id = str(request.request_id) if request.request_id else None
+        slot = self._limiter.slot()
+        slot.__enter__()
         try:
-            with self._limiter.slot():
-                yield from self._stream(request, request_id)
-        except Exception:
+            segments = self._document_segments(request)
+        except BaseException:
+            slot.__exit__(None, None, None)
             if request_id:
                 self._progress.set_stage(request_id, "failed")
             raise
+        return QueryEventStream(
+            lambda: self._stream(request, request_id, segments),
+            _release_once(slot),
+            lambda finished: self._finish(request_id, finished),
+        )
+
+    def _finish(self, request_id: str | None, finished: bool) -> None:
         if request_id:
-            self._progress.set_stage(request_id, "complete")
+            self._progress.set_stage(request_id, "complete" if finished else "failed")
 
     def _stream(
-        self, request: QueryRequest, request_id: str | None
+        self,
+        request: QueryRequest,
+        request_id: str | None,
+        segments: list[tuple[str, str]],
     ) -> Iterator[QueryEvent]:
         """Condense, prepare, then stream generation from the selected strategy."""
         logger.info(
@@ -125,7 +143,7 @@ class AnswerQuery:
         strategy = self._strategy_resolver(request.mode)
         if request.mode is not QueryMode.LLM_ONLY:
             yield stage("retrieving")
-        options = self._execute_options(request, request_id)
+        options = self._execute_options(request, request_id, segments)
         prepared = strategy.prepare(
             query=condensed_query,
             chat_history=chat_history,
@@ -201,15 +219,28 @@ class AnswerQuery:
         return response
 
     def _execute_options(
-        self, request: QueryRequest, request_id: str | None
+        self,
+        request: QueryRequest,
+        request_id: str | None,
+        segments: list[tuple[str, str]] | None = None,
     ) -> _ExecuteOptions:
-        """Collect the progress callback and explicit document segments."""
-        options: _ExecuteOptions = {}
+        """Collect the progress callback, document segments, and answer language.
+
+        The answer language comes from the question as asked: the rewritten
+        question may be in another language (follow-ups about English
+        documents), and its language must not decide the answer's.
+        """
+        options: _ExecuteOptions = {
+            "answer_language": question_language(
+                request.prompt, request.language or "fa"
+            )
+        }
         if request_id:
             options["progress"] = lambda stage: self._progress.set_stage(
                 request_id, stage
             )
-        segments = self._document_segments(request)
+        if segments is None:
+            segments = self._document_segments(request)
         if segments:
             options["document_segments"] = segments
         return options
@@ -236,3 +267,73 @@ class AnswerQuery:
             ]
         except ValueError as exc:
             raise InvalidInputError(str(exc)) from exc
+
+
+def _release_once(slot: AbstractContextManager[None]) -> Callable[[], None]:
+    """Return a callable that exits ``slot`` the first time it is called."""
+    lock = Lock()
+    released = False
+
+    def release() -> None:
+        nonlocal released
+        with lock:
+            if released:
+                return
+            released = True
+        slot.__exit__(None, None, None)
+
+    return release
+
+
+class QueryEventStream(Iterator[QueryEvent]):
+    """Iterate events while a query slot is held; release it exactly once.
+
+    A generator that was never started does not run its ``finally`` block when
+    closed, so the slot is released here as well: on exhaustion, on an error,
+    on ``close`` and when the stream is garbage collected.
+    """
+
+    def __init__(
+        self,
+        events: Callable[[], Iterator[QueryEvent]],
+        release: Callable[[], None],
+        finish: Callable[[bool], None],
+    ) -> None:
+        """Start ``events`` lazily; ``finish`` receives whether it ran to the end."""
+        self._events = events()
+        self._release = release
+        self._finish = finish
+        self._done = False
+
+    def __next__(self) -> QueryEvent:
+        if self._done:
+            raise StopIteration
+        try:
+            return next(self._events)
+        except StopIteration:
+            self._end(finished=True)
+            raise
+        except BaseException:
+            self._end(finished=False)
+            raise
+
+    def close(self) -> None:
+        """Stop generation and free the slot; the stage becomes failed."""
+        if self._done:
+            return
+        try:
+            close = getattr(self._events, "close", None)
+            if close is not None:
+                close()
+        finally:
+            self._end(finished=False)
+
+    def __del__(self) -> None:
+        self.close()
+
+    def _end(self, *, finished: bool) -> None:
+        if self._done:
+            return
+        self._done = True
+        self._release()
+        self._finish(finished)

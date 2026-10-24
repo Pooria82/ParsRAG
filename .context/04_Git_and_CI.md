@@ -1,20 +1,13 @@
 # Git Workflow & CI/CD Strategy
 
 ## 1. Git Workflow Strategy
-To maintain velocity while ensuring absolute stability for a production-grade system, ParsRAG follows a strict **GitHub Flow** strategy (a simplified, fast-paced alternative to traditional GitFlow).
+ParsRAG uses a **GitFlow-style** model with two long-lived branches. There is no
+`staging` branch: `develop` is the pre-release integration branch.
 
-- **`main` Branch:** The production branch. It is heavily protected and strictly deployable at any given moment. Direct commits to `main` are universally forbidden.
-- **`staging` (or `uat`) Branch:** The pre-production testing branch. Merged from `develop` before a release.
-- **`develop` Branch:** The active integration branch. All feature branches merge here first for continuous integration.
-- **Feature Branches:** All work stems from `develop`. Branches must branch off and merge into `develop` using the following strict naming conventions:
-  - `feat/issue-number-short-desc` (e.g., `feat/12-hybrid-rag-strategy`)
-  - `fix/issue-number-short-desc` (e.g., `fix/34-ollama-timeout-error`)
-  - `docs/short-desc`
-  - `refactor/short-desc`
-- **Pull Requests (PRs):** Merging into `main` requires a formal PR. 
-  - The CI/CD pipeline must pass 100%.
-  - The PR must receive at least one code review approval.
-  - Squash and Merge is mandated to keep the `main` history strictly linear and readable.
+- **`main` Branch:** Released code only, one squash commit per release. Protected: required status checks (also for administrators) and resolved conversations; no direct pushes.
+- **`develop` Branch:** The integration branch. Every change reaches it through a pull request whose checks pass, merged with a merge commit.
+- **Work Branches:** Branch from `develop` as `feat/`, `fix/`, `docs/`, `refactor/`, `perf/`, `ci/`, or `chore/` plus a short description (for example `fix/answer-language`). Dependabot opens its own branches against `develop`; its Python updates also need the pin in `requirements.lock`.
+- **Releases:** A `release/x.y.z` branch from `develop` bumps the version and the CHANGELOG, then a pull request to `main` is **squash-merged**. The `vX.Y.Z` tag on that commit runs the release workflow. Afterwards a `chore/sync-develop-x.y.z` branch merges `main` back into `develop`.
 - **Granular Committing Rule:** Work must *always* start on the `develop` branch (or a feature branch branching from it). A commit MUST be made immediately after completing each section, phase, or after making significant changes to a file or directory. Large monolithic commits are forbidden.
 - **Test-Driven Execution Rule:** After implementing any section or phase, you MUST write the related automated tests (e.g., unit tests). You must run the code (if possible) and execute the tests to guarantee correct functionality *before* making the granular commit.
 
@@ -83,23 +76,19 @@ documents/
 ```
 
 ## 4. CI/CD Pipeline Architecture
-An automated CI/CD pipeline (e.g., GitHub Actions) acts as the ultimate gatekeeper. The pipeline runs sequentially on every Push and PR to `main`.
+GitHub Actions runs on every push and pull request to `develop` and `main`.
 
-1. **Linting Job:**
-   - Runs `ruff format --check .` to guarantee formatting.
-   - Runs `ruff check .` to catch unused imports and complexity violations.
-2. **Type Checking Job:**
-   - Runs `mypy backend/ --strict` to ensure 100% type safety on the API and core logic.
-3. **Testing Job:**
-   - Spins up Qdrant locally via GitHub Actions services.
-   - Runs `pytest backend/tests/` to execute all unit and integration tests.
-   - *Requirement:* Fails if code coverage drops below 85%.
-4. **Docker Build Job (Dry Run):**
-   - Runs `docker-compose build` to verify that the containerized microservices build without errors.
+1. **Quality workflow (`quality.yml`):**
+   - `backend` on Ubuntu, macOS, and Windows: `ruff format --check`, `ruff check`, `mypy backend --strict`, and `pytest` with branch coverage (fails below 85%).
+   - `frontend` on the same three systems: `npm ci`, `npm audit --audit-level=high`, unit tests, the production build, Playwright end-to-end tests, and the PWA test.
+   - `end-to-end`: the `backend/tests/e2e` suite against a Qdrant service container.
+   - `packaging`: `docker compose config`, `docker build`, and an import of the application inside the image.
+2. **Supply-chain workflow (`supply-chain.yml`, also weekly):** dependency review on pull requests, `pip-audit` of `requirements.lock`, and a Trivy scan of the built image uploaded to code scanning.
+3. **CodeQL** runs on pull requests to `main`.
 
 ## 5. Release & Versioning Strategy
 - **Versioning:** We strictly adhere to **Semantic Versioning (SemVer) 2.0.0** (`MAJOR.MINOR.PATCH`).
   - `MAJOR`: Breaking architectural changes (e.g., migrating from LlamaIndex to a new framework).
   - `MINOR`: New backwards-compatible features (e.g., adding GraphRAG).
   - `PATCH`: Backwards-compatible bug fixes (e.g., fixing a UI typo).
-- **Tagging:** Releases are triggered automatically when a Git Tag (e.g., `v1.2.0`) is pushed to `main`. The CI pipeline detects the tag, generates a GitHub Release, builds the production Docker images, and publishes them to the container registry.
+- **Tagging:** Pushing a `vX.Y.Z` tag on `main` runs `release.yml`: it checks that the tag matches the project version, repeats the backend and frontend checks, builds the Docker image and imports the application in it, and creates the GitHub Release (its notes are then replaced with the CHANGELOG section). Images are built, not published: users build them with `docker compose`. Publishing to a registry is a later plan (roadmap Phase 19).

@@ -7,16 +7,35 @@ import { BrandMark } from './BrandMark';
 import { ProgressiveMarkdown } from './ProgressiveMarkdown';
 import { SourceList } from './SourceList';
 import { repairModelMarkup } from '../core/markdown';
+import { answerTo } from '../core/state';
 
 interface ChatFeedProps {
   messages: Message[]; language: Language; isGenerating: boolean; activeMode: RAGMode;
   onRetry: (messageId: string) => void; onEditPrompt: (messageId: string, content: string) => void;
+  /** Ask a question again that never got an answer (stopped or interrupted). */
+  onRetryQuestion: (messageId: string) => void;
   onSelectVariant: (messageId: string, index: number) => void; isBusy: boolean;
   queryStage?: QueryStage; revealingMessageId?: string; onRevealComplete: () => void;
   /** Text streamed so far; `messageId` when it replaces an answer being retried. */
   streamingDraft?: { messageId?: string; content: string; sourceCount?: number };
   /** Address of a cited image's preview, shown with its source excerpt. */
   imageUrl?: (filename: string, image: number) => string;
+}
+
+/** Code, `@{file}` mentions and links say nothing about a prompt's language. */
+const NEUTRAL_TEXT = /`[^`]*`|@\{(?:\\.|[^{}\\])*\}|https?:\/\/\S+/g;
+
+/**
+ * The direction a prompt reads in, decided like its answer language on the
+ * server: Persian when Persian words outnumber half the English ones, so
+ * "ORM چیست؟" is Persian. A prompt without words follows the interface.
+ */
+export function promptDirection(text: string, fallback: 'rtl' | 'ltr'): 'rtl' | 'ltr' {
+  const prose = text.replace(NEUTRAL_TEXT, ' ');
+  const persian = prose.match(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]+/g)?.length ?? 0;
+  const latin = prose.match(/[A-Za-z]+/g)?.length ?? 0;
+  if (!persian && !latin) return fallback;
+  return persian * 2 > latin ? 'rtl' : 'ltr';
 }
 
 function GroundingBadge({ language, grounding, sources }: { language: Language; grounding: Grounding; sources?: SourcePassage[] }) {
@@ -30,9 +49,12 @@ function GroundingBadge({ language, grounding, sources }: { language: Language; 
   </span>;
 }
 
-export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft, imageUrl }: ChatFeedProps) {
+export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry, onEditPrompt, onRetryQuestion, onSelectVariant, isBusy, queryStage, revealingMessageId, onRevealComplete, streamingDraft, imageUrl }: ChatFeedProps) {
   const liveDraft = isGenerating && streamingDraft?.content ? streamingDraft : undefined;
   const t = translations[language];
+  // Previous and next follow the reading direction.
+  const [PreviousIcon, NextIcon] = language === 'fa' ? [ChevronRight, ChevronLeft] : [ChevronLeft, ChevronRight];
+  const interfaceDirection = language === 'fa' ? 'rtl' : 'ltr';
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const previousCount = useRef(0);
@@ -72,15 +94,17 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
       <div className="message-list" role="log" aria-label={t.conversations} aria-live="polite" aria-relevant="additions">
         {messages.map(message => message.role === 'system'
           ? <p key={message.id} className="system-message">{message.content}</p>
-          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '') + (liveDraft?.messageId === message.id ? ' is-streaming' : '')} aria-label={message.role === 'user' ? t.you : t.appName} aria-busy={liveDraft?.messageId === message.id || undefined}>
+          : <article key={message.id} className={'message message-' + message.role + (message.error ? ' message-error' : '') + (liveDraft?.messageId === message.id ? ' is-streaming' : '')
+            + (message.role === 'user' ? (promptDirection(message.content, interfaceDirection) === interfaceDirection ? ' prompt-start' : ' prompt-end') : '')} aria-label={message.role === 'user' ? t.you : t.appName} aria-busy={liveDraft?.messageId === message.id || undefined}>
             {message.role === 'user' ? <>
               {editing?.id === message.id ? <form className="prompt-edit" onSubmit={event => { event.preventDefault(); const value = editing.value.trim(); if (value && value !== message.content) onEditPrompt(message.id, value); setEditing(null); }}>
                 <textarea autoFocus value={editing.value} onChange={event => setEditing({ id: message.id, value: event.target.value })} aria-label={t.editPrompt} />
                 <div><button type="button" onClick={() => setEditing(null)}><X size={14} />{t.cancel}</button><button className="save-prompt" disabled={!editing.value.trim() || editing.value.trim() === message.content || isBusy}><Check size={14} />{t.saveAndSubmit}</button></div>
-              </form> : <div className="user-bubble" dir="auto">{message.content}</div>}
+              </form> : <div className="user-bubble" dir={promptDirection(message.content, interfaceDirection)}>{message.content}</div>}
               <div className="message-actions user-actions" data-tour="prompt-actions">
                 <button onClick={() => void copy(message)} title={t.copyPrompt}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copyPrompt}</button>
                 <button onClick={() => setEditing({ id: message.id, value: message.content })} disabled={isBusy || Boolean(editing)} title={t.editPrompt}><Pencil size={15} />{t.editPrompt}</button>
+                {!isGenerating && !answerTo(messages, message.id) && <button onClick={() => onRetryQuestion(message.id)} disabled={isBusy} title={t.retry}><RotateCcw size={15} />{t.retry}</button>}
               </div>
             </> : <>
               <div className="assistant-heading"><span className="assistant-avatar"><BrandMark /></span><strong>{t.appName}</strong>
@@ -110,9 +134,9 @@ export function ChatFeed({ messages, language, isGenerating, activeMode, onRetry
                 {!message.error && <button onClick={() => void copy(message)} title={t.copy}><span>{copied === message.id ? <Check size={15} /> : <Copy size={15} />}</span>{copied === message.id ? t.copied : t.copy}</button>}
                 <button onClick={() => onRetry(message.id)} disabled={isBusy}><RotateCcw size={15} />{t.retry}</button>
                 {message.variants && message.variants.length > 1 && <span className="variant-navigation" aria-label={t.responseVersions}>
-                  <button aria-label={t.previousResponse} disabled={isBusy || (message.activeVariant ?? 0) <= 0} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) - 1)}><ChevronRight size={15} /></button>
+                  <button aria-label={t.previousResponse} disabled={isBusy || (message.activeVariant ?? 0) <= 0} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) - 1)}><PreviousIcon size={15} /></button>
                   <output>{((message.activeVariant ?? 0) + 1).toLocaleString(language)} / {message.variants.length.toLocaleString(language)}</output>
-                  <button aria-label={t.nextResponse} disabled={isBusy || (message.activeVariant ?? 0) >= message.variants.length - 1} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) + 1)}><ChevronLeft size={15} /></button>
+                  <button aria-label={t.nextResponse} disabled={isBusy || (message.activeVariant ?? 0) >= message.variants.length - 1} onClick={() => onSelectVariant(message.id, (message.activeVariant ?? 0) + 1)}><NextIcon size={15} /></button>
                 </span>}
               </div>
             </>}

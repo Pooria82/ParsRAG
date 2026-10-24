@@ -11,8 +11,10 @@ from backend.core.strategies.prompt_rules import FORMATTING_RULES
 from backend.core.strategies.strict_rag import (
     DEFAULT_STRICT_THRESHOLD,
     STRICT_RAG_PROMPT_TEMPLATE,
+    STRICT_REFUSAL_FA,
     StrictRAGStrategy,
     _has_lexical_evidence,
+    configured_threshold,
     is_document_overview_question,
 )
 
@@ -35,6 +37,9 @@ def default_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
         "این فایل چه نوع سندی است؟",
         "What is this document about?",
         "Summarize the report",
+        "خلاصه کن",
+        "گزارش را خلاصه کن",
+        "موضوع اصلی چیست؟",
     ],
 )
 def test_document_overview_questions_are_recognized(question: str) -> None:
@@ -43,7 +48,17 @@ def test_document_overview_questions_are_recognized(question: str) -> None:
 
 @pytest.mark.parametrize(
     "question",
-    ["PKCE چگونه کار می‌کند؟", "رتبه Python در TIOBE چند است؟", "How does RTR work?"],
+    [
+        "PKCE چگونه کار می‌کند؟",
+        "رتبه Python در TIOBE چند است؟",
+        "How does RTR work?",
+        # Summary and topic words inside an ordinary question used to skip the
+        # evidence check.
+        "چه نوع مجوزی برای واردات لازم است؟",
+        "به طور خلاصه بگو مدیر پروژه کیست",
+        "موضوع جلسه دوم چه بود؟",
+        "What are the summary statistics in table 3?",
+    ],
 )
 def test_specific_questions_are_not_overviews(question: str) -> None:
     assert not is_document_overview_question(question)
@@ -86,7 +101,7 @@ def test_unrelated_low_score_question_is_still_refused(
         "طول nonce در AES-GCM چند بیت است؟", [], session_id="s"
     )
 
-    assert "ندارم" in result.answer
+    assert result.answer == STRICT_REFUSAL_FA
     mock_settings.llm.complete.assert_not_called()
 
 
@@ -116,3 +131,24 @@ def test_strict_prompt_allows_meaning_based_partial_answers() -> None:
 def test_every_mode_asks_for_renderable_math(template: str) -> None:
     assert FORMATTING_RULES in template
     assert "Keep Persian words outside math delimiters" in template
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("", 0.75), ("0.6", 0.6), ("abc", 0.75), ("1.5", 0.75), ("nan", 0.75)],
+)
+def test_an_invalid_threshold_falls_back_to_the_default(
+    value: str, expected: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STRICT_RAG_THRESHOLD", value)
+    assert configured_threshold() == pytest.approx(expected)
+
+
+def test_the_prompt_and_the_gate_use_the_same_refusal() -> None:
+    from backend.core.strategies.strict_rag import (
+        STRICT_RAG_PROMPT_TEMPLATE,
+        STRICT_REFUSAL_EN,
+    )
+
+    assert f'"{STRICT_REFUSAL_FA}"' in STRICT_RAG_PROMPT_TEMPLATE
+    assert f'"{STRICT_REFUSAL_EN}"' in STRICT_RAG_PROMPT_TEMPLATE

@@ -28,6 +28,7 @@ const UPLOAD: Messages = {
 
 const QUERY: Messages = {
   model_timeout: { fa: 'مدل در زمان مقرر پاسخ نداد. دوباره تلاش کنید یا پرسش را کوتاه‌تر کنید.', en: 'The model did not answer in time. Try again or ask a shorter question.' },
+  model_key_missing: { fa: 'کلید API تنظیم نشده است. کلیدی که در تنظیمات وارد می‌شود پس از راه‌اندازی دوبارهٔ سرویس پاک می‌شود؛ آن را دوباره وارد کنید یا MODEL_API_KEY و MODEL_API_BASE_URL را در .env بگذارید.', en: 'No API key is set. A key entered in Settings is cleared when the service restarts; enter it again or set MODEL_API_KEY and MODEL_API_BASE_URL in .env.' },
   model_auth: { fa: 'کلید API پذیرفته نشد. در تنظیمات، کلید را بررسی کنید.', en: 'The API key was rejected. Check it in Settings.' },
   model_rate_limited: { fa: 'سرویس مدل محدودیت تعداد درخواست اعمال کرده است. کمی بعد دوباره تلاش کنید.', en: 'The model service is rate-limiting requests. Try again shortly.' },
   model_not_found: { fa: 'مدل انتخاب‌شده روی سرویس پیدا نشد. نام مدل را در تنظیمات بررسی کنید.', en: 'The selected model was not found. Check the model name in Settings.' },
@@ -36,6 +37,7 @@ const QUERY: Messages = {
   model_quota: { fa: 'اعتبار حساب سرویس مدل (API) تمام شده است. حساب را شارژ کنید یا در تنظیمات مدل دیگری انتخاب کنید.', en: 'The model service account is out of credit. Top it up or choose another model in Settings.' },
   invalid_request: { fa: 'درخواست معتبر نیست؛ اشاره به سندها را بررسی کنید.', en: 'The request is invalid; check the document mentions.' },
   stream_interrupted: { fa: 'ارتباط در میانهٔ پاسخ قطع شد. دوباره تلاش کنید.', en: 'The connection dropped in the middle of the answer. Try again.' },
+  too_long: { fa: 'پرسش بیش از حد طولانی است (حداکثر ۱۲٬۰۰۰ نویسه). آن را کوتاه‌تر کنید.', en: 'The question is too long (at most 12,000 characters). Shorten it.' },
 };
 
 const COMMON: Messages = {
@@ -44,10 +46,19 @@ const COMMON: Messages = {
   not_ready: { fa: 'مدل‌ها هنوز در حال آماده‌شدن هستند. کمی صبر کنید.', en: 'Models are still loading. Please wait a moment.' },
   internal_error: { fa: 'خطای داخلی سرویس رخ داد. گزارش‌ها را بررسی کنید.', en: 'An internal service error occurred. Check the logs.' },
   network: { fa: 'ارتباط با سرویس برقرار نشد. اجرای برنامه و اتصال را بررسی کنید.', en: 'Could not reach the service. Check that it is running.' },
+  untrusted_host: { fa: 'سرویس این نام میزبان را نمی‌پذیرد. نام را به PARSRAG_ALLOWED_HOSTS بیفزایید یا برنامه را با localhost باز کنید.', en: 'The service does not accept this host name. Add it to PARSRAG_ALLOWED_HOSTS or open the app on localhost.' },
+  not_found: { fa: 'این مورد روی سرویس پیدا نشد؛ شاید پیش‌تر حذف شده باشد.', en: 'This was not found on the service; it may have been removed already.' },
+  conflict: { fa: 'این کار با وضعیت فعلی گفت‌وگو جور نیست. صفحه را تازه کنید و دوباره تلاش کنید.', en: 'This conflicts with the current state of the conversation. Refresh the page and try again.' },
+  upstream_unavailable: { fa: 'یکی از سرویس‌های لازم در دسترس نیست. کمی بعد دوباره تلاش کنید.', en: 'A required service is unreachable. Try again shortly.' },
+  invalid_session: { fa: 'شناسهٔ این گفت‌وگو معتبر نیست. یک گفت‌وگوی تازه باز کنید.', en: 'This conversation has an invalid ID. Start a new conversation.' },
+  no_file: { fa: 'فایلی فرستاده نشد. فایل را دوباره انتخاب کنید.', en: 'No file was sent. Choose the file again.' },
+  service_error: { fa: 'سرویس نتوانست این کار را انجام دهد. دوباره تلاش کنید و اگر تکرار شد، گزارش‌ها را بررسی کنید.', en: 'The service could not do this. Try again, and check the logs if it keeps happening.' },
+  request_failed: { fa: 'درخواست انجام نشد. دوباره تلاش کنید.', en: 'The request failed. Try again.' },
   untrusted_origin: { fa: 'سرویس به نشانی‌ای که این صفحه از آن باز شده اعتماد ندارد. نشانی را به PARSRAG_ALLOWED_ORIGINS بیفزایید یا برنامه را از نشانی خود سرویس باز کنید.', en: 'The service does not trust the address this page was opened from. Add it to PARSRAG_ALLOWED_ORIGINS or open the app from the service’s own address.' },
 };
 
 const MODEL_SETTINGS: Messages = {
+  api_key_missing: { fa: 'برای این نشانی کلید API وجود ندارد و بدون کلید نمی‌توان به آن وصل شد. کلید را وارد کنید؛ کلید ذخیره‌شده فقط به نشانی خودش فرستاده می‌شود.', en: 'There is no API key for this address, and it cannot be used without one. Enter a key; a stored key is only sent to its own address.' },
   ollama_url_not_allowed: { fa: 'این آدرس Ollama مجاز نیست. از http:// با localhost، ollama یا host.docker.internal استفاده کنید، یا میزبان را به OLLAMA_ALLOWED_HOSTS بیفزایید (بدون نام کاربری، مسیر یا پارامتر).', en: 'This Ollama address is not allowed. Use http:// with localhost, ollama, or host.docker.internal, or add the host to OLLAMA_ALLOWED_HOSTS (no user name, path, or query).' },
   ollama_unreachable: { fa: 'Ollama در این آدرس پاسخ نداد. مطمئن شوید Ollama اجرا می‌شود. اگر روی همین رایانه نصب است و برنامه در Docker است، آدرس http://host.docker.internal:11434 را به کار ببرید؛ در لینوکس، OLLAMA_HOST را طوری تنظیم کنید که Ollama به شبکهٔ Docker هم گوش دهد.', en: 'Ollama did not answer at this address. Make sure Ollama is running. If it is installed on this computer and the app runs in Docker, use http://host.docker.internal:11434; on Linux, set OLLAMA_HOST so Ollama also listens on the Docker network.' },
 };
@@ -59,7 +70,7 @@ const NOTICES: Messages = {
   ocr_unavailable: { fa: 'OCR نصب نیست؛ صفحه‌ها و تصویرهای اسکن‌شده خوانده نشدند.', en: 'OCR is not installed; scanned pages and images were not read.' },
 };
 
-/** Translate an API error code for an upload, or undefined when unknown. */
+/** Translate an API error code for an upload (or another document action), or undefined when unknown. */
 export function uploadErrorMessage(code: string | undefined, language: Language): string | undefined {
   const entry = code ? UPLOAD[code] ?? COMMON[code] : undefined;
   return entry?.[language];
@@ -73,7 +84,8 @@ export function queryErrorMessage(code: string | undefined, language: Language):
 
 /** Translate a model-settings error code, or undefined when unknown. */
 export function modelSettingsErrorMessage(code: string | undefined, language: Language): string | undefined {
-  return code ? MODEL_SETTINGS[code]?.[language] : undefined;
+  const entry = code ? MODEL_SETTINGS[code] ?? COMMON[code] : undefined;
+  return entry?.[language];
 }
 
 /** Translate a partial-indexing notice code. */

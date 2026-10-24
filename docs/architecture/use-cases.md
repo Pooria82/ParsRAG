@@ -27,7 +27,9 @@ flowchart LR
         RMC[ReadModelConfiguration]
         CM[ConfigureModel]
         LOM[ListOllamaModels]
+        CMC[CheckModelConnection]
         GCT[GenerateConversationTitle]
+        SQ[SuggestQuestions]
     end
     subgraph system
         CR[CheckReadiness]
@@ -40,7 +42,9 @@ flowchart LR
     RQP --> ProgressTracker
     LSF & RSI & RD & DD & DS --> DocumentRepository
     RRS & URS --> RuntimeSettingsStore
-    RMC & CM & LOM & GCT --> ModelGateway
+    RMC & CM & LOM & CMC & GCT & SQ --> ModelGateway
+    SQ --> DocumentRepository
+    QueryStrategy -.-> Reranker
     CR --> DocumentRepository
 ```
 
@@ -49,7 +53,7 @@ flowchart LR
 | Use case | Route | Input | Output | Ports | Runtime controls |
 | --- | --- | --- | --- | --- | --- |
 | `IngestDocuments` | `POST /ingest` | `IngestDocumentsCommand` | `IngestResponse` (message + per-file chunks and notices) | `DocumentRepository`, `DocumentParser`, `TextChunker` | ingestion limiter, session lock |
-| `AnswerQuery` | `POST /query`, `POST /query/stream` (SSE events: `stage`, `sources`, `token`, `done`, `error`) | `QueryRequest` | `QueryResponse` (answer, numbered `source_nodes`, `cited`, `outcome`) | `DocumentRepository`, `QuestionCondenser`, `QueryStrategy`, `ProgressTracker` | query limiter |
+| `AnswerQuery` | `POST /query`, `POST /query/stream` (SSE events: `stage`, `sources`, `token`, `done`, `error`, `ping`) | `QueryRequest` | `QueryResponse` (answer, numbered `source_nodes`, `cited`, `outcome`) | `DocumentRepository`, `QuestionCondenser`, `QueryStrategy`, `ProgressTracker` | query limiter |
 | `ReadQueryProgress` | `GET /queries/{id}/progress` | `UUID` | `QueryProgressResponse` | `ProgressTracker` | — |
 | `ListSessionFiles` | `GET /sessions/{id}/files` | session ID | `list[str]` | `DocumentRepository` | — |
 | `ReuseDocument` | `POST /sessions/{id}/files/reuse` | session ID, `ReuseDocumentRequest` | `ReusedDocumentResponse` | `DocumentRepository` | ingestion limiter, two session locks |
@@ -57,12 +61,16 @@ flowchart LR
 | `DeleteSession` | `DELETE /sessions/{id}` | session ID | `MessageResponse` | `DocumentRepository` | session lock |
 | `ReadModelConfiguration` | `GET /models/configuration` | — | `ModelConfigurationResponse` | `ModelGateway` | — |
 | `ConfigureModel` | `PUT /models/configuration` | `ModelConfigurationRequest` | `ModelConfigurationResponse` | `ModelGateway` | — |
+| `CheckModelConnection` | `GET /models/status` | — | `ModelStatusResponse` (`ready`, `unreachable`, `model_missing`, `auth_failed`) | `ModelGateway` | — |
 | `ListOllamaModels` | `GET /models/ollama` | base URL | `list[OllamaModel]` | `ModelGateway` | — |
 | `ReadRuntimeSettings` | `GET /settings/runtime` | — | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | — |
 | `UpdateRuntimeSettings` | `PUT`/`DELETE /settings/runtime` | `RuntimeSettingsUpdate` | `RuntimeSettingsResponse` | `RuntimeSettingsStore` | Persists overrides; rebuilds model clients when their settings change |
 | `ReadSourceImage` | `GET /sessions/{id}/images/{n}` | session, filename, image number | WebP bytes | `DocumentRepository` | — |
 | `GenerateConversationTitle` | `POST /conversations/title` | `ConversationTitleRequest` | `ConversationTitleResponse` | `ModelGateway` | query limiter |
+| `SuggestQuestions` | `POST /sessions/{id}/suggestions` | session ID, `QuestionSuggestionRequest` | `QuestionSuggestionResponse` (up to three questions) | `DocumentRepository`, `ModelGateway` | query limiter |
 | `CheckReadiness` | `GET /health/ready` | — | status string | `DocumentRepository` (lazy) | readiness state |
+| `CheckForUpdates` | `GET /updates` | `refresh` | `UpdateStatusResponse` (newer releases with notes) | `ReleaseFeed` | daily cache |
+| `ReadReleaseNotes` | `GET /release-notes` | `since`, language | `ReleaseNotesResponse` | `ReleaseNotes` | — |
 | `DescribeCapabilities` | `GET /capabilities` | — | `AppCapabilitiesResponse` | — | upload policy |
 
 ## Business rules and errors

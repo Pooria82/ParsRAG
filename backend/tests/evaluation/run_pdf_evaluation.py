@@ -1,5 +1,10 @@
 """Run an opt-in, live three-mode evaluation against private local PDFs.
 
+Documents are indexed and questions answered through the same use cases the
+API runs (``IngestDocuments`` and ``AnswerQuery``), so the evaluation measures
+what users get: Persian normalization, page-boundary bridges, duplicate checks,
+question normalization, and the answer language included.
+
 Detailed prompts, references, answers, and source chunks are written only to the
 ignored output path. The public report generator consumes aggregate metrics and
 document hashes, never the private document text.
@@ -19,19 +24,20 @@ from typing import TypedDict, cast
 
 from dotenv import load_dotenv
 
+from backend.api.dependencies import get_answer_query, get_ingest_documents
 from backend.core.domain.documents import ExtractedNode
+from backend.core.domain.enums import QueryMode
+from backend.core.dto.input.ingestion import IncomingFile, IngestDocumentsCommand
+from backend.core.dto.input.query import QueryRequest
+from backend.core.dto.output.ingestion import IngestedFile
 from backend.core.dto.output.query import QueryResponse
-from backend.core.strategies.hybrid_rag import HybridRAGStrategy
-from backend.core.strategies.llm_only import LLMOnlyStrategy
-from backend.core.strategies.strict_rag import StrictRAGStrategy
+from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
+from backend.core.use_case.query.answer_query import AnswerQuery
 from backend.infrastructure.database.qdrant_repo import QdrantRepository
 from backend.infrastructure.llm.factory import (
     get_model_configuration,
     setup_llm_and_embeddings,
 )
-from backend.infrastructure.llm.reranker import FlashRankReranker
-from backend.infrastructure.parsers.chunker import chunk_text
-from backend.infrastructure.parsers.document_parser import parse_document_sections
 from backend.tests.evaluation.scoring import (
     ExpectedFact,
     is_strict_refusal,
@@ -68,8 +74,23 @@ def _serialize_sources(sources: list[ExtractedNode]) -> list[dict[str, object]]:
     ]
 
 
+def _ingest(
+    ingestion: IngestDocuments, pdf_path: Path, session_id: str
+) -> IngestedFile:
+    """Index one PDF exactly as an upload would."""
+    with pdf_path.open("rb") as stream:
+        response = ingestion.execute(
+            IngestDocumentsCommand(
+                session_id=session_id,
+                files=[IncomingFile(filename=pdf_path.name, stream=stream)],
+            )
+        )
+    return response.files[0]
+
+
 def _query_with_retry(
-    strategy: StrictRAGStrategy | HybridRAGStrategy | LLMOnlyStrategy,
+    answers: AnswerQuery,
+    mode: QueryMode,
     question: str,
     session_id: str | None,
     *,
@@ -77,10 +98,11 @@ def _query_with_retry(
     delay_seconds: float,
 ) -> tuple[QueryResponse, float]:
     last_error: Exception | None = None
+    request = QueryRequest(prompt=question, mode=mode, session_id=session_id)
     for attempt in range(attempts):
         started = time.perf_counter()
         try:
-            response = strategy.execute(question, [], session_id=session_id)
+            response = answers.execute(request)
             return response, time.perf_counter() - started
         except Exception as exc:  # noqa: BLE001 - live adapters expose varied errors.
             last_error = exc
@@ -91,7 +113,8 @@ def _query_with_retry(
 
 
 def _evaluate_positive(
-    strategy: StrictRAGStrategy | HybridRAGStrategy | LLMOnlyStrategy,
+    answers: AnswerQuery,
+    mode: QueryMode,
     case: PositiveCase,
     *,
     session_id: str | None,
@@ -100,7 +123,8 @@ def _evaluate_positive(
     delay_seconds: float,
 ) -> dict[str, object]:
     response, latency = _query_with_retry(
-        strategy,
+        answers,
+        mode,
         case["question"],
         session_id,
         attempts=attempts,
@@ -152,29 +176,18 @@ def run_evaluation(
         host=os.getenv("QDRANT_HOST", "localhost"),
         port=int(os.getenv("QDRANT_PORT", "6333")),
     )
+    ingestion = get_ingest_documents(repository)
+    answers = get_answer_query(repository)
     results: list[dict[str, object]] = []
     for index, document_case in enumerate(cases, start=1):
         pdf_path = pdf_root / document_case["filename"]
         session_id = f"pdf-eval-{index:02d}"
         repository.delete_session(session_id)
-        sections = parse_document_sections(pdf_path.read_bytes(), pdf_path.name)
-        nodes: list[ExtractedNode] = []
-        for section in sections:
-            nodes.extend(
-                chunk_text(
-                    section.text,
-                    metadata={"filename": pdf_path.name, **section.metadata},
-                )
-            )
-        repository.save_nodes(nodes, session_id)
-        strict = StrictRAGStrategy(repository)
-        hybrid = HybridRAGStrategy(
-            repository, reranker=FlashRankReranker.from_environment()
-        )
-        llm_only = LLMOnlyStrategy()
+        indexed = _ingest(ingestion, pdf_path, session_id)
         positives = [
             _evaluate_positive(
-                strict,
+                answers,
+                QueryMode.STRICT,
                 positive,
                 session_id=session_id,
                 filename=pdf_path.name,
@@ -184,7 +197,8 @@ def run_evaluation(
             for positive in document_case["positives"]
         ]
         negative_response, negative_latency = _query_with_retry(
-            strict,
+            answers,
+            QueryMode.STRICT,
             document_case["negative_question"],
             session_id,
             attempts=attempts,
@@ -192,7 +206,8 @@ def run_evaluation(
         )
         primary = document_case["positives"][0]
         hybrid_result = _evaluate_positive(
-            hybrid,
+            answers,
+            QueryMode.HYBRID,
             primary,
             session_id=session_id,
             filename=pdf_path.name,
@@ -200,7 +215,8 @@ def run_evaluation(
             delay_seconds=delay_seconds,
         )
         llm_result = _evaluate_positive(
-            llm_only,
+            answers,
+            QueryMode.LLM_ONLY,
             primary,
             session_id=None,
             filename=pdf_path.name,
@@ -212,8 +228,9 @@ def run_evaluation(
                 "id": document_case["id"],
                 "filename": pdf_path.name,
                 "sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
-                "page_count": len(sections),
-                "chunk_count": len(nodes),
+                "page_count": indexed.sections,
+                "chunk_count": indexed.chunks,
+                "notices": indexed.notices,
                 "strict_positive": positives,
                 "strict_negative": {
                     "question": document_case["negative_question"],

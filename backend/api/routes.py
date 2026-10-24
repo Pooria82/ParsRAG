@@ -5,6 +5,7 @@ response codes). Business rules live in ``backend.core.use_case`` and errors
 are mapped centrally by ``backend.api.errors``.
 """
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -12,6 +13,8 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
+    get_check_for_updates,
+    get_check_model_connection,
     get_check_readiness,
     get_configure_model,
     get_delete_document,
@@ -23,6 +26,7 @@ from backend.api.dependencies import (
     get_list_session_files,
     get_read_model_configuration,
     get_read_query_progress,
+    get_read_release_notes,
     get_read_runtime_settings,
     get_read_source_image,
     get_reuse_document,
@@ -47,12 +51,15 @@ from backend.core.dto.output.ingestion import IngestResponse
 from backend.core.dto.output.model import (
     ConversationTitleResponse,
     ModelConfigurationResponse,
+    ModelStatusResponse,
     OllamaModel,
     QuestionSuggestionResponse,
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
 from backend.core.dto.output.runtime_settings import RuntimeSettingsResponse
+from backend.core.dto.output.updates import ReleaseNotesResponse, UpdateStatusResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
+from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
 from backend.core.use_case.model.generate_conversation_title import (
     GenerateConversationTitle,
@@ -69,8 +76,10 @@ from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
 from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
+from backend.core.use_case.system.check_for_updates import CheckForUpdates
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.read_release_notes import ReadReleaseNotes
 from backend.core.use_case.system.runtime_settings import (
     ReadRuntimeSettings,
     UpdateRuntimeSettings,
@@ -138,6 +147,14 @@ def read_model_configuration(
     return use_case.execute()
 
 
+@router.get("/models/status", response_model=ModelStatusResponse)
+def read_model_status(
+    use_case: CheckModelConnection = Depends(get_check_model_connection),  # noqa: B008
+) -> ModelStatusResponse:
+    """Report whether the active model service answers (checked at most every 10 s)."""
+    return use_case.execute()
+
+
 @router.put("/models/configuration", response_model=ModelConfigurationResponse)
 def update_model_configuration(
     request: ModelConfigurationRequest,
@@ -199,9 +216,14 @@ def stream_query(
     _ready: None = Depends(require_runtime_ready),
     use_case: AnswerQuery = Depends(get_answer_query),  # noqa: B008
 ) -> StreamingResponse:
-    """Stream stages, numbered sources, answer text, and the final result (SSE)."""
+    """Stream stages, numbered sources, answer text, and the final result (SSE).
+
+    A full query capacity or an invalid document mention is answered with 429
+    or 400 before the stream starts.
+    """
+    events = use_case.stream(request)
     return StreamingResponse(
-        event_stream(use_case.stream(request)),
+        event_stream(events),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -219,6 +241,7 @@ def read_query_progress(
 @router.get("/sessions/{session_id}/files", response_model=list[str])
 def get_session_files(
     session_id: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ListSessionFiles = Depends(get_list_session_files),  # noqa: B008
 ) -> list[str]:
     """Retrieves all distinct filenames indexed for a given session."""
@@ -230,6 +253,7 @@ def read_source_image(
     session_id: str,
     image: int,
     filename: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ReadSourceImage = Depends(get_read_source_image),  # noqa: B008
 ) -> Response:
     """Return the preview of image ``image`` in ``filename`` (WebP)."""
@@ -246,6 +270,7 @@ def read_source_image(
 def reuse_session_document(
     session_id: str,
     request: ReuseDocumentRequest,
+    _ready: None = Depends(require_runtime_ready),
     use_case: ReuseDocument = Depends(get_reuse_document),  # noqa: B008
 ) -> ReusedDocumentResponse:
     """Reuse a prior session's indexed vectors without storing raw upload bytes."""
@@ -268,6 +293,7 @@ def suggest_session_questions(
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)
 def delete_session(
     session_id: str,
+    _ready: None = Depends(require_runtime_ready),
     use_case: DeleteSession = Depends(get_delete_session),  # noqa: B008
 ) -> MessageResponse:
     """Deletes all indexed vectors and documents for a given session."""
@@ -278,7 +304,27 @@ def delete_session(
 def delete_session_document(
     session_id: str,
     request: DeleteDocumentRequest,
+    _ready: None = Depends(require_runtime_ready),
     use_case: DeleteDocument = Depends(get_delete_document),  # noqa: B008
 ) -> MessageResponse:
     """Deletes one indexed document without affecting the rest of the session."""
     return use_case.execute(session_id, request)
+
+
+@router.get("/updates", response_model=UpdateStatusResponse)
+def read_update_status(
+    refresh: bool = False,
+    use_case: CheckForUpdates = Depends(get_check_for_updates),  # noqa: B008
+) -> UpdateStatusResponse:
+    """Report whether a newer release is out (checked once a day, or on request)."""
+    return use_case.execute(refresh=refresh)
+
+
+@router.get("/release-notes", response_model=ReleaseNotesResponse)
+def read_release_notes(
+    since: str | None = None,
+    language: Literal["fa", "en"] = "fa",
+    use_case: ReadReleaseNotes = Depends(get_read_release_notes),  # noqa: B008
+) -> ReleaseNotesResponse:
+    """What changed in the versions installed after ``since``."""
+    return use_case.execute(since, language)

@@ -41,3 +41,19 @@ Python 3.12 environment, use `npm install` to update `package-lock.json`, review
 upstream release and security notes, then run the complete local checks and image
 scan. Container service images use explicit versions; update them in a dedicated
 pull request and verify persistence compatibility before merging.
+
+## Releases
+
+The version is written once, in `VERSION`. To prepare release `x.y.z` on a
+`release/x.y.z` branch:
+
+1. Run `python scripts/set_version.py x.y.z` to update `VERSION` and its copies.
+2. Write `release-notes/x.y.z.fa.md` and `release-notes/x.y.z.en.md`: a short,
+   user-facing summary that the app shows after the update and in the update
+   window. Keep the Persian and English notes saying the same thing.
+3. Move the `Unreleased` CHANGELOG section under `x.y.z`.
+
+After the squash merge to `main`, tag `vx.y.z`; the release workflow checks the
+tag against `VERSION`. Installations find the release on their next daily check.
+A release must keep data from any earlier version usable, because the update
+script goes straight to the latest release.

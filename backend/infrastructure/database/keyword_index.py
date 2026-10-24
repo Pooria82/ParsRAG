@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from collections import Counter, OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -88,13 +89,25 @@ class SessionCorpus:
 
 
 class SessionCorpusCache:
-    """Keep the most recently used session corpora; forget changed sessions."""
+    """Keep the most recently used session corpora; forget changed sessions.
 
-    def __init__(self, capacity: int = 4) -> None:
+    Writers call ``invalidate`` before and after they change Qdrant. A corpus
+    loaded while a change runs is either not cached (its version moved) or
+    dropped by the second call, so a deleted document never stays searchable.
+    """
+
+    # Seconds after which an unchanged session's version is forgotten; no
+    # corpus load takes this long, so a forgotten version cannot hide a change.
+    VERSION_RETENTION_SECONDS = 3600.0
+
+    def __init__(
+        self, capacity: int = 4, clock: Callable[[], float] = time.monotonic
+    ) -> None:
         """Bound memory to ``capacity`` sessions."""
         self._capacity = capacity
         self._corpora: OrderedDict[str, SessionCorpus] = OrderedDict()
-        self._versions: dict[str, int] = {}
+        self._versions: dict[str, tuple[int, float]] = {}
+        self._clock = clock
         self._lock = Lock()
 
     def get(self, session_id: str, load: Callable[[], SessionCorpus]) -> SessionCorpus:
@@ -104,10 +117,10 @@ class SessionCorpusCache:
             if corpus is not None:
                 self._corpora.move_to_end(session_id)
                 return corpus
-            version = self._versions.get(session_id, 0)
+            version = self._version(session_id)
         corpus = load()
         with self._lock:
-            if self._versions.get(session_id, 0) != version:
+            if self._version(session_id) != version:
                 return corpus  # Documents changed while loading; do not cache.
             self._corpora[session_id] = corpus
             self._corpora.move_to_end(session_id)
@@ -116,7 +129,19 @@ class SessionCorpusCache:
         return corpus
 
     def invalidate(self, session_id: str) -> None:
-        """Drop a session after its documents change."""
+        """Drop a session before and after its documents change."""
         with self._lock:
             self._corpora.pop(session_id, None)
-            self._versions[session_id] = self._versions.get(session_id, 0) + 1
+            now = self._clock()
+            self._versions[session_id] = (self._version(session_id) + 1, now)
+            cutoff = now - self.VERSION_RETENTION_SECONDS
+            for stale in [
+                key
+                for key, (_, changed) in self._versions.items()
+                if changed < cutoff and key not in self._corpora
+            ]:
+                del self._versions[stale]
+
+    def _version(self, session_id: str) -> int:
+        entry = self._versions.get(session_id)
+        return entry[0] if entry else 0

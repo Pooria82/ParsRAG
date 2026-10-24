@@ -10,7 +10,7 @@ import re
 
 LANGUAGE_RULES = """\
 LANGUAGE RULES:
-1. Answer in the natural language of the user's question: Persian (فارسی) questions get a Persian answer, English questions an English answer.
+1. Answer in the natural language of the user's question: Persian (فارسی) questions get a Persian answer, English questions an English answer. The language of the documents does not matter: translate what you use from them.
 2. Code, commands, function names, and technical terms are usually English. Do not treat them as a sign that the question is in English; decide from the surrounding sentences.
 3. Never answer in Chinese or any other unintended language."""
 
@@ -36,30 +36,43 @@ _LATIN_WORD = re.compile(r"[A-Za-z]+")
 _NEUTRAL = re.compile(r"`[^`]*`|@\{(?:\\.|[^{}\\])*\}|https?://\S+")
 
 
-def question_language(question: str) -> str:
+def question_language(question: str, fallback: str = "fa") -> str:
     """Return ``"fa"`` or ``"en"``: the language the answer should be written in.
 
     English technical terms are common inside Persian questions, so a question
     counts as Persian when Persian words make up more than a third of its words.
+    A question without words in either script (a formula, a file mention) takes
+    ``fallback``: the interface language when the browser sends it.
     """
     text = _NEUTRAL.sub(" ", question)
     persian = len(_PERSIAN_WORD.findall(text))
     latin = len(_LATIN_WORD.findall(text))
     if not persian:
-        return "en" if latin else "fa"
+        return "en" if latin else ("en" if fallback == "en" else "fa")
     return "fa" if persian * 2 > latin else "en"
 
 
-def answer_language_rule(question: str) -> str:
-    """An explicit instruction naming the answer language, placed after the question.
+def answer_language_rule(language: str) -> str:
+    """The instruction that ends every prompt: the answer language, then its start.
 
     The general language rules and the bilingual examples in the prompt are not
-    enough on their own: models answered English questions in Persian in
-    Hybrid and open-chat modes.
+    enough on their own: models answered English questions in Persian, and
+    Persian questions about English documents in English. Naming the language
+    last and starting the answer in it keeps small models in that language.
     """
-    if question_language(question) == "fa":
-        return "ANSWER LANGUAGE: The question is in Persian. Write the whole answer in Persian (فارسی)."
-    return "ANSWER LANGUAGE: The question is in English. Write the whole answer in English, even though the documents or examples may be in Persian."
+    if language == "fa":
+        return (
+            "ANSWER LANGUAGE: The question is in Persian. Write the whole answer in "
+            "Persian (فارسی), even when the documents are in English: translate what "
+            "you use from them. Keep code, commands, and names as written.\n"
+            "پاسخ (به فارسی):"
+        )
+    return (
+        "ANSWER LANGUAGE: The question is in English. Write the whole answer in "
+        "English, even when the documents or examples are in Persian: translate what "
+        "you use from them. Keep code, commands, and names as written.\n"
+        "Answer (in English):"
+    )
 
 
 CODE_VERIFICATION_RULES = """\

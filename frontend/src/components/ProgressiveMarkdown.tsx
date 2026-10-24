@@ -54,7 +54,8 @@ export function ProgressiveMarkdown({ content, active, externalImageLabel, onCom
     return () => cancelAnimationFrame(frame);
   }, [active, content, reduceMotion]);
 
-  const visibleContent = linkCitations(normalizeMathMarkdown(content.slice(0, visibleLength)), sourceCount);
+  const shown = active && !reduceMotion ? content.slice(0, visibleLength) : content;
+  const visibleContent = linkCitations(normalizeMathMarkdown(shown), sourceCount);
   const revealing = streaming || (active && visibleLength < content.length);
   return <div className={'progressive-markdown' + (revealing ? ' is-revealing' : '')}>
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]} components={{

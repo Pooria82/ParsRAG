@@ -30,6 +30,7 @@ from backend.core.strategies.prompt_rules import (
     FORMATTING_RULES,
     LANGUAGE_RULES,
     answer_language_rule,
+    question_language,
 )
 
 HYBRID_RAG_PROMPT_TEMPLATE = (
@@ -58,8 +59,7 @@ Context:
 
 Query: {query}
 
-{answer_language}
-Answer:"""
+{answer_language}"""
 )
 
 
@@ -170,6 +170,7 @@ class HybridRAGStrategy(GeneratingStrategy):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> PreparedAnswer:
         """Retrieve a broad pool, rerank it, and build the prompt.
 
@@ -181,10 +182,12 @@ class HybridRAGStrategy(GeneratingStrategy):
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports retrieval and generation stages.
             document_segments: File-scoped question segments from explicit mentions.
+            answer_language: ``"fa"`` or ``"en"``; by default the language of ``query``.
 
         Returns:
             PreparedAnswer: The prompt with numbered sources.
         """
+        language = answer_language or question_language(query)
         if progress:
             progress("retrieving")
 
@@ -243,7 +246,11 @@ class HybridRAGStrategy(GeneratingStrategy):
 
         if not extracted_nodes:
             return PreparedAnswer(
-                immediate="هیچ سند مرتبطی یافت نشد. (No relevant documents found.)",
+                immediate=(
+                    "هیچ سند مرتبطی یافت نشد."
+                    if language == "fa"
+                    else "No relevant documents found."
+                ),
                 outcome="no_documents",
             )
 
@@ -271,18 +278,21 @@ class HybridRAGStrategy(GeneratingStrategy):
         final_source_nodes = with_whole_tables(
             self.repo, final_source_nodes, session_id
         )
-        answer_language = answer_language_rule(query)
+        language_rule = answer_language_rule(language)
         final_source_nodes = order_by_document(
             fit_to_context(
                 final_source_nodes,
                 context_window=model_context_window(self.llm),
                 fixed_prompt=self.prompt_template.format(
-                    context_str="", query=query, answer_language=answer_language
+                    context_str="", query=query, answer_language=language_rule
                 ),
+                # Anchors, then reranked order, then part evidence: the list is
+                # already in priority order, and its scores mix two scales.
+                ranked=True,
             )
         )
         context_str = format_multi_doc_context(final_source_nodes)
         prompt = self.prompt_template.format(
-            context_str=context_str, query=query, answer_language=answer_language
+            context_str=context_str, query=query, answer_language=language_rule
         )
         return PreparedAnswer(prompt=prompt, sources=final_source_nodes)

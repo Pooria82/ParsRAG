@@ -52,11 +52,12 @@ function hasMathCommand(expression: string): boolean {
 function looksLikeFormula(value: string): boolean {
   const expression = value.trim();
   if (expression.length < 3 || expression.length > 600 || expression.includes('\n')) return false;
-  if (hasRtlOutsideText(expression)) return false;
+  if (hasRtlOutsideText(expression) || /:\/\/|^(?:www\.|\.{0,2}\/)/.test(expression)) return false;
   const hasOperand = /[A-Za-z0-9Α-ω]/.test(expression);
-  const hasTeX = /\\[A-Za-z]+|[_^](?:\{|[A-Za-z0-9])/.test(expression);
+  // A script follows a one-letter variable ("x_1", "a^2"); "my_var" is a name.
+  const hasTeX = /\\[A-Za-z]+|(?<![A-Za-z]{2})[_^](?:\{|[A-Za-z0-9])/.test(expression);
   const hasEquation = /(?:=|≤|≥|≈|≠|<|>)/.test(expression)
-    && /(?:[+\-*/^]|\\[A-Za-z]+|[A-Za-z][_{])/.test(expression);
+    && /(?:[+\-*/^]|\\[A-Za-z]+|(?<![A-Za-z])[A-Za-z][_{])/.test(expression);
   return hasOperand && (hasTeX || hasEquation);
 }
 
@@ -104,11 +105,32 @@ function normalizeText(text: string): string {
     }
     flushPlain();
     const inner = text.slice(index + 1, closing);
-    output += looksLikeFormula(inner) ? `$${inner.trim()}$` : `(${normalizeText(inner)})`;
+    // A link target ("[docs](…/my_page)") is kept exactly as written.
+    if (text[index - 1] === ']') output += `(${inner})`;
+    else output += looksLikeFormula(inner) ? `$${inner.trim()}$` : `(${normalizeText(inner)})`;
     index = closing + 1;
   }
   flushPlain();
   return output;
+}
+
+/**
+ * Where an inline `$` span whose content starts at `from` closes, or -1. As in
+ * Pandoc, the opener must touch its first character and the closer its last
+ * one, and the closer is not followed by a digit. A `$` that can only open a
+ * new span means this one never closes: "$5 and $10" is two amounts.
+ */
+function closingDollar(line: string, from: number): number {
+  if (/\s/.test(line[from] ?? ' ')) return -1;
+  for (let at = line.indexOf('$', from); at >= 0; at = line.indexOf('$', at + 1)) {
+    if (line[at - 1] === '\\') continue;
+    if (/\s/.test(line[at - 1])) {
+      if (!/\s/.test(line[at + 1] ?? ' ')) return -1;
+      continue;
+    }
+    if (!/[0-9]/.test(line[at + 1] ?? '')) return at;
+  }
+  return -1;
 }
 
 /**
@@ -137,9 +159,11 @@ function normalizeLine(line: string): string {
       continue;
     }
     const marker = line[index + 1] === '$' ? '$$' : '$';
-    const closing = line.indexOf(marker, index + marker.length);
+    const closing = marker === '$' ? closingDollar(line, index + 1) : line.indexOf(marker, index + 2);
     if (closing < 0) {
-      // An opener without a partner is a stray delimiter; drop it.
+      // "$5" is an amount: keep the sign. Any other opener without a partner
+      // is a stray delimiter; drop it.
+      if (marker === '$' && /[0-9]/.test(line[index + 1] ?? '')) text += '\\$';
       index += marker.length;
       continue;
     }

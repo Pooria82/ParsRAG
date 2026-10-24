@@ -68,3 +68,28 @@ def test_context_window_is_read_from_the_model_adapter() -> None:
     assert model_context_window(llm) == 8192
     assert model_context_window(MagicMock()) == UNKNOWN_CONTEXT_WINDOW
     assert model_context_window(object()) == UNKNOWN_CONTEXT_WINDOW
+
+
+def test_a_ranked_list_keeps_its_first_chunks_whatever_their_scores() -> None:
+    """Hybrid lists mix reranker and cosine scores; their order is the priority."""
+    nodes = [
+        _node(PERSIAN_CHUNK, 0.30, "reranked-top"),
+        _node(PERSIAN_CHUNK, 0.85, "dense-anchor"),
+        _node(PERSIAN_CHUNK, 0.80, "weaker-anchor"),
+    ]
+    per_chunk = estimate_tokens(PERSIAN_CHUNK) + 24
+    window = 1024 + 100 + per_chunk * 2 + 10
+
+    by_score = fit_to_context(nodes, context_window=window, fixed_prompt="x" * 350)
+    by_rank = fit_to_context(
+        nodes, context_window=window, fixed_prompt="x" * 350, ranked=True
+    )
+
+    assert [node.metadata["filename"] for node in by_score] == [
+        "dense-anchor",
+        "weaker-anchor",
+    ]
+    assert [node.metadata["filename"] for node in by_rank] == [
+        "reranked-top",
+        "dense-anchor",
+    ]

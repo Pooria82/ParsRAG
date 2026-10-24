@@ -55,10 +55,12 @@ export function usePwa() {
     setInstallPrompt(null);
   }, [installPrompt]);
 
-  const activateUpdate = useCallback(() => {
+  /** Switch to the new shell; `reload` is false when the page already runs it. */
+  const activateUpdate = useCallback((reload = true) => {
     if (!waitingWorker) return;
-    navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true });
+    if (reload) navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true });
     waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    setWaitingWorker(null);
   }, [waitingWorker]);
 
   return { canInstall: Boolean(installPrompt), install, updateReady: Boolean(waitingWorker), activateUpdate };

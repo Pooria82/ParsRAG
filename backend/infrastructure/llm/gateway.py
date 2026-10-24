@@ -5,9 +5,18 @@ from typing import Literal
 import httpx
 
 from backend.core.domain.enums import ModelProvider
-from backend.core.domain.exceptions import ModelConnectionError, OllamaConnectionError
+from backend.core.domain.exceptions import (
+    ModelConnectionError,
+    ModelKeyMissingError,
+    OllamaConnectionError,
+    UpstreamServiceError,
+)
 from backend.core.dto.input.model import ModelConfigurationRequest
-from backend.core.dto.output.model import ModelConfigurationResponse, OllamaModel
+from backend.core.dto.output.model import (
+    ModelConfigurationResponse,
+    ModelStatusResponse,
+    OllamaModel,
+)
 from backend.infrastructure.llm import factory
 from backend.infrastructure.llm.endpoint_policy import OllamaURLNotAllowedError
 
@@ -38,12 +47,18 @@ class LlamaIndexModelGateway:
         """
         try:
             return factory.configure_model(configuration)
+        except factory.APIKeyMissingError as exc:
+            raise ModelKeyMissingError(str(exc)) from exc
         except (OllamaURLNotAllowedError, httpx.HTTPError) as exc:
             if configuration.provider is ModelProvider.OLLAMA:
                 raise _ollama_error(exc) from exc
             raise ModelConnectionError("Model configuration failed.") from exc
         except (ValueError, TypeError, OSError) as exc:
             raise ModelConnectionError("Model configuration failed.") from exc
+
+    def connection_status(self) -> ModelStatusResponse:
+        """Check, briefly, whether the active model service answers."""
+        return factory.model_connection_status()
 
     def list_ollama_models(self, base_url: str | None) -> list[OllamaModel]:
         """List installed models from an allowed Ollama service.
@@ -59,8 +74,15 @@ class LlamaIndexModelGateway:
             raise _ollama_error(exc) from exc
 
     def generate_title(self, prompt: str, language: Literal["fa", "en"]) -> str:
-        """Generate a sanitized short title with the active model."""
-        return factory.generate_conversation_title(prompt, language)
+        """Generate a sanitized short title with the active model.
+
+        Raises:
+            UpstreamServiceError: The model returned no usable title.
+        """
+        try:
+            return factory.generate_conversation_title(prompt, language)
+        except ValueError as exc:
+            raise UpstreamServiceError("The model returned no title.") from exc
 
     def suggest_questions(
         self, excerpts: list[str], language: Literal["fa", "en"]

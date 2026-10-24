@@ -1,5 +1,6 @@
 """BM25 keyword matches fused with vector search."""
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -145,3 +146,39 @@ def test_keyword_fusion_can_be_disabled(
         settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
         nodes = repository.similarity_search("Katalon", top_k=2, session_id="s")
     assert all("Katalon" not in node.text for node in nodes)
+
+
+def test_a_search_during_a_delete_does_not_keep_the_deleted_document(
+    repository: QdrantRepository,
+) -> None:
+    """A query that loads the corpus mid-delete must not cache deleted chunks."""
+    original_delete = repository.client.delete
+    with patch("backend.infrastructure.database.qdrant_repo.Settings") as settings:
+        settings.embed_model.get_query_embedding.return_value = [1.0, 0.0]
+
+        def delete_after_a_concurrent_search(*args: Any, **kwargs: Any) -> Any:
+            repository.similarity_search("Katalon", top_k=2, session_id="s")
+            return original_delete(*args, **kwargs)
+
+        with (
+            patch.object(
+                repository.client,
+                "delete",
+                side_effect=delete_after_a_concurrent_search,
+            ),
+            patch.object(repository, "_delete_images"),
+        ):
+            repository.delete_document("s", "r.docx")
+        nodes = repository.similarity_search("Katalon", top_k=4, session_id="s")
+
+    assert not any(node.metadata.get("filename") == "r.docx" for node in nodes)
+
+
+def test_unchanged_session_versions_are_forgotten() -> None:
+    now = [0.0]
+    cache = SessionCorpusCache(capacity=1, clock=lambda: now[0])
+    cache.invalidate("old")
+    now[0] = SessionCorpusCache.VERSION_RETENTION_SECONDS + 1
+    cache.invalidate("new")
+
+    assert set(cache._versions) == {"new"}

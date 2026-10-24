@@ -77,8 +77,7 @@ class UpdateRuntimeSettings:
                 changes[key] = normalize_setting(spec, value)
             except ValueError as exc:
                 raise InvalidInputError(str(exc), code="invalid_setting") from exc
-        self._check_upload_limits(changes)
-        self._store.apply(changes)
+        self._store.apply(changes, validate=self._check_upload_limits)
         return ReadRuntimeSettings(self._store, self._ceiling).execute()
 
     def reset(self) -> RuntimeSettingsResponse:
@@ -86,19 +85,14 @@ class UpdateRuntimeSettings:
         self._store.apply(dict.fromkeys(self._store.overrides()))
         return ReadRuntimeSettings(self._store, self._ceiling).execute()
 
-    def _check_upload_limits(self, changes: dict[str, str | None]) -> None:
-        """A file must fit in a batch, and a batch in one HTTP request."""
-        values = self._store.values()
-        env_values = self._store.env_values()
+    def _check_upload_limits(self, values: dict[str, str]) -> None:
+        """A file must fit in a batch, and a batch in one HTTP request.
 
-        def after(key: str) -> int:
-            if key in changes:
-                change = changes[key]
-                return int(change if change is not None else env_values[key])
-            return int(values[key])
-
-        file_bytes = after("PARSRAG_MAX_FILE_BYTES")
-        batch_bytes = after("PARSRAG_MAX_BATCH_BYTES")
+        ``values`` are the settings that would be in effect after the change;
+        the store calls this inside its lock.
+        """
+        file_bytes = int(values["PARSRAG_MAX_FILE_BYTES"])
+        batch_bytes = int(values["PARSRAG_MAX_BATCH_BYTES"])
         if file_bytes > batch_bytes:
             raise InvalidInputError(
                 "The file size limit cannot exceed the upload batch limit.",

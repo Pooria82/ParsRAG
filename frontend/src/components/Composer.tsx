@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowUp, BookOpen, Check, ChevronDown, Layers2, MessageCircle, Paperclip, Square } from 'lucide-react';
 import type { RAGMode, Language } from '../types';
 import { translations } from '../i18n/translations';
-import { MODES } from '../core/state';
+import { MAX_PROMPT_CHARS, MODES } from '../core/state';
 import { activeComposerTrigger, applyComposerCommand, COMMANDS, insertDocumentMention } from '../core/composerActions';
 
 interface ComposerProps {
   value: string; onChange: (value: string) => void; onSendMessage: () => void;
-  onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean;
+  onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean; isUploading?: boolean;
   activeMode: RAGMode; onChangeMode: (mode: RAGMode) => void;
   language: Language; onOpenDocuments: () => void; documentCount: number; focusToken: number;
   documentNames: string[]; onSelectMention: (name: string) => void; onOpenGuide: () => void;
@@ -112,7 +112,7 @@ export function Composer(props: ComposerProps) {
         aria-controls={trigger && (suggestions.length || props.guidedMenu === 'document') ? 'composer-suggestions' : undefined} aria-expanded={Boolean(trigger && (suggestions.length || props.guidedMenu === 'document'))}
         aria-activedescendant={trigger && suggestions.length ? `composer-option-${menuIndex % suggestions.length}` : undefined}
         aria-autocomplete="list"
-        rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={30000} />
+        rows={2} dir={value ? 'auto' : language === 'fa' ? 'rtl' : 'ltr'} maxLength={MAX_PROMPT_CHARS} />
       {trigger && (suggestions.length > 0 || props.guidedMenu === 'document') && <div ref={suggestionsRef} data-tour={trigger.kind === 'document' ? 'mention-menu' : 'command-menu'} className="composer-suggestions" id="composer-suggestions" role="listbox" aria-label={trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}>
         <p>{trigger.kind === 'document' ? t.mentionDocuments : t.slashCommands}</p>
         {suggestions.length === 0 && <p className="tour-empty-hint">{language === 'fa' ? 'پس از بارگذاری سند، نام فایل‌ها اینجا پیشنهاد می‌شود.' : 'After uploading documents, their filenames are suggested here.'}</p>}
@@ -153,7 +153,7 @@ export function Composer(props: ComposerProps) {
         </div>
       </div>
     </div>
-    <p className="composer-disclaimer">{props.isBusy && !isGenerating ? t.otherGenerating : t.disclaimer}</p>
+    <p className="composer-disclaimer">{isGenerating || !props.isBusy ? t.disclaimer : props.isUploading ? t.uploadingNotice : t.otherGenerating}</p>
   </div>;
 }
 

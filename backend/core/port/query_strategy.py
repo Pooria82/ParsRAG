@@ -21,6 +21,7 @@ class QueryStrategy(Protocol):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> PreparedAnswer:
         """Retrieve evidence and build the prompt, or decide not to generate."""
         ...
@@ -34,6 +35,7 @@ class QueryStrategy(Protocol):
         file_filter: list[str] | None = None,
         progress: ProgressCallback | None = None,
         document_segments: list[tuple[str, str]] | None = None,
+        answer_language: str | None = None,
     ) -> QueryResponse:
         """Prepare and generate the whole answer.
 
@@ -45,6 +47,7 @@ class QueryStrategy(Protocol):
             file_filter (list[str] | None, optional): Optional list of filenames to restrict to.
             progress (ProgressCallback | None, optional): Reports coarse pipeline stages.
             document_segments: Explicit file-scoped question segments.
+            answer_language: ``"fa"`` or ``"en"``; by default the language of ``query``.
 
         Returns:
             QueryResponse: The generated answer.

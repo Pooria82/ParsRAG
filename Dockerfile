@@ -9,6 +9,8 @@ COPY frontend/public ./public
 COPY frontend/src ./src
 COPY frontend/pwa ./pwa
 COPY frontend/scripts/build-service-worker.mjs ./scripts/build-service-worker.mjs
+# The build reads the version from the project root.
+COPY VERSION /build/VERSION
 RUN npm run build
 
 FROM python:3.12-slim-trixie AS python-dependencies
@@ -50,6 +52,8 @@ ENV HF_HUB_DISABLE_XET=1
 COPY --from=python-dependencies /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=parsrag:parsrag backend ./backend
+COPY --chown=parsrag:parsrag VERSION ./VERSION
+COPY --chown=parsrag:parsrag release-notes ./release-notes
 COPY --from=frontend-build --chown=parsrag:parsrag /build/frontend/dist ./frontend/dist
 RUN mkdir -p "$HF_HOME" /home/parsrag/.cache/llama_index /var/lib/parsrag \
     && chown -R parsrag:parsrag /home/parsrag /var/lib/parsrag

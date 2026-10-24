@@ -5,6 +5,205 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-24
+
+### Added
+
+- Update check: once a day the server asks GitHub (anonymously) for newer
+  releases (`GET /updates`, `UPDATE_CHECK_ENABLED`, on by default and in
+  Settings). The sidebar offers the latest one, and its window lists the
+  changes of every newer release in Persian or English, asks for a backup of
+  the conversations, and gives one command:
+  `scripts/update.ps1` (Windows) or `scripts/update.sh`.
+- The update scripts back up `.env`, the Qdrant data, and the model settings,
+  go straight to the latest release tag, rebuild with the same Compose files
+  and profile, wait until the service is ready, and start the previous
+  version again if the rebuild fails.
+- After an update the app shows what changed in every version since the last
+  one seen (`GET /release-notes`, from `release-notes/<version>.<fa|en>.md`),
+  and an open page loads the new interface by itself: the page and the service
+  worker are served with `Cache-Control: no-cache`, hashed assets are cached
+  for a year, and a waiting interface is activated when nothing is running.
+- One version for the project in `VERSION`, read by the backend and the
+  frontend build; `scripts/set_version.py` copies it to `pyproject.toml`,
+  `package.json`, `package-lock.json`, and `CITATION.cff`, and a test keeps
+  them in step.
+
+- `OCR_DOCUMENT_TIMEOUT_SECONDS` (default 900, changeable in Settings) bounds
+  the OCR time of one document. Remaining pages and images are skipped with a
+  notice and the rest is indexed.
+- PowerPoint speaker notes are indexed with their slide.
+- CSV and TSV files are read as tables, with row records and whole-table
+  answers.
+- Text files are split at Markdown headings or about 300 words, so sources
+  name a section instead of the whole file.
+- Uploaded images keep a preview shown next to their source.
+- Streamed answers send a `ping` event every 15 seconds while the server
+  works, so the browser waits as long as the model needs (up to the server's
+  own timeouts) and gives up only on a connection that went quiet.
+- An unanswered question (stopped before any text, or interrupted) has a
+  Try again button.
+- Open tabs of the workspace share their changes instead of overwriting each
+  other's conversations.
+
+### Improved
+
+- The service status card shows the model clearly for any name: the model
+  in monospace with its variant as a tag (`gemma3` `4b`), its publisher and
+  the provider below (`google · API service`), an icon for local or API, and
+  the full id on hover.
+- Scanned PDF pages are recognized several at a time, like images in Word and
+  PowerPoint, and near-certain OCR readings skip the skew search. On the
+  96-image final report the text is unchanged.
+
+### Fixed
+
+- After a reload the conversation that was open opens again; once
+  conversations lived in IndexedDB the app always opened the first one.
+  Conversations are written before the app reloads itself (for an update) and
+  when the page is hidden, so a just-finished answer is not lost.
+- Two open tabs no longer undo each other's unsaved edits, new conversations,
+  or deletions; a save that had to fall back to `localStorage` always wins over
+  the older IndexedDB copy.
+- "Clear all data" no longer stays on "Saving…"; retrying or stopping an
+  earlier question streams and shows its note in place; the keyboard stays in
+  the message box after the first question; a document cannot be deleted twice
+  at once; the message box says when an upload is running.
+- Setting `PARSRAG_ALLOWED_HOSTS` keeps localhost allowed, so the container
+  health check and the update script keep working.
+- A saved API connection starts while offline, and an API host that does not
+  resolve shows as unreachable instead of an error.
+- Saving an API without a key now shows its own message; malformed CSV files,
+  empty generated titles, oversized requests and bad session ids return clear
+  codes instead of internal errors; Word files saved online
+  (`word/document2.xml`) are accepted; reusing a document with the same
+  content as one already in the conversation is refused.
+- The update scripts work when the stack is stopped, do not stop on Docker
+  warnings in Windows PowerShell, and always install the release tag.
+- After the Settings window (or any dialog) closes with the mouse, the button
+  that opened it no longer shows the keyboard focus ring.
+- An external model API can no longer be connected without an API key.
+  OpenRouter lists its models without a key, so saving the connection passed
+  and every question then failed with "internal error". Saving is now refused
+  with a message, the sidebar says "No API key is set" instead of "Service
+  ready", and a question names the missing key. The key form shows which host
+  the service holds a key for (a key is only sent to its own host; a key in
+  `.env` belongs to `MODEL_API_BASE_URL`).
+- "Service ready" no longer appears while the model cannot answer. A new
+  `GET /models/status` checks the active model service (Ollama running with
+  the selected model installed; an API reachable and accepting the key, at
+  most every 10 seconds), and the sidebar says "Ollama is not reachable",
+  "This model is not installed in Ollama", "The model API is not reachable"
+  or "The API key was rejected" instead, with a Check again button whose
+  icon spins while the check runs.
+- Answers are written in the language of the question, also when the
+  documents are in the other language. A follow-up such as «چطور تمدید
+  می‌شوند؟» about English documents was rewritten as an English question, and
+  the answer language was taken from that rewrite; with gemma3:4b all five
+  such test questions were answered in the wrong language, and now all five
+  are right. The prompt asks to translate what it uses and starts the answer
+  in the question's language. A question without words (a formula) is
+  answered in the interface language, which the browser now sends.
+- Your questions sit on the side their language starts from: Persian on the
+  right and English on the left, in either interface language. They were on
+  the opposite side.
+- Text and pictures inside grouped PowerPoint shapes are indexed, and a
+  linked picture adds a notice instead of rejecting the whole deck.
+- Content inside Word content controls (forms, templates) is indexed; a
+  generated table of contents is skipped.
+- An image that declares more pixels than allowed is reported as an OCR
+  notice instead of a server error.
+- HTML table cells are separated instead of running together.
+- A UTF-8 file with a few stray bytes is read as UTF-8 instead of turning
+  into Windows-1256 mojibake.
+- A question asked while a document was being deleted could keep that
+  document in keyword search until the next change.
+- `/query/stream` answers a full query capacity with 429 and an unknown
+  `@{file}` with 400 before streaming, instead of 200 plus an error event. A
+  client that disconnects marks the query failed instead of leaving it at
+  "generating" for five minutes.
+- Documents-only mode no longer skips its evidence check for ordinary
+  questions that contain words such as «خلاصه», «موضوع» or «چه نوع»; only
+  questions about the document itself, or a bare request to summarize, do.
+- The documents-only refusal is the same sentence in the evidence check and
+  in the prompt, in the question's language. An invalid
+  `STRICT_RAG_THRESHOLD` falls back to the default instead of failing every
+  documents-only question.
+- Brackets inside math and code, such as the interval `[1, 3]`, are no
+  longer counted as citations.
+- Hybrid mode trims the context in its ranked order; mixing reranker and
+  cosine scores could drop the best reranked passage.
+- A stored API key is only sent to the server it was entered for; changing
+  the API address without a new key no longer sends the old one.
+- API requests have one retry layer (`MODEL_API_MAX_RETRIES`); the OpenAI SDK
+  no longer retries on top of it.
+- Conversation titles and suggested questions are capped on Ollama too.
+- Resetting CPU threads to automatic restores the startup value.
+- A failed reranker download waits five minutes before the next attempt
+  instead of being retried on every Hybrid question, and the download has a
+  timeout.
+- Listing, previewing, reusing and deleting documents wait until the
+  embedding model is ready, like questions and uploads.
+- Runtime settings are validated, saved, and applied as one step; a failed
+  save changes nothing.
+- The message box accepts 12,000 characters, the API's limit, and a question
+  that is too long says so. A failed or unanswered turn is no longer sent as
+  history, and long turns are shortened, so one failure does not make the
+  next questions fail too.
+- Answers keep links, `snake_case` names and dollar amounts such as "$5"
+  instead of typesetting them as math.
+- Unsaved server-setting edits survive the 30-second health check and other
+  changes, and clearing a number field no longer switches it to Automatic.
+- Editing a question that never got an answer no longer attaches the new
+  answer to a later question; the answer is placed right after it.
+- A save that fell back to `localStorage` (IndexedDB failed) is loaded on the
+  next start instead of the older IndexedDB copy.
+- Keyboard shortcuts work with the Persian keyboard layout.
+- The unused browser setting `strictThreshold` is removed; the Strict
+  threshold is a server setting.
+- `npm run dev` proxies `/settings`, so server settings load in development.
+- Deleting a conversation or clearing all data works while the service is
+  offline; documents on the server are deleted when it is reachable again.
+  Conversations without documents never need the server.
+- Importing a backup applies its preferences, and its documents show as not
+  on this server until the server lists them.
+- A timeout or dropped connection keeps the text that already streamed, with
+  the reason below it, as Stop does.
+- Upload limits follow a server-settings change at once; answer-version
+  arrows point the reading direction in English; Strict mode with every
+  document unticked asks to select one; starter cards keep the chosen mode;
+  dragging from inside a dialog to outside no longer closes it; the rename
+  field is focused.
+- The backend codes `not_found`, `conflict`, `upstream_unavailable`,
+  `invalid_session`, `no_file`, `untrusted_host`, `service_error` and
+  `request_failed` have messages, and reusing or deleting a document and the
+  model settings show the server's reason.
+
+### Documentation
+
+- The ADRs describe the project as it is: pip with `requirements.lock` instead
+  of Poetry, `compose.yaml`, the e2e suite instead of Testcontainers, opt-in
+  live evaluation, JSON logs, the GitFlow-style branches without `staging`,
+  the actual CI jobs, and releases that build but do not publish images. The
+  PWA ADR is now number 09 (two were numbered 07), and `Reranker`,
+  `RuntimeSettingsStore` and `SuggestQuestions` are in the architecture
+  documents.
+- The live PDF evaluation indexes and asks through the same use cases as the
+  API, so it includes Persian normalization, page bridges, duplicate checks
+  and the answer language.
+
+### Security
+
+- `filelock` (pulled in by PyTorch and Hugging Face) is upgraded to 4.2.1
+  for CVE-2026-112940, an arbitrary file overwrite.
+- At startup, a saved API connection to one host no longer receives the
+  `.env` key of another (`MODEL_API_KEY` belongs to `MODEL_API_BASE_URL`).
+  A connection saved for OpenRouter was given the Google AI Studio key from
+  `.env` and sent it to OpenRouter.
+- Model API requests re-check the host's addresses each time and do not
+  follow redirects, so a DNS change or redirect cannot reach link-local
+  (cloud metadata), multicast, or reserved addresses.
+
 ## [1.1.1] - 2026-10-22
 
 ### Changed
@@ -333,7 +532,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0

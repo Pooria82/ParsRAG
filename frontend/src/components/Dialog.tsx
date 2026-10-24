@@ -12,10 +12,27 @@ interface DialogProps {
   children: ReactNode;
 }
 
+// Whether the last input was the keyboard. Focus returned to the opener after
+// a mouse click should not draw the keyboard focus ring around it.
+let keyboardInput = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', () => { keyboardInput = true; }, true);
+  window.addEventListener('pointerdown', () => { keyboardInput = false; }, true);
+}
+
+/** Close the dialog and give focus back to what opened it, with a ring only for keyboard users. */
+function closeAndReturnFocus(dialog: HTMLDialogElement, opener: HTMLElement | null) {
+  dialog.close();
+  if (opener?.isConnected) opener.focus({ preventScroll: true, focusVisible: keyboardInput } as FocusOptions);
+}
+
 /** Native modal semantics keep keyboard focus and background interaction scoped. */
 export function Dialog({ open, onClose, title, closeLabel, subtitle, className = '', guided = false, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
+  /** Whether the press began on the backdrop: a drag out of the dialog is not a click outside it. */
+  const pressedBackdrop = useRef(false);
+  const opener = useRef<HTMLElement | null>(null);
   const [closing, setClosing] = useState(false);
   const titleId = useId();
   useEffect(() => {
@@ -26,16 +43,19 @@ export function Dialog({ open, onClose, title, closeLabel, subtitle, className =
       setClosing(false);
       if (dialog.open && dialog.matches(':modal') === guided) dialog.close();
       if (!dialog.open) {
+        opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         if (guided) dialog.show();
         else dialog.showModal();
+        // The browser focuses the first button (Close); prefer the field meant for typing.
+        dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
       }
       return;
     }
     if (dialog.open) {
-      if (guided) { dialog.close(); setClosing(false); return; }
+      if (guided) { closeAndReturnFocus(dialog, opener.current); setClosing(false); return; }
       setClosing(true);
       closeTimer.current = window.setTimeout(() => {
-        dialog.close();
+        closeAndReturnFocus(dialog, opener.current);
         setClosing(false);
       }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : className.includes('documents-dialog') ? 340 : 180);
     }
@@ -47,7 +67,8 @@ export function Dialog({ open, onClose, title, closeLabel, subtitle, className =
 
   return <dialog ref={ref} className={`dialog ${className}`} data-closing={closing || undefined} aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose(); }}
-    onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    onPointerDown={event => { pressedBackdrop.current = event.target === event.currentTarget; }}
+    onClick={event => { if (event.target === event.currentTarget && pressedBackdrop.current) onClose(); pressedBackdrop.current = false; }}>
     <div className="dialog-surface">
       <header className="dialog-header">
         <div><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
