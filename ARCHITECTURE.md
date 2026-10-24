@@ -117,7 +117,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | Domain | `core/domain` | `ExtractedNode`, `ParsedSection`, `QueryMode`, `ModelProvider`, session ID rules, `UploadPolicy`, error hierarchy | anything outside stdlib and Pydantic |
 | DTOs | `core/dto/input`, `core/dto/output` | Validated requests/commands and responses | adapters, frameworks |
-| Ports | `core/port` | `DocumentRepository`, `QueryStrategy`, `DocumentParser`, `TextChunker`, `QuestionCondenser`, `ModelGateway`, `ProgressTracker`, `Reranker`, `RuntimeSettingsStore` | adapters |
+| Ports | `core/port` | `DocumentRepository`, `QueryStrategy`, `DocumentParser`, `TextChunker`, `QuestionCondenser`, `ModelGateway`, `ProgressTracker`, `Reranker`, `RuntimeSettingsStore`, `ReleaseFeed`, `ReleaseNotes` | adapters |
 | Use cases | `core/use_case/<module>` | One class per operation with an `execute` method | FastAPI, Starlette, Qdrant, httpx, PyMuPDF |
 | Strategies and services | `core/strategies`, `core/service` | Answer pipelines, question condensation, retrieval depth | adapters |
 | Runtime | `core/runtime` | `WorkLimiter`, `SessionLocks`, readiness, progress store, correlation ID | frameworks |
@@ -164,6 +164,7 @@ Detailed sequence diagrams for every flow are in the
 | Title a conversation | `POST /conversations/title` | `GenerateConversationTitle` | `ModelGateway` |
 | Suggest questions | `POST /sessions/{id}/suggestions` | `SuggestQuestions` | `DocumentRepository`, `ModelGateway` |
 | Health and capabilities | `/health/*`, `/capabilities` | `CheckReadiness`, `DescribeCapabilities` | `DocumentRepository` |
+| Updates | `GET /updates`, `GET /release-notes` | `CheckForUpdates`, `ReadReleaseNotes` | `ReleaseFeed` (GitHub), `ReleaseNotes` (`release-notes/`) |
 
 ## 6. Cross-cutting concerns
 

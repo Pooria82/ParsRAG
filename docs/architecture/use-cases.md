@@ -69,6 +69,8 @@ flowchart LR
 | `GenerateConversationTitle` | `POST /conversations/title` | `ConversationTitleRequest` | `ConversationTitleResponse` | `ModelGateway` | query limiter |
 | `SuggestQuestions` | `POST /sessions/{id}/suggestions` | session ID, `QuestionSuggestionRequest` | `QuestionSuggestionResponse` (up to three questions) | `DocumentRepository`, `ModelGateway` | query limiter |
 | `CheckReadiness` | `GET /health/ready` | — | status string | `DocumentRepository` (lazy) | readiness state |
+| `CheckForUpdates` | `GET /updates` | `refresh` | `UpdateStatusResponse` (newer releases with notes) | `ReleaseFeed` | daily cache |
+| `ReadReleaseNotes` | `GET /release-notes` | `since`, language | `ReleaseNotesResponse` | `ReleaseNotes` | — |
 | `DescribeCapabilities` | `GET /capabilities` | — | `AppCapabilitiesResponse` | — | upload policy |
 
 ## Business rules and errors
