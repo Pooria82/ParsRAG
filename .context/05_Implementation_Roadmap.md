@@ -578,7 +578,97 @@ Each item names where the problem is and what it breaks.
   06, and the missing `Reranker`, `RuntimeSettingsStore`, and
   `SuggestQuestions` in `ARCHITECTURE.md` and `docs/architecture/use-cases.md`.
 
+### Task 16.5: Project review, October 2026 (fixed)
+- [x] Backend:
+  - `PARSRAG_ALLOWED_HOSTS` no longer removes loopback (the container health
+    check and the update script use 127.0.0.1).
+  - The `.env` API key is sent only to its own host, also on the startup path
+    and in `/models/status`.
+  - A saved API connection starts without DNS (offline start).
+  - A keyless API whose host does not resolve reports `unreachable` instead
+    of 500.
+  - `api_key_missing` reaches the browser.
+  - The request ceiling follows the `.env` batch limit, not an override.
+  - A malformed CSV returns `corrupt_file`.
+  - An empty generated title returns `upstream_unavailable`.
+  - Word Online `word/document2.xml` files are accepted.
+  - 413 responses and malformed session ids carry their codes.
+  - The update check no longer holds its lock over the network.
+  - Reusing a document with identical content is refused.
+  - `filelock` is upgraded to 4.2.1 for CVE-2026-112940.
+- [x] Update scripts:
+  - PowerShell 5.1 no longer stops on stderr from probes.
+  - A stopped stack keeps its Compose files and profile.
+  - The scripts check out the release tag even on `main`.
+  - The ROCm Ollama image is pinned.
+- [x] Frontend:
+  - The open conversation is restored after a reload (it was lost once
+    conversations lived in IndexedDB).
+  - Saves are written before the app reloads itself and when the page is
+    hidden.
+  - "Clear all data" no longer stays stuck on "Saving…".
+  - A `localStorage` fallback save is always marked as newer.
+  - Another tab's save no longer undoes unsaved edits, new conversations, or
+    deletions.
+  - The model check has its own timeout.
+  - Retrying or stopping an earlier question streams and notes in place.
+  - Focus stays in the message box after the first question.
+  - The upload notice is correct.
+  - Streaming renders once per update.
+  - The suggestion loader is no longer cleared by a cancelled request.
+  - A document cannot be deleted twice at once.
+
+### Task 16.6: Frontend accessibility and trust (do first)
+- [ ] Muted text fails WCAG AA contrast in the light palettes: `--muted
+  #6d7a73` is 3.93:1 on `--sidebar` and 4.21:1 on `--canvas` (4.5:1
+  needed). Several labels are 8–10 px, and opacity on `.message-time` and
+  `.user-actions` lowers it further. Darken `--muted` (about `#5f6c65`, which
+  gives 4.81:1), drop text opacity, and set an 11 px floor (12 px for Persian
+  body text).
+- [ ] Screen readers announce a streaming answer in fragments: the message
+  list is `aria-live="polite"` and `ProgressiveMarkdown` re-renders every
+  frame. Turn the live region off while generating, announce stages and
+  "answer ready, N sources cited" through one hidden status region, and move
+  `QueryProgress` out of the log (WCAG 4.1.3).
+- [ ] The grounding badge counts every retrieved passage when the model cited
+  none ("Documents + model knowledge · 10 sources"). Count cited sources only;
+  with none, say "No citations" (`ChatFeed.tsx`, `GroundingBadge`).
+- [ ] On phones, Enter sends, and there is no Shift+Enter, so a question
+  cannot have several lines. On coarse pointers, Enter inserts a new line and
+  the button sends (`Composer.tsx`).
+
 ## Phase 17: Improvements
+
+### Task 17.0: Frontend experience (do first)
+High value and low risk; together they close the "first question fails with
+no clear next step" gap.
+- [ ] First run: replace the auto-starting 17-step tour with a three-step
+  checklist on the welcome screen, each step with live state and an action:
+  model connected (opens Settings on the Model tab), add a document, ask a
+  question. Keep the full tour as a link.
+- [ ] Make the model status card actionable: a "Fix" button that opens
+  Settings on the Model tab (`SettingsModal` gets an initial tab). For a
+  missing Ollama model, show a copyable `ollama pull <model>`; for a missing
+  key, focus the key field.
+- [ ] Turn dead-end answers into next steps. On `no_evidence`, offer "Ask
+  again in Hybrid" and "Open documents". On connection errors, offer "Check
+  connection" and "Open settings". Reword the timeout message: it means 60
+  seconds without any event, not a long question.
+- [ ] Uploads: show "queued" for files waiting their turn instead of several
+  bars at 0%. Show indexing progress on the Documents button and the attach
+  icon, and announce "N documents ready" when done.
+- [ ] Add files from anywhere: drop on the whole workspace, and paste images
+  or PDFs into the message box, with the same validation as the dialog.
+- [ ] "Copy with sources": copy an answer together with the sources its [n]
+  markers refer to. This is the first step of the export in Task 18.3.
+- [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
+  button to code blocks. Moved up from Task 17.4.
+- [ ] Show the offline hint and poll faster while the backend is preparing.
+  Moved up from Task 17.4.
+- [ ] Frontend performance: memoize messages and markdown rendering, keep the
+  draft out of the sessions state (every keystroke re-runs the sidebar search
+  over all messages), and window long conversations. Moved up from Task 17.2.
+
 
 ### Task 17.1: Retrieval quality
 - [ ] Read images with a vision model during indexing (see Task 19.1); OCR
@@ -601,9 +691,7 @@ Each item names where the problem is and what it breaks.
 - [ ] Give BM25 an inverted index instead of scanning every chunk per query.
 - [x] OCR scanned PDF pages in parallel, as Office images already are, and skip
   the deskew search when the first reading is confident.
-- [ ] Frontend: memoize messages and markdown rendering, keep the draft out of
-  the sessions state, and window long conversations; typing and streaming slow
-  down in long chats.
+- [ ] Frontend performance: moved to Task 17.0.
 
 ### Task 17.3: Ingestion
 - [x] Parse CSV and TSV as tables so they get row records and whole-table
@@ -615,12 +703,38 @@ Each item names where the problem is and what it breaks.
   PowerPoint images.
 
 ### Task 17.4: Interface
-- [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
-  button to code blocks.
-- [ ] Show the offline hint, poll faster while the backend is preparing, and
-  check for new service-worker versions while the app stays open.
-- [ ] Call `navigator.storage.persist()`, flush pending saves on `pagehide`,
-  and keep a copy of stored data that fails to parse instead of overwriting it.
+- [x] Check for new service-worker versions while the app stays open (done
+  with the update check, 1.1.2). Escape, upload retry, code copy, and the
+  offline hint moved to Task 17.0.
+- [ ] Call `navigator.storage.persist()` and keep a copy of stored data that
+  fails to parse instead of overwriting it. Pending saves are already flushed
+  on `pagehide` (Task 16.5).
+- [ ] Citation preview: on hover, focus, or long-press, show a popover with
+  the file, location, highlighted excerpt, and image, plus "Open in sources".
+  Today a click jumps away from the sentence being checked.
+- [ ] In Hybrid answers, mark paragraphs without any [n] citation, with a
+  legend in the badge tooltip, so readers know what to verify.
+- [ ] Source images: drop the empty bands (`width:auto`) and open them in an
+  in-app viewer with zoom, instead of a new browser tab that leaves the
+  installed app.
+- [ ] Put backup, restore, clear data, the service address, and storage used
+  in a "Data & privacy" settings tab; today they sit under Model &
+  connection.
+- [ ] Undo a conversation delete: hide it at once with an "Undo" toast for
+  about 8 seconds, then delete on the server through the pending-deletion
+  queue.
+- [ ] Per-document "Summarize" and "Ask about this file" in the Documents
+  dialog, pre-filling the `@` mention and command.
+- [ ] Localization:
+  - `Intl` percent and megabyte formats (the English UI shows `٪`).
+  - A language-aware list separator.
+  - History groups for the last 7 and 30 days and by month, with Persian
+    month names.
+  - Move inline strings into `translations.ts`.
+- [ ] Reading size (S/M/L) in Appearance, and a tighter line height for
+  English answers (`line-height: 2.1` suits Persian only).
+- [ ] Show a character counter near the 12,000 limit and warn when a paste is
+  cut; Escape cancels a prompt edit.
 - [ ] Offer export and reset from the error screen, so stored data that breaks
   rendering does not crash every reload.
 - [ ] Remove dead code (`progressRef`, `revealingMessageId`, unused API calls,
@@ -635,7 +749,7 @@ Each item names where the problem is and what it breaks.
   `pip-compile`) so Dependabot can update Python dependencies and builds are
   reproducible; audit the packages inside the image.
 - [ ] Add the `docker-compose` ecosystem to Dependabot (Qdrant and Ollama
-  images) and pin `ollama/ollama:rocm` to a version.
+  images). The ROCm Ollama image is pinned (Task 16.5).
 - [ ] Install the same CPU PyTorch in CI as in the image; split PyTorch into
   its own Docker layer and use BuildKit pip caches.
 - [ ] Turn `.dockerignore` into an allowlist; local folders (`demo-video`,
@@ -653,6 +767,8 @@ Each item names where the problem is and what it breaks.
   `RUNTIME_SETTINGS`; replace wall-clock assertions in the regular-expression
   tests with growth checks; add an SSE disconnect test through the route.
 - [ ] Add a pre-commit configuration, ESLint, and frontend coverage.
+- [ ] Add `@axe-core/playwright` scans of the main screens in fa/en,
+  light/dark, and all palettes, so contrast and labelling regressions fail CI.
 - [ ] Add a GitHub ruleset that allows only squash merges into `main`, so each
   release stays one commit.
 - [ ] Refresh the landing-site screenshots (`ParsRAG-Landing`,
@@ -660,18 +776,290 @@ Each item names where the problem is and what it breaks.
 
 ## Phase 18: New Features
 
+Start these features after the Phase 16 defects and Task 17.0, and in the
+order below. Each one must be complete and efficient, not a first draft:
+- it works with local Ollama models and with APIs, in Persian and English;
+- it works offline unless it says otherwise;
+- nothing leaves the machine without the user's consent;
+- it has tests and measurements like the rest of the project.
+
+Later tasks build on earlier ones: feedback feeds memory and evaluation, export
+feeds sharing, projects scope memory and documents, and the document library
+gives the Studio its sources.
+
+### Task 18.1: Answer feedback
+- [ ] Thumbs up and thumbs down on every answer, and on each version of a
+  retried answer. The control can be changed or undone, works from the
+  keyboard, and uses `aria-pressed`.
+- [ ] Thumbs down asks why, in a short dialog that can be skipped:
+  - reason chips: wrong or inaccurate, not supported by the documents, wrong
+    source cited, incomplete, wrong language, formatting, too slow, other;
+  - an optional comment;
+  - an optional correct answer or source.
+- [ ] Store each item with what it rated: question, answer, mode, model and
+  settings, retrieved and cited sources, and outcome. Keep it on this machine
+  (browser and a server-side feedback store), include it in backup files, and
+  export it as an evaluation set.
+- [ ] Feedback feeds Task 18.11 (memory) and in-app evaluation (Task 18.16).
+  Temporary chats (Task 18.5) send none of it to memory.
+
+### Task 18.2: Pin and archive conversations
+- [ ] Pin conversations to a Pinned group at the top of the history. Archive
+  them to hide them from the list without deleting them; an Archived view
+  restores them.
+- [ ] Search can include archived conversations, the row menu offers bulk
+  actions, and the backup format carries both flags.
+
+### Task 18.3: Export and share
+- [ ] Export one answer or a whole conversation (the active branch) as
+  Markdown, Word (`.docx`), or PDF. The file holds:
+  - the question and the answer;
+  - the cited sources with file and page;
+  - optionally the source images;
+  - the date, model, and mode.
+
+  Generate it on the server, since the browser sends the conversation it
+  holds. Get Persian right: embedded Vazirmatn in PDF, bidi paragraphs and
+  Persian digits in Word, and math as images or LaTeX.
+- [ ] Share through the system share sheet (Web Share API: text, or the
+  exported file) and email (`mailto:` with subject and body). For X, LinkedIn,
+  and Reddit, open their share pages with a short excerpt cut to each
+  platform's limit, plus a "Shared from ParsRAG" note.
+- [ ] Before sharing an answer that quotes documents, say that the excerpts
+  will leave the machine. The app runs locally, so it shares content, never a
+  link.
+
+### Task 18.4: Model picker and thinking switch in the message box
+- [ ] A model menu next to the mode menu lists:
+  - installed Ollama models, with size, context, and capability badges
+    (thinking, vision);
+  - API models the user saved, as favourites per provider;
+  - whether each one is local or API, and whether it can be reached now
+    (`/models/status`).
+
+  A model can be chosen for one conversation (stored with it) or as the
+  default.
+- [ ] Choosing an API model the first time goes through the key and privacy
+  confirmation of Settings, in place.
+- [ ] Moving between local Ollama and an API needs no trip to Settings.
+- [ ] The backend accepts a model per request: a small registry of model
+  clients replaces the single global `Settings.llm`, so two conversations can
+  use different models at the same time.
+- [ ] Thinking switch: show it only when the model can think. Read that from
+  Ollama's capabilities (`/api/show`), and from a known list or provider
+  metadata for APIs.
+- [ ] Send the switch per request: `think` for Ollama, `reasoning_effort` or
+  the provider's own parameter for APIs.
+- [ ] When thinking is on, the context budget grows automatically and
+  timeouts are longer. Show the reasoning collapsed under "Show reasoning".
+  Answers, citations, and the evidence check keep ignoring it.
+
+### Task 18.5: Temporary (anonymous) chat
+- [ ] A "Temporary chat" mode, clearly marked, that:
+  - is not saved to the history or IndexedDB;
+  - never feeds memory or feedback stores;
+  - gets no generated title.
+- [ ] Documents uploaded in it are deleted from the server when it closes,
+  and a time-based sweep removes those left by closed tabs.
+- [ ] The user can still copy or export an answer by hand.
+
+### Task 18.6: English as good as Persian
+- [ ] Build an English acceptance set like the Persian `finaltest` (text,
+  tables, images, Strict refusals) and report both languages side by side for
+  every release.
+- [ ] Check English retrieval:
+  - BM25 tokenisation, stop words, and stemming;
+  - English OCR;
+  - the embedding model's English scores;
+  - the Strict threshold for English.
+- [ ] Review the English interface text and the English prompt rules. Fix the
+  gaps until English matches Persian, and gate releases on both.
+
+### Task 18.7: Read answers aloud
+- [ ] A play, pause, and stop control on each answer, with speed and a
+  choice of voice; the sentence being read is highlighted.
+- [ ] Persian answers use a Persian voice and English answers an English
+  voice. A mixed answer is split into runs by script and language, and each
+  run is read with its own voice.
+- [ ] Code, math, URLs, and citation markers are not read as text: the
+  markers become "source 2", and numbers are read in the answer's language.
+- [ ] Synthesise speech locally on the server (for example Piper voices for
+  Persian and English), downloaded on first use. Stream it sentence by
+  sentence so playback starts at once.
+- [ ] When no local voice is installed, fall back to the browser's own voices
+  and say that Persian voice quality depends on the system.
+
+### Task 18.8: Dictation
+- [ ] A microphone button in the message box that turns speech into text, in
+  Persian or English (detected, or set by the interface language), with
+  punctuation. Text appears while speaking and can be edited before sending.
+- [ ] Recognise speech locally (for example faster-whisper, multilingual,
+  with the model size chosen by Task 18.12), so audio never leaves the
+  machine.
+- [ ] The browser's Web Speech API sends audio to the browser vendor's
+  servers, so offer it only as an opt-in with that disclosure.
+- [ ] Handle the microphone permission, a level meter, push-to-talk, and
+  cancel.
+
+### Task 18.9: Projects
+- [ ] A project has a name, a description, instructions (a custom prompt
+  added to every question), shared project documents, and its own
+  conversations.
+- [ ] A new conversation in a project inherits its documents, instructions,
+  default mode, and model.
+- [ ] The sidebar shows projects as folders. Conversations can move in and
+  out of a project.
+- [ ] Deleting a project asks what to do with its conversations and
+  documents.
+- [ ] On the server, documents belong to a scope (conversation or project)
+  instead of only a session. Memory (Task 18.11) can be scoped to a project.
+- [ ] Backup format version 2 includes projects.
+
+### Task 18.10: Document library
+- [ ] One library for every document kept for reuse. It has search and
+  filters (name, type, date, project), pin and archive, and per-document and
+  total storage use.
+- [ ] Keep each original file once, by content hash, with a reference count
+  across conversations and projects. Reuse no longer copies vectors.
+  Unreferenced files and vectors are collected.
+- [ ] Storage limits warn before the disk fills, and a cleanup view lists
+  large and unused documents, so the library does not slow the app down.
+- [ ] Preview inside the app:
+  - PDF with PDF.js, opened at the cited page from a citation;
+  - images;
+  - text, Markdown, and CSV;
+  - Word and PowerPoint through a rendered PDF, or their extracted text.
+- [ ] Download the original file.
+- [ ] Move indexing to a background queue with progress. Large documents must
+  not hold an HTTP request or the single ingestion slot. This also replaces
+  the queued state of Task 17.0.
+
+### Task 18.11: Memory
+Build memory to the standard of established assistants. It stays on this
+machine, the user can see and control all of it, and it never weakens
+grounding.
+- [ ] **What is remembered:**
+  - explicit requests ("remember that…", "forget…");
+  - preferences inferred from behaviour: answer language, length, format,
+    level of detail, and citation style, from edits, retries, and feedback;
+  - profile facts the user states: field of study, current goals;
+  - lessons from thumbs-down reasons, so a corrected mistake is not repeated;
+  - short summaries of earlier conversations, so "as we discussed" can be
+    found.
+- [ ] **Extraction:** after a turn, when the app is idle, a model proposes
+  memory candidates. Each candidate has a type, text, the messages it comes
+  from, and a confidence.
+- [ ] **Merging:** candidates are deduplicated against existing memories by
+  embedding similarity. A conflict keeps the newer value and its history.
+  Low-confidence memories expire unless they are confirmed.
+- [ ] **Never stored:** API keys, passwords, or sensitive personal data,
+  unless the user asks explicitly.
+- [ ] **Storage:** a local database with a vector index on the server,
+  global or per project, included in backup files.
+- [ ] **Use at question time:**
+  - the most relevant memories (by similarity, recency, and importance) go
+    into the prompt as user context, within a fixed token budget and apart
+    from document evidence;
+  - Strict mode uses memory only for preferences and style, never as
+    evidence;
+  - an answer that used memory says so, with a link to the memory.
+- [ ] **Control:**
+  - a Memory tab to view, search, edit, and delete memories, switch types
+    off, pause memory, or clear it;
+  - a "Memory updated" chip with undo;
+  - "Don't remember this" on any message;
+  - temporary chats never read or write memory.
+- [ ] **Measurement:**
+  - extraction precision on a labelled set;
+  - tests that memory never leaks into Strict evidence;
+  - privacy tests;
+  - no added latency on the answer path: memory retrieval stays under 50 ms
+    and extraction runs in the background.
+
+### Task 18.12: Model recommendations for this computer
+- [ ] **Read the hardware:**
+  - CPU cores and instruction sets;
+  - total and free RAM;
+  - GPU vendor, model, and VRAM (NVIDIA, AMD, Apple), through Ollama or a
+    small host-side probe, since the container cannot see all of it;
+  - free disk space.
+
+  Ask the user for whatever cannot be read.
+- [ ] **Ask about the use:**
+  - languages (Persian, English, both);
+  - typical message and context size (short questions or long documents);
+  - speed or quality;
+  - whether thinking or vision is needed.
+- [ ] **Model catalogue:** a curated catalogue shipped with each release.
+  Per model and quantisation it records:
+  - memory for the weights, and the KV cache per context length;
+  - Persian and English quality measured on the project's acceptance sets;
+  - speed classes;
+  - capabilities, licence, and the Ollama tag.
+- [ ] **Recommendation:**
+  - recommend the best three models that fit fully in GPU memory (or in RAM)
+    at the needed context;
+  - give the reasons, for example "fits on the GPU at 8k context, about 30
+    tokens/s";
+  - pull the model in one click through Ollama with progress, and mark
+    models already installed.
+
+### Task 18.13: Studio: mind maps and generated study material
+Outputs grounded in the selected documents, like NotebookLM:
+- [ ] **Mind map:** concepts and their relations, extracted with a map-reduce
+  pass over the chunks. It is shown as an interactive map (zoom, pan,
+  collapse).
+  - Each node links to its sources, and clicking a node asks about it.
+  - Export as PNG, SVG, or a Markdown outline.
+- [ ] **Reports:** a briefing, a study guide, or a summary with citations,
+  from templates.
+- [ ] **Data table:** fill the columns the user names from the documents,
+  with a source per cell. Export as CSV or Excel.
+- [ ] **Flashcards:** question and answer cards with source links, and a
+  study mode with spaced repetition.
+- [ ] **Quiz:** multiple-choice and short-answer questions with explanations
+  and citations, and a score.
+- [ ] **How it runs:**
+  - long jobs go through the background queue (Task 18.10) with progress;
+  - outputs are saved with the conversation or project;
+  - the language follows the interface or the sources;
+  - small local models use chunked map-reduce and JSON-schema output
+    (Ollama `format`), so results stay valid.
+
+### Task 18.14: More languages
+- [ ] Generalise the code that assumes two languages:
+  - interface text in locale files (ICU messages), with direction per locale;
+  - answer-language detection beyond Persian and English;
+  - normalisation and BM25 tokenisation per language;
+  - Tesseract language data per language;
+  - an acceptance set per language.
+- [ ] Add languages in order of internet use, roughly: Chinese, Spanish,
+  Arabic, Portuguese, Indonesian, French, Japanese, Russian, German. Recheck
+  current figures before each one.
+- [ ] Arabic reuses most of the Persian right-to-left work and may go
+  earlier. Chinese and Japanese need word segmentation for keyword search.
+
+### Task 18.15: Voice assistant (last)
+- [ ] A spoken conversation: push-to-talk or voice activity detection, local
+  speech recognition (Task 18.8), the normal grounded answer, and local speech
+  (Task 18.7) streamed as it is generated.
+- [ ] The user can interrupt the answer by speaking, with low latency from
+  the end of speech to the first audio, in Persian and English. Sources are
+  still shown on screen.
+- [ ] Built last, on Tasks 18.4, 18.7, 18.8, and 18.11.
+
+### Task 18.16: Other features
 - [ ] Vision-model image descriptions during indexing, optional and
   configurable like OCR (Task 19.1).
 - [ ] Legacy Office formats (`.doc`, `.ppt`) and spreadsheets (`.xlsx`).
-- [ ] Background indexing queue with progress, so large documents do not hold
-  an HTTP request and the single ingestion slot.
-- [ ] A shared, persistent document library next to per-conversation documents,
-  as described in the original PRD (Section 3.2).
-- [ ] Answer export (Markdown or PDF) with its sources, and a link that opens a
-  cited page or image in the original document.
 - [ ] Conversation search that shows the matching snippet and jumps to it.
-- [ ] In-app evaluation: run a labelled question set against the current model
-  and settings and show the results.
+- [ ] In-app evaluation: run a labelled question set (including flagged
+  answers from Task 18.1) against the current model and settings and show the
+  results.
+- [ ] Evidence side panel on wide screens (1280 px and up), mirrored for RTL,
+  so an answer and its sources can be read side by side.
+- [ ] Optional Persian digits in answers (display only; code, math, tables,
+  and URLs unchanged, and copying keeps the original text).
 
 ## Phase 19: Long-Term Plans
 

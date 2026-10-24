@@ -11,13 +11,15 @@ interface DocumentCenterProps {
   guided?: boolean;
   onUploadFiles: (files: File[]) => void; onRemoveFailed: (name: string) => void;
   onToggleDocument: (name: string) => void; onDeleteDocument: (name: string) => void; language: Language; isUploading: boolean;
+  /** Documents whose deletion is in progress. */
+  deletingDocuments?: ReadonlySet<string>;
   activeMode: RAGMode; error: string | null;
   capabilities?: IngestionCapabilities;
   reusableDocuments: Array<{ sourceSessionId: string; sourceTitle: string; name: string }>;
   onReuseDocument: (sourceSessionId: string, name: string) => void;
 }
 
-export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, reusableDocuments, onReuseDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES, guided = false }: DocumentCenterProps) {
+export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRemoveFailed, onToggleDocument, onDeleteDocument, reusableDocuments, onReuseDocument, language, isUploading, activeMode, error, capabilities = DEFAULT_INGESTION_CAPABILITIES, guided = false, deletingDocuments }: DocumentCenterProps) {
   const t = translations[language];
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -71,7 +73,8 @@ export function DocumentCenter({ isOpen, onClose, documents, onUploadFiles, onRe
             </div>
             {doc.status === 'indexed' && <input type="checkbox" checked={doc.enabled !== false}
               onChange={() => onToggleDocument(doc.name)} aria-label={t.docSelected + ': ' + doc.name} />}
-            {doc.status === 'indexed' && (pendingDelete === doc.name ? <span className="document-delete-confirm"><button className="button secondary" onClick={() => setPendingDelete(null)}>{t.cancel}</button><button className="button danger" disabled={isUploading} onClick={() => { onDeleteDocument(doc.name); setPendingDelete(null); }}>{t.confirmDeleteDocument}</button></span> : <button className="icon-button danger-text" disabled={isUploading} onClick={() => setPendingDelete(doc.name)} aria-label={t.deleteDocument + ': ' + doc.name}><Trash2 size={16} /></button>)}
+            {doc.status === 'indexed' && deletingDocuments?.has(doc.name) ? <Loader2 size={16} className="spin" aria-label={t.saving} />
+              : doc.status === 'indexed' && (pendingDelete === doc.name ? <span className="document-delete-confirm"><button className="button secondary" onClick={() => setPendingDelete(null)}>{t.cancel}</button><button className="button danger" disabled={isUploading} onClick={() => { onDeleteDocument(doc.name); setPendingDelete(null); }}>{t.confirmDeleteDocument}</button></span> : <button className="icon-button danger-text" disabled={isUploading} onClick={() => setPendingDelete(doc.name)} aria-label={t.deleteDocument + ': ' + doc.name}><Trash2 size={16} /></button>)}
             {doc.status === 'error' && <button className="icon-button danger-text" onClick={() => onRemoveFailed(doc.name)} aria-label={t.removeFailed + ': ' + doc.name}><Trash2 size={16} /></button>}
           </div>)}
         </div>

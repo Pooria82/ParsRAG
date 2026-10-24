@@ -16,7 +16,7 @@ services:
       - render
 
   ollama:
-    image: ollama/ollama:rocm
+    image: "${OLLAMA_IMAGE:-ollama/ollama:0.34.1-rocm}"
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri

@@ -78,8 +78,20 @@ _REQUEST_OVERHEAD_BYTES = 10 * 1024 * 1024
 
 
 def max_request_bytes() -> int:
-    """The HTTP body ceiling, including multipart overhead."""
-    default = UploadPolicy.from_environment().max_batch_bytes + _REQUEST_OVERHEAD_BYTES
+    """The HTTP body ceiling, including multipart overhead.
+
+    Without ``PARSRAG_MAX_REQUEST_BYTES`` it follows the batch limit in
+    ``.env``: a lower limit saved in the app must not shrink the ceiling at the
+    next start, or raising the limit again would be refused.
+    """
+    startup_batch = runtime_settings_store.env_values().get("PARSRAG_MAX_BATCH_BYTES")
+    try:
+        batch = max(
+            int(startup_batch or 0), UploadPolicy.from_environment().max_file_bytes
+        )
+    except ValueError:
+        batch = UploadPolicy.from_environment().max_batch_bytes
+    default = (batch or 500 * 1024 * 1024) + _REQUEST_OVERHEAD_BYTES
     try:
         return int(os.getenv("PARSRAG_MAX_REQUEST_BYTES", str(default)))
     except ValueError:

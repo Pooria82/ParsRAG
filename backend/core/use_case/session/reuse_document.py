@@ -47,7 +47,7 @@ class ReuseDocument:
             not is_valid_session_id(session_id)
             or session_id == request.source_session_id
         ):
-            raise InvalidInputError("Invalid target session.")
+            raise InvalidInputError("Invalid target session.", code="invalid_session")
         with (
             self._limiter.slot(),
             self._session_locks.hold(session_id, request.source_session_id),
@@ -62,6 +62,15 @@ class ReuseDocument:
                 )
             if len(target_files) >= self._policy_provider().max_files_per_session:
                 raise InvalidInputError("The target session is full.")
+            # The same bytes under another name would double every passage.
+            digest = self._repository.document_digest(
+                request.source_session_id, request.filename
+            )
+            if digest and self._repository.find_document_by_content(session_id, digest):
+                raise ConflictError(
+                    "The target session already contains this document's content.",
+                    code="duplicate_content",
+                )
             copied = self._repository.copy_document(
                 request.source_session_id, session_id, request.filename
             )

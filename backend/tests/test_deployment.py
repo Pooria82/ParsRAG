@@ -174,7 +174,7 @@ def test_amd_override_uses_rocm_for_embeddings_and_ollama() -> None:
 
     assert "download.pytorch.org/whl/rocm6.2" in gpu
     assert "TORCH_VERSION: 2.6.0" in gpu
-    assert "ollama/ollama:rocm" in gpu
+    assert "ollama/ollama:0.34.1-rocm" in gpu
     assert gpu.count("/dev/kfd:/dev/kfd") == 2
     assert gpu.count("/dev/dri:/dev/dri") == 2
 

@@ -47,7 +47,9 @@ echo "Updating ParsRAG $current to ${latest#v}."
 set --
 project=parsrag
 image=""
-app=$(docker compose ps -q app 2>/dev/null || true)
+# Running or stopped; with no container at all, Compose reads COMPOSE_FILE and
+# COMPOSE_PROFILES from .env or the environment.
+app=$(docker compose ps -a -q app 2>/dev/null | head -n 1 || true)
 if [ -n "$app" ]; then
   files=$(docker inspect "$app" --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}')
   old_ifs=$IFS; IFS=,
@@ -55,7 +57,7 @@ if [ -n "$app" ]; then
   IFS=$old_ifs
   project=$(docker inspect "$app" --format '{{index .Config.Labels "com.docker.compose.project"}}')
   image=$(docker inspect "$app" --format '{{.Config.Image}}')
-  if [ -n "$(docker compose "$@" ps -q ollama 2>/dev/null || true)" ]; then
+  if [ -n "$(docker compose "$@" ps -a -q ollama 2>/dev/null || true)" ]; then
     set -- "$@" --profile local-model
   fi
 fi
@@ -90,18 +92,17 @@ file the app downloaded before this update (Settings > Data > Import).
 EOF
 echo "Backup saved in $backup"
 
-previous=$(git rev-parse HEAD)
+# Back to the branch if there was one, so a failed update leaves main as it was.
+previous=${branch:-$(git rev-parse HEAD)}
 rollback() {
   echo "The update failed. Starting the previous version again..." >&2
   git checkout --quiet "$previous"
   docker compose "$@" up -d --build || true
   fail "the previous version ($current) is running again. Your backup is in $backup"
 }
-if [ "$branch" = main ]; then
-  git pull --quiet --ff-only origin main || rollback "$@"
-else
-  git checkout --quiet "$latest" || rollback "$@"
-fi
+# The release tag itself, even from main: main may hold unreleased commits,
+# and its history may have been rewritten.
+git checkout --quiet "$latest" || rollback "$@"
 echo "Building and starting the new version (this can take several minutes)..."
 docker compose "$@" up -d --build || rollback "$@"
 

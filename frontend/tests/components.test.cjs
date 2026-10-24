@@ -222,7 +222,8 @@ test('model settings keep provider-specific endpoints and require API disclosure
 test('clear-all waits for backend deletion and preserves browser state on failure', () => {
   const settingsSource = require('node:fs').readFileSync('src/components/SettingsModal.tsx', 'utf8');
   const appSource = require('node:fs').readFileSync('src/App.tsx', 'utf8');
-  assert.match(settingsSource, /onClearAllData\(\)\.then\(onClose\)\.catch/);
+  // On success the confirmation resets, so reopening Settings is not stuck on "clearing".
+  assert.match(settingsSource, /onClearAllData\(\)\.then\(\(\) => \{ setClearStatus\('idle'\); setClearConfirm\(false\); onClose\(\); \}\)\.catch/);
   assert.match(appSource, /await api\.deleteSession\(session\.id/);
   assert.match(appSource, /if \(failures\.length\) throw/);
 });

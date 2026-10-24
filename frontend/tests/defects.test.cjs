@@ -155,3 +155,31 @@ test('model ids split into publisher, name and variant for display', () => {
   assert.deepEqual(modelNameParts('hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M'), { vendor: 'hf.co/bartowski', name: 'Llama-3.2-3B-Instruct-GGUF', tag: 'Q4_K_M' });
   assert.deepEqual(modelNameParts('gpt-4o'), { vendor: '', name: 'gpt-4o', tag: '' });
 });
+
+test('another tab cannot undo edits or deletions this tab has not saved yet', () => {
+  const { mergeSavedSessions } = require('./.compiled/core/storage.js');
+  const session = (id, updatedAt, draft = '') => ({ ...createSession('en', 'hybrid'), id, updatedAt, draft });
+  const local = [session('a', 5, 'typing here'), session('new', 1), session('b', 5)];
+  const remote = [session('a', 5, ''), session('b', 5), session('gone', 5)];
+  // Same updatedAt, but this tab changed "a" and created "new"; it deleted "gone".
+  const merged = mergeSavedSessions(local, remote, 10, new Set(['a', 'new']), new Set(['gone']));
+  assert.deepEqual(merged.map(item => [item.id, item.draft]), [['a', 'typing here'], ['b', ''], ['new', '']]);
+});
+
+test('a note goes after the turn it belongs to', () => {
+  const { placeNote } = require('./.compiled/core/state.js');
+  const note = { id: 'n', role: 'system', content: 'stopped', timestamp: 3 };
+  const messages = [user('u1'), answer('a1', 'u1'), user('u2'), answer('a2', 'u2')];
+  assert.deepEqual(placeNote(messages, note, 'u1').map(m => m.id), ['u1', 'a1', 'n', 'u2', 'a2']);
+  assert.deepEqual(placeNote([user('u1'), user('u2')], note, 'u1').map(m => m.id), ['u1', 'n', 'u2']);
+  assert.deepEqual(placeNote(messages, note, 'u2').map(m => m.id), ['u1', 'a1', 'u2', 'a2', 'n']);
+});
+
+test('the message box says an upload is running, not another answer', () => {
+  const { Composer } = require('./.compiled/components/Composer.js');
+  const props = { value: '', onChange: noop, onSendMessage: noop, onStopGenerating: noop, isGenerating: false, isBusy: true,
+    activeMode: 'hybrid', onChangeMode: noop, language: 'en', onOpenDocuments: noop, documentCount: 0, focusToken: 0,
+    documentNames: [], onSelectMention: noop, onOpenGuide: noop };
+  assert.match(renderToStaticMarkup(React.createElement(Composer, { ...props, isUploading: true })), /A document is being uploaded/);
+  assert.match(renderToStaticMarkup(React.createElement(Composer, props)), /Another conversation/);
+});

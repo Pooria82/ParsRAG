@@ -22,7 +22,7 @@ class ReadSourceImage:
             NotFoundError: The document has no preview for this image.
         """
         if not is_valid_session_id(session_id):
-            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE)
+            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE, code="invalid_session")
         if not filename or len(filename) > MAX_FILENAME_LENGTH or number < 1:
             raise InvalidInputError("Invalid image reference.")
         image = self._repository.get_image(session_id, filename, number)

@@ -69,6 +69,10 @@ class DocumentRepository(Protocol):
         """Return the name of a session document with these exact bytes, if any."""
         ...
 
+    def document_digest(self, session_id: str, filename: str) -> str | None:
+        """Return the SHA-256 of a stored document's bytes, if recorded."""
+        ...
+
     def section_chunks(
         self, session_id: str, filename: str, key: str, value: int
     ) -> list[ExtractedNode]:

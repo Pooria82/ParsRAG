@@ -32,6 +32,10 @@ def active(monkeypatch: pytest.MonkeyPatch) -> Activate:
             ),
         )
         monkeypatch.setattr(factory, "_api_key", key)
+        monkeypatch.setattr(
+            factory, "_api_keys", {factory._origin(base): key} if key else {}
+        )
+        monkeypatch.setattr(factory, "model_api_is_external", lambda url: True)
         monkeypatch.setattr(factory, "_status_cache", None)
 
     return use

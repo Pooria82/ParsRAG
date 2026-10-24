@@ -9,6 +9,7 @@ from backend.core.domain.exceptions import (
     ModelConnectionError,
     ModelKeyMissingError,
     OllamaConnectionError,
+    UpstreamServiceError,
 )
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import (
@@ -73,8 +74,15 @@ class LlamaIndexModelGateway:
             raise _ollama_error(exc) from exc
 
     def generate_title(self, prompt: str, language: Literal["fa", "en"]) -> str:
-        """Generate a sanitized short title with the active model."""
-        return factory.generate_conversation_title(prompt, language)
+        """Generate a sanitized short title with the active model.
+
+        Raises:
+            UpstreamServiceError: The model returned no usable title.
+        """
+        try:
+            return factory.generate_conversation_title(prompt, language)
+        except ValueError as exc:
+            raise UpstreamServiceError("The model returned no title.") from exc
 
     def suggest_questions(
         self, excerpts: list[str], language: Literal["fa", "en"]

@@ -564,6 +564,34 @@ class QdrantRepository(DocumentRepository):
                 f"Failed to retrieve session files in Qdrant: {exc}"
             ) from exc
 
+    def document_digest(self, session_id: str, filename: str) -> str | None:
+        """Return the SHA-256 recorded for one document of a session."""
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qmodels.Filter(
+                    must=[
+                        qmodels.FieldCondition(
+                            key="session_id", match=qmodels.MatchValue(value=session_id)
+                        ),
+                        qmodels.FieldCondition(
+                            key="filename", match=qmodels.MatchValue(value=filename)
+                        ),
+                    ]
+                ),
+                limit=1,
+                with_payload=["content_sha256"],
+                with_vectors=False,
+            )
+        except Exception as exc:
+            raise VectorDBConnectionError(
+                f"Failed to read the document digest in Qdrant: {exc}"
+            ) from exc
+        if not points or not points[0].payload:
+            return None
+        digest = points[0].payload.get("content_sha256")
+        return digest if isinstance(digest, str) else None
+
     def find_document_by_content(
         self, session_id: str, content_sha256: str
     ) -> str | None:

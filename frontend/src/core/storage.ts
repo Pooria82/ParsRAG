@@ -82,17 +82,21 @@ export async function hydrateSessions(store: KeyValueStore, key: string, legacy:
 
 /**
  * Combine conversations another tab saved at `savedAt` with this tab's. The
- * other tab's copy wins unless this tab changed a conversation later; one
- * missing there was deleted there, unless this tab changed it after that save.
+ * other tab's copy wins unless this tab changed a conversation after its own
+ * last save (`changed`) or later than that copy; one missing there was
+ * deleted there, unless this tab changed it. Conversations this tab deleted
+ * (`deleted`) stay deleted.
  */
-export function mergeSavedSessions(local: Session[], remote: Session[], savedAt: number): Session[] {
+export function mergeSavedSessions(local: Session[], remote: Session[], savedAt: number,
+  changed: ReadonlySet<string> = new Set(), deleted: ReadonlySet<string> = new Set()): Session[] {
   const mine = new Map(local.map(session => [session.id, session]));
   const theirs = new Set(remote.map(session => session.id));
-  const merged = remote.map(session => {
+  const merged = remote.filter(session => !deleted.has(session.id)).map(session => {
     const current = mine.get(session.id);
-    return current && current.updatedAt > session.updatedAt ? current : session;
+    return current && (changed.has(session.id) || current.updatedAt > session.updatedAt) ? current : session;
   });
-  merged.push(...local.filter(session => !theirs.has(session.id) && session.updatedAt > savedAt));
+  merged.push(...local.filter(session => !theirs.has(session.id)
+    && (changed.has(session.id) || session.updatedAt > savedAt)));
   return merged;
 }
 
