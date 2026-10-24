@@ -27,7 +27,9 @@ class DeleteDocument:
             InvalidInputError: The session ID is malformed.
         """
         if not is_valid_session_id(session_id):
-            raise InvalidInputError("Invalid session_id format.")
+            raise InvalidInputError(
+                "Invalid session_id format.", code="invalid_session"
+            )
         with self._session_locks.hold(session_id):
             self._repository.delete_document(session_id, request.filename)
         return MessageResponse(

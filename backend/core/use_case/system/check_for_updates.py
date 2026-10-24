@@ -44,6 +44,7 @@ class CheckForUpdates:
         self._now = now
         self._lock = threading.Lock()
         self._checked: float | None = None
+        self._checking = False
         self._result: UpdateStatusResponse | None = None
 
     def execute(self, refresh: bool = False) -> UpdateStatusResponse:
@@ -53,12 +54,25 @@ class CheckForUpdates:
         """
         if not self._enabled():
             return UpdateStatusResponse(enabled=False, current_version=self._current)
+        # GitHub is asked outside the lock: other requests meanwhile get the
+        # last result instead of waiting up to a minute for a slow answer.
         with self._lock:
             age = None if self._checked is None else self._clock() - self._checked
             due = age is None or age >= CHECK_INTERVAL_SECONDS
-            if due or (refresh and age is not None and age >= MANUAL_CHECK_SECONDS):
+            manual = refresh and age is not None and age >= MANUAL_CHECK_SECONDS
+            start = (due or manual) and not self._checking
+            if start:
+                self._checking = True
                 self._checked = self._clock()
-                self._result = self._check() or self._result
+        if start:
+            fresh: UpdateStatusResponse | None = None
+            try:
+                fresh = self._check()
+            finally:
+                with self._lock:
+                    self._result = fresh or self._result
+                    self._checking = False
+        with self._lock:
             return self._result or UpdateStatusResponse(
                 enabled=True, current_version=self._current
             )

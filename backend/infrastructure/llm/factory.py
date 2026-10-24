@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import threading
@@ -41,6 +42,7 @@ from backend.infrastructure.parsers.document_parser import default_ocr_workers
 
 load_dotenv()
 
+logger = logging.getLogger("parsrag.operations")
 _configuration_lock = RLock()
 _api_key = os.getenv("MODEL_API_KEY") or os.getenv("OPENROUTER_API_KEY") or None
 
@@ -204,6 +206,19 @@ class APIKeyMissingError(ValueError):
     """An external model API was chosen with no key for its address."""
 
 
+def _key_for(base_url: str) -> str | None:
+    """The API key held for ``base_url``'s host; never another host's key."""
+    return _api_keys.get(_origin(base_url))
+
+
+def _is_external(base_url: str) -> bool:
+    """Whether an API is third-party; a host that does not resolve now counts as one."""
+    try:
+        return model_api_is_external(base_url)
+    except ValueError:
+        return True
+
+
 def get_model_configuration() -> ModelConfigurationResponse:
     """Returns the active model settings without returning the API key."""
     with _configuration_lock:
@@ -211,7 +226,12 @@ def get_model_configuration() -> ModelConfigurationResponse:
             provider=_configuration.provider,
             model_name=_configuration.model_name,
             base_url=_configuration.base_url,
-            api_key_configured=bool(_api_key),
+            # The active API's own key; with Ollama active, whether any key is held.
+            api_key_configured=bool(
+                _key_for(_configuration.base_url)
+                if _configuration.provider is ModelProvider.API
+                else _api_keys
+            ),
             api_key_hosts=sorted({host for _, host, _ in _api_keys if host}),
             disclosure_acknowledged=_configuration.disclosure_acknowledged,
             ollama_base_url=default_ollama_base_url(),
@@ -323,6 +343,35 @@ def _clean_conversation_title(value: str) -> str:
     return shortened or cleaned[:80]
 
 
+def _checked_api_connection(
+    configuration: ModelConfigurationRequest, base_url: str, verify: bool
+) -> tuple[str, str | None]:
+    """Check an API connection and pick its key: only the key of its own host.
+
+    Saving checks the address now. A saved connection starts without DNS
+    (offline, or before the network is up); every request is checked again.
+
+    Raises:
+        ValueError: The address or the disclosure is not acceptable.
+        APIKeyMissingError: Saving an external API with no key for its host.
+    """
+    if verify:
+        base_url = validate_model_api_url(base_url)
+    external = _is_external(base_url)
+    if external and not configuration.disclosure_acknowledged:
+        raise ValueError("External model API disclosure must be acknowledged.")
+    api_key = configuration.api_key or _key_for(base_url)
+    # Some APIs list their models without a key, so verifying would pass and
+    # every question fail.
+    if verify and not api_key and external:
+        raise APIKeyMissingError(
+            f"No API key for {urlsplit(base_url).hostname}; enter one."
+        )
+    if verify:
+        _verify_openai_compatible_connection(base_url, api_key)
+    return base_url, api_key
+
+
 def configure_model(
     configuration: ModelConfigurationRequest,
     *,
@@ -335,22 +384,7 @@ def configure_model(
     if configuration.provider is ModelProvider.OLLAMA:
         require_allowed_ollama_url(base_url)
     if configuration.provider is ModelProvider.API:
-        base_url = validate_model_api_url(base_url)
-        if (
-            model_api_is_external(base_url)
-            and not configuration.disclosure_acknowledged
-        ):
-            raise ValueError("External model API disclosure must be acknowledged.")
-        origin = _origin(base_url)
-        api_key = configuration.api_key or _api_keys.get(origin)
-        # Some APIs list their models without a key, so verifying would pass
-        # and every question fail. A key is never sent to another host.
-        if verify and not api_key and model_api_is_external(base_url):
-            raise APIKeyMissingError(
-                f"No API key for {urlsplit(base_url).hostname}; enter one."
-            )
-        if verify:
-            _verify_openai_compatible_connection(base_url, api_key)
+        base_url, api_key = _checked_api_connection(configuration, base_url, verify)
         model_name = api_model_name(base_url, configuration.model_name)
         next_llm = ReasoningFreeOpenAILike(
             model=model_name,
@@ -441,7 +475,7 @@ def model_connection_status(
     global _status_cache
     with _configuration_lock:
         configuration = _configuration
-        api_key = _api_key
+        api_key = _key_for(configuration.base_url)
     key = (
         configuration.provider,
         configuration.base_url,
@@ -479,7 +513,11 @@ def _check_connection(
             if wanted in installed or f"{wanted}:latest" in installed
             else "model_missing"
         )
-    if not api_key and model_api_is_external(configuration.base_url):
+    try:
+        external = model_api_is_external(configuration.base_url)
+    except ValueError:
+        return "unreachable"
+    if not api_key and external:
         return "key_missing"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
@@ -596,7 +634,11 @@ def apply_runtime_settings(changed: set[str]) -> None:
     if changed & _MODEL_SETTINGS:
         with _configuration_lock:
             current = _configuration
-        configure_model(current, verify=False, persist=False)
+        try:
+            configure_model(current, verify=False, persist=False)
+        except (ValueError, OSError) as exc:
+            # Saved already; the next start or model change applies it.
+            logger.warning("model_settings_not_applied error=%s", type(exc).__name__)
     if "PARSRAG_CPU_THREADS" in changed:
         apply_cpu_threads()
     if "EMBED_BATCH_SIZE" in changed and _embedding_device is not None:

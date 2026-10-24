@@ -888,11 +888,17 @@ def _text_blocks(text: str, *, markdown: bool) -> list[str]:
 
 def _delimited_table_sections(text: str, delimiter: str) -> list[ParsedSection]:
     """Read CSV/TSV as a table, so rows keep their headers and come back whole."""
-    rows = [
-        [_clean_cell_text(cell) for cell in row]
-        for row in csv.reader(io.StringIO(text), delimiter=delimiter)
-        if any(cell.strip() for cell in row)
-    ]
+    try:
+        rows = [
+            [_clean_cell_text(cell) for cell in row]
+            for row in csv.reader(io.StringIO(text), delimiter=delimiter)
+            if any(cell.strip() for cell in row)
+        ]
+    except csv.Error as exc:
+        raise DocumentError(
+            "The table could not be read (an unclosed quote or a very long field).",
+            "corrupt_file",
+        ) from exc
     if not rows:
         return []
     width = max(len(row) for row in rows)

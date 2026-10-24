@@ -26,15 +26,18 @@ def configured_hosts() -> list[str]:
 
     Only loopback names are accepted by default, so a public domain that a
     malicious page rebinds to 127.0.0.1 cannot reach the API. Deployments
-    that serve other machines list their names in ``PARSRAG_ALLOWED_HOSTS``;
-    ``*`` disables the check.
+    that serve other machines add their names in ``PARSRAG_ALLOWED_HOSTS``;
+    loopback stays allowed (the container health check and the update script
+    use it), and ``*`` disables the check.
     """
-    configured = os.getenv("PARSRAG_ALLOWED_HOSTS", "").strip() or _LOOPBACK_HOSTS
-    return [
-        host.strip().lower().strip("[]").rstrip(".")
-        for host in configured.split(",")
-        if host.strip()
-    ]
+    configured = os.getenv("PARSRAG_ALLOWED_HOSTS", "").strip()
+    names = f"{_LOOPBACK_HOSTS},{configured}" if configured else _LOOPBACK_HOSTS
+    hosts: list[str] = []
+    for host in names.split(","):
+        name = host.strip().lower().strip("[]").rstrip(".")
+        if name and name not in hosts:
+            hosts.append(name)
+    return hosts
 
 
 def request_hostname(host_header: str) -> str:
@@ -197,7 +200,7 @@ class ContentLengthLimitMiddleware:
     @staticmethod
     async def _reject(send: Send) -> None:
         """Return the same bounded-body error for both transfer styles."""
-        response = b'{"detail":"Request body exceeds the configured limit."}'
+        response = b'{"detail":"Request body exceeds the configured limit.","code":"too_large"}'
         await send(
             {
                 "type": "http.response.start",

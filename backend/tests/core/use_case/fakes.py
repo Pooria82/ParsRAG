@@ -51,6 +51,14 @@ class InMemoryRepository:
                 names.append(node.metadata["filename"])
         return names
 
+    def document_digest(self, session_id: str, filename: str) -> str | None:
+        """Return the digest stored with a document's chunks."""
+        for node in self.sessions.get(session_id, []):
+            if node.metadata.get("filename") == filename:
+                digest = node.metadata.get("content_sha256")
+                return digest if isinstance(digest, str) else None
+        return None
+
     def find_document_by_content(
         self, session_id: str, content_sha256: str
     ) -> str | None:

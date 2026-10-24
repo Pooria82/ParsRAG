@@ -24,7 +24,7 @@ class DeleteSession:
             InvalidInputError: The session ID is malformed.
         """
         if not is_valid_session_id(session_id):
-            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE)
+            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE, code="invalid_session")
         with self._session_locks.hold(session_id):
             self._repository.delete_session(session_id)
         return MessageResponse(message=f"Session '{session_id}' deleted successfully.")

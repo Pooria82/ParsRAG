@@ -1,6 +1,7 @@
 """Content-based upload validation performed before any parser touches the bytes."""
 
 import io
+import re
 import zipfile
 from pathlib import PurePath
 
@@ -57,8 +58,13 @@ def validate_archive(data: bytes, extension: str) -> None:
         raise DocumentError(
             "The file is not a valid Office document archive.", "corrupt_file"
         ) from exc
-    required = "word/document.xml" if extension == ".docx" else "ppt/presentation.xml"
-    if "[Content_Types].xml" not in names or required not in names:
+    # Word Online and SharePoint may store the body as word/document2.xml.
+    main_part = (
+        any(re.fullmatch(r"word/document\d*\.xml", name) for name in names)
+        if extension == ".docx"
+        else "ppt/presentation.xml" in names
+    )
+    if "[Content_Types].xml" not in names or not main_part:
         raise DocumentError(
             f"The file content does not match its {extension.upper()} extension.",
             "file_type_mismatch",

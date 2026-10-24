@@ -19,5 +19,5 @@ class ListSessionFiles:
             InvalidInputError: The session ID is malformed.
         """
         if not is_valid_session_id(session_id):
-            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE)
+            raise InvalidInputError(INVALID_SESSION_ID_MESSAGE, code="invalid_session")
         return self._repository.get_session_files(session_id)
