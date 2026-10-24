@@ -46,12 +46,18 @@ and this project uses Semantic Versioning.
 
 ### Improved
 
+- The service status card shows the model clearly for any name: the model
+  in monospace with its variant as a tag (`gemma3` `4b`), its publisher and
+  the provider below (`google · API service`), an icon for local or API, and
+  the full id on hover.
 - Scanned PDF pages are recognized several at a time, like images in Word and
   PowerPoint, and near-certain OCR readings skip the skew search. On the
   96-image final report the text is unchanged.
 
 ### Fixed
 
+- After the Settings window (or any dialog) closes with the mouse, the button
+  that opened it no longer shows the keyboard focus ring.
 - An external model API can no longer be connected without an API key.
   OpenRouter lists its models without a key, so saving the connection passed
   and every question then failed with "internal error". Saving is now refused

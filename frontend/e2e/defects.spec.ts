@@ -201,3 +201,15 @@ test('an API address without a key cannot be connected, and the sidebar says why
   await page.getByRole('button', { name: 'Verify connection and apply' }).click();
   await expect(page.getByText('There is no API key for this address, and it cannot be used without one.')).toBeVisible();
 });
+
+test('closing Settings with the mouse leaves no focus ring on the Settings button', async ({ page }) => {
+  await open(page);
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  const settings = page.getByRole('button', { name: 'Settings' });
+  await settings.click();
+  await page.getByRole('dialog', { name: /Settings/ }).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('dialog', { name: /Settings/ })).toBeHidden();
+  await expect(settings).toBeFocused();
+  expect(await settings.evaluate(element => element.matches(':focus-visible'))).toBe(false);
+});
