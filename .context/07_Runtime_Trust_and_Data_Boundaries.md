@@ -18,7 +18,14 @@ on the workstation. Generation has three user-visible trust modes:
 
 API keys are runtime secrets. They may come from process environment or current
 process memory, but are excluded from API responses, browser storage, logs, and
-the persisted model configuration.
+the persisted model configuration. Each key belongs to one host and is sent only
+there.
+
+Apart from model traffic, the only outbound request is the daily update check, an
+anonymous read of the public GitHub release list and notes. It is on by default,
+can be turned off, and sends nothing about the user or the documents. Updates
+themselves run on the host through the update scripts, which back up `.env` and
+the volumes first.
 
 ## Vector schema versioning
 

@@ -176,7 +176,10 @@ flowchart LR
 
 Embeddings and Qdrant remain local in all modes. API keys stay in process memory
 or environment variables; they are not written to browser storage, logs, API
-responses, or the persisted non-secret model configuration.
+responses, or the persisted non-secret model configuration, and each key is sent
+only to the host it belongs to. The only other outbound request is the daily
+update check, an anonymous read of GitHub's public release list that can be
+turned off (see [Updating](#updating)).
 
 The layered backend design (ports, use cases, and DTOs) is described in
 [ARCHITECTURE.md](ARCHITECTURE.md). Ingestion, vector storage, retrieval, and
