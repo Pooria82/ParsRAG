@@ -6,6 +6,7 @@ override any collaborator without patching route internals.
 """
 
 import os
+import time
 from collections.abc import Generator
 from functools import lru_cache
 
@@ -41,8 +42,10 @@ from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
 from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
+from backend.core.use_case.system.check_for_updates import CheckForUpdates
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.read_release_notes import ReadReleaseNotes
 from backend.core.use_case.system.runtime_settings import (
     ReadRuntimeSettings,
     UpdateRuntimeSettings,
@@ -61,6 +64,9 @@ from backend.infrastructure.runtime_settings import (
     EnvironmentSettingsStore,
     runtime_settings_path,
 )
+from backend.infrastructure.updates.github_releases import GitHubReleaseFeed
+from backend.infrastructure.updates.release_notes import LocalReleaseNotes
+from backend.infrastructure.version import app_version
 
 # Overrides saved in the app are active before any setting is read.
 runtime_settings_store = EnvironmentSettingsStore(
@@ -259,3 +265,28 @@ def get_describe_capabilities() -> DescribeCapabilities:
 def get_check_readiness() -> CheckReadiness:
     """Build the readiness use case around the shared repository."""
     return CheckReadiness(runtime_state, lambda: _shared_document_repository())
+
+
+def _update_check_enabled() -> bool:
+    """``UPDATE_CHECK_ENABLED``: on unless set to 0, false, no, or off."""
+    value = os.getenv("UPDATE_CHECK_ENABLED", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+# One checker for the process, so its daily result is shared by every request.
+update_checker = CheckForUpdates(
+    GitHubReleaseFeed(app_version()),
+    app_version(),
+    enabled=_update_check_enabled,
+    clock=time.monotonic,
+)
+
+
+def get_check_for_updates() -> CheckForUpdates:
+    """Return the shared update checker."""
+    return update_checker
+
+
+def get_read_release_notes() -> ReadReleaseNotes:
+    """Build the release-notes reader for the running version."""
+    return ReadReleaseNotes(LocalReleaseNotes(), app_version())

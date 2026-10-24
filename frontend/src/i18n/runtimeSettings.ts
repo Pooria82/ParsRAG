@@ -4,6 +4,10 @@ type Text = { fa: string; en: string };
 
 /** Label and short explanation of each server setting, by environment name. */
 export const SETTING_TEXT: Record<string, { label: Text; hint: Text }> = {
+  UPDATE_CHECK_ENABLED: {
+    label: { fa: 'بررسی خودکار نسخهٔ تازه', en: 'Check for new versions' },
+    hint: { fa: 'روزی یک بار از GitHub می‌پرسد نسخهٔ تازه‌ای منتشر شده است یا نه. چیزی از شما یا اسنادتان فرستاده نمی‌شود.', en: 'Once a day, asks GitHub whether a new version is out. Nothing about you or your documents is sent.' },
+  },
   OLLAMA_CONTEXT_LENGTH: {
     label: { fa: 'اندازهٔ متن Ollama (توکن)', en: 'Ollama context (tokens)' },
     hint: { fa: 'حافظه‌ای که Ollama برای هر پرسش می‌گیرد. روی GPU کوچک کمترش کنید (مثلاً ۴۰۹۶).', en: 'Memory Ollama reserves per question. Lower it on small GPUs (for example 4096).' },
@@ -123,6 +127,7 @@ export const GROUP_TEXT: Record<RuntimeSettingGroup, Text> = {
   retrieval: { fa: 'بازیابی در سرور', en: 'Server retrieval' },
   documents: { fa: 'بارگذاری و OCR', en: 'Uploads and OCR' },
   performance: { fa: 'سرعت ایندکس', en: 'Indexing speed' },
+  updates: { fa: 'به‌روزرسانی', en: 'Updates' },
 };
 
 export const RUNTIME_TEXT = {
