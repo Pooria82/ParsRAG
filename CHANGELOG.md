@@ -170,6 +170,8 @@ and this project uses Semantic Versioning.
 
 ### Security
 
+- `filelock` (pulled in by PyTorch and Hugging Face) is upgraded to 4.2.1
+  for CVE-2026-112940, an arbitrary file overwrite.
 - At startup, a saved API connection to one host no longer receives the
   `.env` key of another (`MODEL_API_KEY` belongs to `MODEL_API_BASE_URL`).
   A connection saved for OpenRouter was given the Google AI Studio key from

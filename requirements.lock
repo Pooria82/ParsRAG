@@ -12,6 +12,7 @@ llama-index-embeddings-huggingface==0.7.0
 # Transitive pins: transformers 5.19 cannot import with PyTorch 2.6 (AMD image).
 sentence-transformers==6.1.0
 transformers==5.18.0
+filelock==4.2.1
 qdrant-client==1.19.1
 pymupdf==2.0
 pydantic==2.14.1
