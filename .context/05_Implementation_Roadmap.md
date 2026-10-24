@@ -660,7 +660,7 @@ no clear next step" gap.
 - [ ] Add files from anywhere: drop on the whole workspace, and paste images
   or PDFs into the message box, with the same validation as the dialog.
 - [ ] "Copy with sources": copy an answer together with the sources its [n]
-  markers refer to. This is the first step of the Phase 18 answer export.
+  markers refer to. This is the first step of the export in Task 18.3.
 - [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
   button to code blocks. Moved up from Task 17.4.
 - [ ] Show the offline hint and poll faster while the backend is preparing.
@@ -776,21 +776,286 @@ no clear next step" gap.
 
 ## Phase 18: New Features
 
+Start these features after the Phase 16 defects and Task 17.0, and in the
+order below. Each one must be complete and efficient, not a first draft:
+- it works with local Ollama models and with APIs, in Persian and English;
+- it works offline unless it says otherwise;
+- nothing leaves the machine without the user's consent;
+- it has tests and measurements like the rest of the project.
+
+Later tasks build on earlier ones: feedback feeds memory and evaluation, export
+feeds sharing, projects scope memory and documents, and the document library
+gives the Studio its sources.
+
+### Task 18.1: Answer feedback
+- [ ] Thumbs up and thumbs down on every answer, and on each version of a
+  retried answer. The control can be changed or undone, works from the
+  keyboard, and uses `aria-pressed`.
+- [ ] Thumbs down asks why, in a short dialog that can be skipped:
+  - reason chips: wrong or inaccurate, not supported by the documents, wrong
+    source cited, incomplete, wrong language, formatting, too slow, other;
+  - an optional comment;
+  - an optional correct answer or source.
+- [ ] Store each item with what it rated: question, answer, mode, model and
+  settings, retrieved and cited sources, and outcome. Keep it on this machine
+  (browser and a server-side feedback store), include it in backup files, and
+  export it as an evaluation set.
+- [ ] Feedback feeds Task 18.11 (memory) and in-app evaluation (Task 18.16).
+  Temporary chats (Task 18.5) send none of it to memory.
+
+### Task 18.2: Pin and archive conversations
+- [ ] Pin conversations to a Pinned group at the top of the history. Archive
+  them to hide them from the list without deleting them; an Archived view
+  restores them.
+- [ ] Search can include archived conversations, the row menu offers bulk
+  actions, and the backup format carries both flags.
+
+### Task 18.3: Export and share
+- [ ] Export one answer or a whole conversation (the active branch) as
+  Markdown, Word (`.docx`), or PDF. The file holds:
+  - the question and the answer;
+  - the cited sources with file and page;
+  - optionally the source images;
+  - the date, model, and mode.
+
+  Generate it on the server, since the browser sends the conversation it
+  holds. Get Persian right: embedded Vazirmatn in PDF, bidi paragraphs and
+  Persian digits in Word, and math as images or LaTeX.
+- [ ] Share through the system share sheet (Web Share API: text, or the
+  exported file) and email (`mailto:` with subject and body). For X, LinkedIn,
+  and Reddit, open their share pages with a short excerpt cut to each
+  platform's limit, plus a "Shared from ParsRAG" note.
+- [ ] Before sharing an answer that quotes documents, say that the excerpts
+  will leave the machine. The app runs locally, so it shares content, never a
+  link.
+
+### Task 18.4: Model picker and thinking switch in the message box
+- [ ] A model menu next to the mode menu lists:
+  - installed Ollama models, with size, context, and capability badges
+    (thinking, vision);
+  - API models the user saved, as favourites per provider;
+  - whether each one is local or API, and whether it can be reached now
+    (`/models/status`).
+
+  A model can be chosen for one conversation (stored with it) or as the
+  default.
+- [ ] Choosing an API model the first time goes through the key and privacy
+  confirmation of Settings, in place.
+- [ ] Moving between local Ollama and an API needs no trip to Settings.
+- [ ] The backend accepts a model per request: a small registry of model
+  clients replaces the single global `Settings.llm`, so two conversations can
+  use different models at the same time.
+- [ ] Thinking switch: show it only when the model can think. Read that from
+  Ollama's capabilities (`/api/show`), and from a known list or provider
+  metadata for APIs.
+- [ ] Send the switch per request: `think` for Ollama, `reasoning_effort` or
+  the provider's own parameter for APIs.
+- [ ] When thinking is on, the context budget grows automatically and
+  timeouts are longer. Show the reasoning collapsed under "Show reasoning".
+  Answers, citations, and the evidence check keep ignoring it.
+
+### Task 18.5: Temporary (anonymous) chat
+- [ ] A "Temporary chat" mode, clearly marked, that:
+  - is not saved to the history or IndexedDB;
+  - never feeds memory or feedback stores;
+  - gets no generated title.
+- [ ] Documents uploaded in it are deleted from the server when it closes,
+  and a time-based sweep removes those left by closed tabs.
+- [ ] The user can still copy or export an answer by hand.
+
+### Task 18.6: English as good as Persian
+- [ ] Build an English acceptance set like the Persian `finaltest` (text,
+  tables, images, Strict refusals) and report both languages side by side for
+  every release.
+- [ ] Check English retrieval:
+  - BM25 tokenisation, stop words, and stemming;
+  - English OCR;
+  - the embedding model's English scores;
+  - the Strict threshold for English.
+- [ ] Review the English interface text and the English prompt rules. Fix the
+  gaps until English matches Persian, and gate releases on both.
+
+### Task 18.7: Read answers aloud
+- [ ] A play, pause, and stop control on each answer, with speed and a
+  choice of voice; the sentence being read is highlighted.
+- [ ] Persian answers use a Persian voice and English answers an English
+  voice. A mixed answer is split into runs by script and language, and each
+  run is read with its own voice.
+- [ ] Code, math, URLs, and citation markers are not read as text: the
+  markers become "source 2", and numbers are read in the answer's language.
+- [ ] Synthesise speech locally on the server (for example Piper voices for
+  Persian and English), downloaded on first use. Stream it sentence by
+  sentence so playback starts at once.
+- [ ] When no local voice is installed, fall back to the browser's own voices
+  and say that Persian voice quality depends on the system.
+
+### Task 18.8: Dictation
+- [ ] A microphone button in the message box that turns speech into text, in
+  Persian or English (detected, or set by the interface language), with
+  punctuation. Text appears while speaking and can be edited before sending.
+- [ ] Recognise speech locally (for example faster-whisper, multilingual,
+  with the model size chosen by Task 18.12), so audio never leaves the
+  machine.
+- [ ] The browser's Web Speech API sends audio to the browser vendor's
+  servers, so offer it only as an opt-in with that disclosure.
+- [ ] Handle the microphone permission, a level meter, push-to-talk, and
+  cancel.
+
+### Task 18.9: Projects
+- [ ] A project has a name, a description, instructions (a custom prompt
+  added to every question), shared project documents, and its own
+  conversations.
+- [ ] A new conversation in a project inherits its documents, instructions,
+  default mode, and model.
+- [ ] The sidebar shows projects as folders. Conversations can move in and
+  out of a project.
+- [ ] Deleting a project asks what to do with its conversations and
+  documents.
+- [ ] On the server, documents belong to a scope (conversation or project)
+  instead of only a session. Memory (Task 18.11) can be scoped to a project.
+- [ ] Backup format version 2 includes projects.
+
+### Task 18.10: Document library
+- [ ] One library for every document kept for reuse. It has search and
+  filters (name, type, date, project), pin and archive, and per-document and
+  total storage use.
+- [ ] Keep each original file once, by content hash, with a reference count
+  across conversations and projects. Reuse no longer copies vectors.
+  Unreferenced files and vectors are collected.
+- [ ] Storage limits warn before the disk fills, and a cleanup view lists
+  large and unused documents, so the library does not slow the app down.
+- [ ] Preview inside the app:
+  - PDF with PDF.js, opened at the cited page from a citation;
+  - images;
+  - text, Markdown, and CSV;
+  - Word and PowerPoint through a rendered PDF, or their extracted text.
+- [ ] Download the original file.
+- [ ] Move indexing to a background queue with progress. Large documents must
+  not hold an HTTP request or the single ingestion slot. This also replaces
+  the queued state of Task 17.0.
+
+### Task 18.11: Memory
+Build memory to the standard of established assistants. It stays on this
+machine, the user can see and control all of it, and it never weakens
+grounding.
+- [ ] **What is remembered:**
+  - explicit requests ("remember that…", "forget…");
+  - preferences inferred from behaviour: answer language, length, format,
+    level of detail, and citation style, from edits, retries, and feedback;
+  - profile facts the user states: field of study, current goals;
+  - lessons from thumbs-down reasons, so a corrected mistake is not repeated;
+  - short summaries of earlier conversations, so "as we discussed" can be
+    found.
+- [ ] **Extraction:** after a turn, when the app is idle, a model proposes
+  memory candidates. Each candidate has a type, text, the messages it comes
+  from, and a confidence.
+- [ ] **Merging:** candidates are deduplicated against existing memories by
+  embedding similarity. A conflict keeps the newer value and its history.
+  Low-confidence memories expire unless they are confirmed.
+- [ ] **Never stored:** API keys, passwords, or sensitive personal data,
+  unless the user asks explicitly.
+- [ ] **Storage:** a local database with a vector index on the server,
+  global or per project, included in backup files.
+- [ ] **Use at question time:**
+  - the most relevant memories (by similarity, recency, and importance) go
+    into the prompt as user context, within a fixed token budget and apart
+    from document evidence;
+  - Strict mode uses memory only for preferences and style, never as
+    evidence;
+  - an answer that used memory says so, with a link to the memory.
+- [ ] **Control:**
+  - a Memory tab to view, search, edit, and delete memories, switch types
+    off, pause memory, or clear it;
+  - a "Memory updated" chip with undo;
+  - "Don't remember this" on any message;
+  - temporary chats never read or write memory.
+- [ ] **Measurement:**
+  - extraction precision on a labelled set;
+  - tests that memory never leaks into Strict evidence;
+  - privacy tests;
+  - no added latency on the answer path: memory retrieval stays under 50 ms
+    and extraction runs in the background.
+
+### Task 18.12: Model recommendations for this computer
+- [ ] **Read the hardware:**
+  - CPU cores and instruction sets;
+  - total and free RAM;
+  - GPU vendor, model, and VRAM (NVIDIA, AMD, Apple), through Ollama or a
+    small host-side probe, since the container cannot see all of it;
+  - free disk space.
+
+  Ask the user for whatever cannot be read.
+- [ ] **Ask about the use:**
+  - languages (Persian, English, both);
+  - typical message and context size (short questions or long documents);
+  - speed or quality;
+  - whether thinking or vision is needed.
+- [ ] **Model catalogue:** a curated catalogue shipped with each release.
+  Per model and quantisation it records:
+  - memory for the weights, and the KV cache per context length;
+  - Persian and English quality measured on the project's acceptance sets;
+  - speed classes;
+  - capabilities, licence, and the Ollama tag.
+- [ ] **Recommendation:**
+  - recommend the best three models that fit fully in GPU memory (or in RAM)
+    at the needed context;
+  - give the reasons, for example "fits on the GPU at 8k context, about 30
+    tokens/s";
+  - pull the model in one click through Ollama with progress, and mark
+    models already installed.
+
+### Task 18.13: Studio: mind maps and generated study material
+Outputs grounded in the selected documents, like NotebookLM:
+- [ ] **Mind map:** concepts and their relations, extracted with a map-reduce
+  pass over the chunks. It is shown as an interactive map (zoom, pan,
+  collapse).
+  - Each node links to its sources, and clicking a node asks about it.
+  - Export as PNG, SVG, or a Markdown outline.
+- [ ] **Reports:** a briefing, a study guide, or a summary with citations,
+  from templates.
+- [ ] **Data table:** fill the columns the user names from the documents,
+  with a source per cell. Export as CSV or Excel.
+- [ ] **Flashcards:** question and answer cards with source links, and a
+  study mode with spaced repetition.
+- [ ] **Quiz:** multiple-choice and short-answer questions with explanations
+  and citations, and a score.
+- [ ] **How it runs:**
+  - long jobs go through the background queue (Task 18.10) with progress;
+  - outputs are saved with the conversation or project;
+  - the language follows the interface or the sources;
+  - small local models use chunked map-reduce and JSON-schema output
+    (Ollama `format`), so results stay valid.
+
+### Task 18.14: More languages
+- [ ] Generalise the code that assumes two languages:
+  - interface text in locale files (ICU messages), with direction per locale;
+  - answer-language detection beyond Persian and English;
+  - normalisation and BM25 tokenisation per language;
+  - Tesseract language data per language;
+  - an acceptance set per language.
+- [ ] Add languages in order of internet use, roughly: Chinese, Spanish,
+  Arabic, Portuguese, Indonesian, French, Japanese, Russian, German. Recheck
+  current figures before each one.
+- [ ] Arabic reuses most of the Persian right-to-left work and may go
+  earlier. Chinese and Japanese need word segmentation for keyword search.
+
+### Task 18.15: Voice assistant (last)
+- [ ] A spoken conversation: push-to-talk or voice activity detection, local
+  speech recognition (Task 18.8), the normal grounded answer, and local speech
+  (Task 18.7) streamed as it is generated.
+- [ ] The user can interrupt the answer by speaking, with low latency from
+  the end of speech to the first audio, in Persian and English. Sources are
+  still shown on screen.
+- [ ] Built last, on Tasks 18.4, 18.7, 18.8, and 18.11.
+
+### Task 18.16: Other features
 - [ ] Vision-model image descriptions during indexing, optional and
   configurable like OCR (Task 19.1).
 - [ ] Legacy Office formats (`.doc`, `.ppt`) and spreadsheets (`.xlsx`).
-- [ ] Background indexing queue with progress, so large documents do not hold
-  an HTTP request and the single ingestion slot.
-- [ ] A shared, persistent document library next to per-conversation documents,
-  as described in the original PRD (Section 3.2).
-- [ ] Answer export (Markdown or PDF) with its sources, and a link that opens a
-  cited page or image in the original document.
 - [ ] Conversation search that shows the matching snippet and jumps to it.
-- [ ] In-app evaluation: run a labelled question set against the current model
-  and settings and show the results.
-- [ ] "Flag this answer" with an optional correct answer or source, stored
-  locally and exportable as an evaluation set for the item above.
-- [ ] Pin conversations, with a Pinned group at the top of the history.
+- [ ] In-app evaluation: run a labelled question set (including flagged
+  answers from Task 18.1) against the current model and settings and show the
+  results.
 - [ ] Evidence side panel on wide screens (1280 px and up), mirrored for RTL,
   so an answer and its sources can be read side by side.
 - [ ] Optional Persian digits in answers (display only; code, math, tables,
