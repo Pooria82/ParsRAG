@@ -5,6 +5,8 @@ and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-24
+
 ### Added
 
 - Update check: once a day the server asks GitHub (anonymously) for newer
@@ -530,7 +532,8 @@ and this project uses Semantic Versioning.
 - Established owner-controlled source-available terms, an upstream-only
   contribution path, citation metadata, and explicit copyright notices.
 
-[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/Pooria82/ParsRAG/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/Pooria82/ParsRAG/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Pooria82/ParsRAG/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Pooria82/ParsRAG/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pooria82/ParsRAG/compare/v0.2.0...v1.0.0
