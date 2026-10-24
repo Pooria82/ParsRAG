@@ -48,6 +48,12 @@ class ModelConnectionError(ParsRAGError):
     code = "model_unavailable"
 
 
+class ModelKeyMissingError(ModelConnectionError):
+    """An external model API was chosen without an API key for its address."""
+
+    code = "api_key_missing"
+
+
 class OllamaConnectionError(ModelConnectionError):
     """An Ollama service is disallowed or unreachable; ``code`` says which.
 

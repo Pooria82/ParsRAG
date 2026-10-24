@@ -147,3 +147,11 @@ test('questions carry the interface language for prompts without words', () => {
   assert.equal(buildQuery(session, { ...DEFAULT_SETTINGS, language: 'fa' }, '2 + 2 = ?').language, 'fa');
 });
 
+
+test('model ids split into publisher, name and variant for display', () => {
+  const { modelNameParts } = require('./.compiled/core/modelName.js');
+  assert.deepEqual(modelNameParts('google/gemma-4-26b-a4b-it'), { vendor: 'google', name: 'gemma-4-26b-a4b-it', tag: '' });
+  assert.deepEqual(modelNameParts('gemma3:4b'), { vendor: '', name: 'gemma3', tag: '4b' });
+  assert.deepEqual(modelNameParts('hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M'), { vendor: 'hf.co/bartowski', name: 'Llama-3.2-3B-Instruct-GGUF', tag: 'Q4_K_M' });
+  assert.deepEqual(modelNameParts('gpt-4o'), { vendor: '', name: 'gpt-4o', tag: '' });
+});

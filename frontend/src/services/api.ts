@@ -1,4 +1,4 @@
-import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelConnectionState, ModelProvider, OllamaModel, QueryStage, RuntimeSettings } from '../types';
+import type { AppCapabilities, IngestedFile, ModelConfiguration, ModelConnectionState, ModelProvider, OllamaModel, QueryStage, ReleaseNote, RuntimeSettings, UpdateStatus } from '../types';
 
 /** A failed request with the server's stable error code ('network' when unreachable). */
 export class ApiError extends Error {
@@ -257,7 +257,25 @@ export class ParsRagApiClient {
     if (!response.ok) throw new ApiError('request_failed', response.status);
     const payload: unknown = await response.json();
     const status = typeof payload === 'object' && payload !== null && 'status' in payload ? payload.status : null;
-    return status === 'ready' || status === 'unreachable' || status === 'model_missing' || status === 'auth_failed' ? status : null;
+    return status === 'ready' || status === 'unreachable' || status === 'model_missing' || status === 'auth_failed' || status === 'key_missing' ? status : null;
+  }
+
+  /** Whether a newer release is out; `refresh` asks GitHub again (at most once a minute). */
+  async updates(refresh = false, signal?: AbortSignal): Promise<UpdateStatus> {
+    const response = await fetch(this.url(`/updates${refresh ? '?refresh=true' : ''}`), { signal });
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    return response.json() as Promise<UpdateStatus>;
+  }
+
+  /** Notes of the versions installed after `since` (only the current one without it). */
+  async releaseNotes(since: string | null, language: 'fa' | 'en', signal?: AbortSignal): Promise<ReleaseNote[]> {
+    const query = new URLSearchParams({ language });
+    if (since) query.set('since', since);
+    const response = await fetch(this.url(`/release-notes?${query}`), { signal });
+    if (!response.ok) throw new ApiError('request_failed', response.status);
+    const payload = await response.json() as { notes?: unknown };
+    return Array.isArray(payload.notes) ? payload.notes.filter((note): note is ReleaseNote =>
+      typeof note === 'object' && note !== null && typeof (note as ReleaseNote).version === 'string' && typeof (note as ReleaseNote).notes === 'string') : [];
   }
 
   async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string; disclosure_acknowledged?: boolean }, signal?: AbortSignal): Promise<ModelConfiguration> {

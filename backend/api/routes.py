@@ -5,6 +5,7 @@ response codes). Business rules live in ``backend.core.use_case`` and errors
 are mapped centrally by ``backend.api.errors``.
 """
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -12,6 +13,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from backend.api.dependencies import (
     get_answer_query,
+    get_check_for_updates,
     get_check_model_connection,
     get_check_readiness,
     get_configure_model,
@@ -24,6 +26,7 @@ from backend.api.dependencies import (
     get_list_session_files,
     get_read_model_configuration,
     get_read_query_progress,
+    get_read_release_notes,
     get_read_runtime_settings,
     get_read_source_image,
     get_reuse_document,
@@ -54,6 +57,7 @@ from backend.core.dto.output.model import (
 )
 from backend.core.dto.output.query import QueryProgressResponse, QueryResponse
 from backend.core.dto.output.runtime_settings import RuntimeSettingsResponse
+from backend.core.dto.output.updates import ReleaseNotesResponse, UpdateStatusResponse
 from backend.core.use_case.ingestion.ingest_documents import IngestDocuments
 from backend.core.use_case.model.check_model_connection import CheckModelConnection
 from backend.core.use_case.model.configure_model import ConfigureModel
@@ -72,8 +76,10 @@ from backend.core.use_case.session.delete_session import DeleteSession
 from backend.core.use_case.session.list_session_files import ListSessionFiles
 from backend.core.use_case.session.read_source_image import ReadSourceImage
 from backend.core.use_case.session.reuse_document import ReuseDocument
+from backend.core.use_case.system.check_for_updates import CheckForUpdates
 from backend.core.use_case.system.check_readiness import CheckReadiness
 from backend.core.use_case.system.describe_capabilities import DescribeCapabilities
+from backend.core.use_case.system.read_release_notes import ReadReleaseNotes
 from backend.core.use_case.system.runtime_settings import (
     ReadRuntimeSettings,
     UpdateRuntimeSettings,
@@ -303,3 +309,22 @@ def delete_session_document(
 ) -> MessageResponse:
     """Deletes one indexed document without affecting the rest of the session."""
     return use_case.execute(session_id, request)
+
+
+@router.get("/updates", response_model=UpdateStatusResponse)
+def read_update_status(
+    refresh: bool = False,
+    use_case: CheckForUpdates = Depends(get_check_for_updates),  # noqa: B008
+) -> UpdateStatusResponse:
+    """Report whether a newer release is out (checked once a day, or on request)."""
+    return use_case.execute(refresh=refresh)
+
+
+@router.get("/release-notes", response_model=ReleaseNotesResponse)
+def read_release_notes(
+    since: str | None = None,
+    language: Literal["fa", "en"] = "fa",
+    use_case: ReadReleaseNotes = Depends(get_read_release_notes),  # noqa: B008
+) -> ReleaseNotesResponse:
+    """What changed in the versions installed after ``since``."""
+    return use_case.execute(since, language)

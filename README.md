@@ -651,8 +651,39 @@ The installed window opens with the same local conversations and settings as
 that browser profile. The interface shell can reopen without network access;
 uploading, indexing, and answering still require the local backend and selected
 model endpoint. API responses, prompts, documents, and credentials are never
-saved by the service worker. When a new interface build is ready, the app offers
-an explicit reload and waits until any upload or answer is finished.
+saved by the service worker. When a new interface build is ready, the app
+switches to it as soon as no upload or answer is running.
+
+### Updating
+
+Once a day the app asks GitHub, anonymously, whether a newer release is out.
+Nothing about you or your documents is sent; GitHub only sees the address the
+request comes from. Turn the check off in **Settings → General → Version and
+updates** or with `UPDATE_CHECK_ENABLED=0`. When a release is out, the sidebar
+shows it, and its window lists what changed in every newer version.
+
+To update, first download a backup of your conversations from that window (they
+live in the browser). Then run one command in the ParsRAG folder:
+
+```bash
+sh scripts/update.sh
+```
+
+On Windows:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/update.ps1
+```
+
+The script stops if files in the copy were changed. It backs up `.env`, the
+documents index (Qdrant), and the model settings to `backups/<date>-v<version>/`
+(with `RESTORE.txt`), then switches straight to the latest release. Versions in
+between are skipped; their changes are still shown afterwards. It rebuilds and
+restarts with the same Compose files and profile, and waits until the service
+is ready. If the rebuild fails, it starts the previous version again. The open
+page then loads the new interface by itself (no cache clearing needed) and shows
+what changed. The script needs a `git clone` of the repository; from 1.1.1 or
+earlier, update once by hand with `git pull` and `docker compose up -d --build`.
 
 For access from another machine, serve the app over HTTPS: service workers are
 restricted to secure contexts, with localhost as the development exception.

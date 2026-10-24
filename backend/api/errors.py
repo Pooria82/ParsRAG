@@ -15,6 +15,7 @@ from backend.core.domain.exceptions import (
     ConflictError,
     EmptyDocumentError,
     InvalidInputError,
+    ModelKeyMissingError,
     NotFoundError,
     ParsRAGError,
     PayloadTooLargeError,
@@ -40,6 +41,7 @@ APPLICATION_ERROR_STATUS: dict[type[ApplicationError], int] = {
 MODEL_FAILURE_DETAIL = {
     "model_timeout": "The model did not answer in time.",
     "model_auth": "The model service rejected the API key.",
+    "model_key_missing": "No API key is set for this model service.",
     "model_rate_limited": "The model service is rate-limiting requests.",
     "model_not_found": "The configured model was not found on the model service.",
     "model_unavailable": "The model service could not be reached.",
@@ -83,6 +85,8 @@ async def parsrag_error_handler(request: Request, exc: Exception) -> JSONRespons
     failure = classify_model_failure(exc)
     if failure is not None:
         return _model_failure_response(*failure)
+    if isinstance(exc, ModelKeyMissingError):
+        return JSONResponse(status_code=400, content=error_body(str(exc), exc.code))
     if isinstance(exc, VectorDBConnectionError):
         return JSONResponse(
             status_code=503,

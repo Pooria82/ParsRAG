@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -460,14 +461,20 @@ def test_a_stored_key_is_not_sent_to_a_different_server(
     with patch("backend.infrastructure.llm.endpoint_policy.socket.getaddrinfo") as dns:
         dns.return_value = [(None, None, None, None, ("104.18.2.115", 443))]
         configure_model(first, persist=False)
-        configure_model(
-            first.model_copy(
-                update={"base_url": "https://other.example/v1", "api_key": None}
-            ),
-            persist=False,
+        calls = mock_get.call_count
+        # Without a key for that host it is refused, and the old key is not sent.
+        with pytest.raises(factory.APIKeyMissingError, match=r"other.example"):
+            configure_model(
+                first.model_copy(
+                    update={"base_url": "https://other.example/v1", "api_key": None}
+                ),
+                persist=False,
+            )
+        assert mock_get.call_count == calls
+        assert all(
+            call.kwargs.get("api_base") != "https://other.example/v1"
+            for call in mock_openai.call_args_list
         )
-        assert mock_get.call_args.kwargs["headers"] == {}
-        assert mock_openai.call_args.kwargs["api_key"] == ""
 
         configure_model(first.model_copy(update={"api_key": None}), persist=False)
     assert mock_get.call_args.kwargs["headers"] == {
@@ -544,3 +551,50 @@ def test_api_models_use_the_guarded_http_client(
         client = call.kwargs["http_client"]
         assert client.follow_redirects is False
         assert isinstance(client._transport, GuardedTransport)
+
+
+def test_a_saved_connection_to_another_host_starts_without_the_env_key(
+    tmp_path: Path,
+) -> None:
+    """The .env key belongs to MODEL_API_BASE_URL and is never given to OpenRouter."""
+    import json
+    import os
+    import subprocess
+    import sys
+
+    saved = tmp_path / "model-configuration.json"
+    saved.write_text(
+        json.dumps(
+            {
+                "provider": "api",
+                "model_name": "google/gemma-4-26b-a4b-it",
+                "base_url": "https://openrouter.ai/api/v1",
+                "disclosure_acknowledged": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "MODEL_API_KEY": "google-studio-key",
+        "MODEL_API_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "PARSRAG_CONFIG_PATH": str(saved),
+    }
+    env.pop("OPENROUTER_API_KEY", None)
+    script = (
+        "from backend.infrastructure.llm import factory as f;"
+        "print(f._configuration.api_key);"
+        "print(sorted(host for _, host, _ in f._api_keys))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[3],
+    )
+    assert result.stdout.split("\n")[:2] == [
+        "None",
+        "['generativelanguage.googleapis.com']",
+    ]

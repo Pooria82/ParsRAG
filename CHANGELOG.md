@@ -7,6 +7,26 @@ and this project uses Semantic Versioning.
 
 ### Added
 
+- Update check: once a day the server asks GitHub (anonymously) for newer
+  releases (`GET /updates`, `UPDATE_CHECK_ENABLED`, on by default and in
+  Settings). The sidebar offers the latest one, and its window lists the
+  changes of every newer release in Persian or English, asks for a backup of
+  the conversations, and gives one command:
+  `scripts/update.ps1` (Windows) or `scripts/update.sh`.
+- The update scripts back up `.env`, the Qdrant data, and the model settings,
+  go straight to the latest release tag, rebuild with the same Compose files
+  and profile, wait until the service is ready, and start the previous
+  version again if the rebuild fails.
+- After an update the app shows what changed in every version since the last
+  one seen (`GET /release-notes`, from `release-notes/<version>.<fa|en>.md`),
+  and an open page loads the new interface by itself: the page and the service
+  worker are served with `Cache-Control: no-cache`, hashed assets are cached
+  for a year, and a waiting interface is activated when nothing is running.
+- One version for the project in `VERSION`, read by the backend and the
+  frontend build; `scripts/set_version.py` copies it to `pyproject.toml`,
+  `package.json`, `package-lock.json`, and `CITATION.cff`, and a test keeps
+  them in step.
+
 - `OCR_DOCUMENT_TIMEOUT_SECONDS` (default 900, changeable in Settings) bounds
   the OCR time of one document. Remaining pages and images are skipped with a
   notice and the rest is indexed.
@@ -26,12 +46,25 @@ and this project uses Semantic Versioning.
 
 ### Improved
 
+- The service status card shows the model clearly for any name: the model
+  in monospace with its variant as a tag (`gemma3` `4b`), its publisher and
+  the provider below (`google · API service`), an icon for local or API, and
+  the full id on hover.
 - Scanned PDF pages are recognized several at a time, like images in Word and
   PowerPoint, and near-certain OCR readings skip the skew search. On the
   96-image final report the text is unchanged.
 
 ### Fixed
 
+- After the Settings window (or any dialog) closes with the mouse, the button
+  that opened it no longer shows the keyboard focus ring.
+- An external model API can no longer be connected without an API key.
+  OpenRouter lists its models without a key, so saving the connection passed
+  and every question then failed with "internal error". Saving is now refused
+  with a message, the sidebar says "No API key is set" instead of "Service
+  ready", and a question names the missing key. The key form shows which host
+  the service holds a key for (a key is only sent to its own host; a key in
+  `.env` belongs to `MODEL_API_BASE_URL`).
 - "Service ready" no longer appears while the model cannot answer. A new
   `GET /models/status` checks the active model service (Ollama running with
   the selected model installed; an API reachable and accepting the key, at
@@ -137,6 +170,12 @@ and this project uses Semantic Versioning.
 
 ### Security
 
+- `filelock` (pulled in by PyTorch and Hugging Face) is upgraded to 4.2.1
+  for CVE-2026-112940, an arbitrary file overwrite.
+- At startup, a saved API connection to one host no longer receives the
+  `.env` key of another (`MODEL_API_KEY` belongs to `MODEL_API_BASE_URL`).
+  A connection saved for OpenRouter was given the Google AI Studio key from
+  `.env` and sent it to OpenRouter.
 - Model API requests re-check the host's addresses each time and do not
   follow redirects, so a DNS change or redirect cannot reach link-local
   (cloud metadata), multicast, or reserved addresses.
