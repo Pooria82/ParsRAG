@@ -167,7 +167,7 @@ async function settingsDialog(page, tab) {
 }
 
 await mkdir(output, { recursive: true });
-const server = await preview({ root: resolve(import.meta.dirname, '..'), preview: { host: '127.0.0.1', port: 4182, strictPort: true } });
+const server = await preview({ root: resolve(import.meta.dirname, '..'), preview: { host: '127.0.0.1', port: Number(process.env.SCREENSHOT_PORT) || 4182, strictPort: true } });
 const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
 try {
   for (const language of ['en', 'fa']) {
