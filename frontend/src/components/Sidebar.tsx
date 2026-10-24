@@ -34,6 +34,7 @@ export function Sidebar(props: SidebarProps) {
   };
   const modelProblem = props.connection !== 'online' || !props.modelState || props.modelState === 'ready' ? undefined
     : props.modelState === 'model_missing' ? t.modelMissing : props.modelState === 'auth_failed' ? t.modelAuthFailed
+      : props.modelState === 'key_missing' ? t.modelKeyMissing
       : props.modelRuntime?.provider === 'api' ? t.modelUnreachableApi : t.modelUnreachableOllama;
   const newChatShortcut = shortcutLabel('newChat', isApplePlatform(navigator.platform || navigator.userAgent));
   const [search, setSearch] = useState('');

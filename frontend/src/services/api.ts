@@ -257,7 +257,7 @@ export class ParsRagApiClient {
     if (!response.ok) throw new ApiError('request_failed', response.status);
     const payload: unknown = await response.json();
     const status = typeof payload === 'object' && payload !== null && 'status' in payload ? payload.status : null;
-    return status === 'ready' || status === 'unreachable' || status === 'model_missing' || status === 'auth_failed' ? status : null;
+    return status === 'ready' || status === 'unreachable' || status === 'model_missing' || status === 'auth_failed' || status === 'key_missing' ? status : null;
   }
 
   async configureModel(payload: { provider: ModelProvider; model_name: string; base_url: string; api_key?: string; disclosure_acknowledged?: boolean }, signal?: AbortSignal): Promise<ModelConfiguration> {

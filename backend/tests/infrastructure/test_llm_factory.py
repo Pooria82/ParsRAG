@@ -460,14 +460,20 @@ def test_a_stored_key_is_not_sent_to_a_different_server(
     with patch("backend.infrastructure.llm.endpoint_policy.socket.getaddrinfo") as dns:
         dns.return_value = [(None, None, None, None, ("104.18.2.115", 443))]
         configure_model(first, persist=False)
-        configure_model(
-            first.model_copy(
-                update={"base_url": "https://other.example/v1", "api_key": None}
-            ),
-            persist=False,
+        calls = mock_get.call_count
+        # Without a key for that host it is refused, and the old key is not sent.
+        with pytest.raises(factory.APIKeyMissingError, match=r"other.example"):
+            configure_model(
+                first.model_copy(
+                    update={"base_url": "https://other.example/v1", "api_key": None}
+                ),
+                persist=False,
+            )
+        assert mock_get.call_count == calls
+        assert all(
+            call.kwargs.get("api_base") != "https://other.example/v1"
+            for call in mock_openai.call_args_list
         )
-        assert mock_get.call_args.kwargs["headers"] == {}
-        assert mock_openai.call_args.kwargs["api_key"] == ""
 
         configure_model(first.model_copy(update={"api_key": None}), persist=False)
     assert mock_get.call_args.kwargs["headers"] == {

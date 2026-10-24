@@ -28,6 +28,7 @@ const UPLOAD: Messages = {
 
 const QUERY: Messages = {
   model_timeout: { fa: 'مدل در زمان مقرر پاسخ نداد. دوباره تلاش کنید یا پرسش را کوتاه‌تر کنید.', en: 'The model did not answer in time. Try again or ask a shorter question.' },
+  model_key_missing: { fa: 'کلید API تنظیم نشده است. کلیدی که در تنظیمات وارد می‌شود پس از راه‌اندازی دوبارهٔ سرویس پاک می‌شود؛ آن را دوباره وارد کنید یا MODEL_API_KEY و MODEL_API_BASE_URL را در .env بگذارید.', en: 'No API key is set. A key entered in Settings is cleared when the service restarts; enter it again or set MODEL_API_KEY and MODEL_API_BASE_URL in .env.' },
   model_auth: { fa: 'کلید API پذیرفته نشد. در تنظیمات، کلید را بررسی کنید.', en: 'The API key was rejected. Check it in Settings.' },
   model_rate_limited: { fa: 'سرویس مدل محدودیت تعداد درخواست اعمال کرده است. کمی بعد دوباره تلاش کنید.', en: 'The model service is rate-limiting requests. Try again shortly.' },
   model_not_found: { fa: 'مدل انتخاب‌شده روی سرویس پیدا نشد. نام مدل را در تنظیمات بررسی کنید.', en: 'The selected model was not found. Check the model name in Settings.' },
@@ -57,6 +58,7 @@ const COMMON: Messages = {
 };
 
 const MODEL_SETTINGS: Messages = {
+  api_key_missing: { fa: 'برای این نشانی کلید API وجود ندارد و بدون کلید نمی‌توان به آن وصل شد. کلید را وارد کنید؛ کلید ذخیره‌شده فقط به نشانی خودش فرستاده می‌شود.', en: 'There is no API key for this address, and it cannot be used without one. Enter a key; a stored key is only sent to its own address.' },
   ollama_url_not_allowed: { fa: 'این آدرس Ollama مجاز نیست. از http:// با localhost، ollama یا host.docker.internal استفاده کنید، یا میزبان را به OLLAMA_ALLOWED_HOSTS بیفزایید (بدون نام کاربری، مسیر یا پارامتر).', en: 'This Ollama address is not allowed. Use http:// with localhost, ollama, or host.docker.internal, or add the host to OLLAMA_ALLOWED_HOSTS (no user name, path, or query).' },
   ollama_unreachable: { fa: 'Ollama در این آدرس پاسخ نداد. مطمئن شوید Ollama اجرا می‌شود. اگر روی همین رایانه نصب است و برنامه در Docker است، آدرس http://host.docker.internal:11434 را به کار ببرید؛ در لینوکس، OLLAMA_HOST را طوری تنظیم کنید که Ollama به شبکهٔ Docker هم گوش دهد.', en: 'Ollama did not answer at this address. Make sure Ollama is running. If it is installed on this computer and the app runs in Docker, use http://host.docker.internal:11434; on Linux, set OLLAMA_HOST so Ollama also listens on the Docker network.' },
 };

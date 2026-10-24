@@ -32,6 +32,13 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- An external model API can no longer be connected without an API key.
+  OpenRouter lists its models without a key, so saving the connection passed
+  and every question then failed with "internal error". Saving is now refused
+  with a message, the sidebar says "No API key is set" instead of "Service
+  ready", and a question names the missing key. The key form shows which host
+  the service holds a key for (a key is only sent to its own host; a key in
+  `.env` belongs to `MODEL_API_BASE_URL`).
 - "Service ready" no longer appears while the model cannot answer. A new
   `GET /models/status` checks the active model service (Ollama running with
   the selected model installed; an API reachable and accepting the key, at

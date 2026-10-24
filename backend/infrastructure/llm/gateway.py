@@ -5,7 +5,11 @@ from typing import Literal
 import httpx
 
 from backend.core.domain.enums import ModelProvider
-from backend.core.domain.exceptions import ModelConnectionError, OllamaConnectionError
+from backend.core.domain.exceptions import (
+    ModelConnectionError,
+    ModelKeyMissingError,
+    OllamaConnectionError,
+)
 from backend.core.dto.input.model import ModelConfigurationRequest
 from backend.core.dto.output.model import (
     ModelConfigurationResponse,
@@ -42,6 +46,8 @@ class LlamaIndexModelGateway:
         """
         try:
             return factory.configure_model(configuration)
+        except factory.APIKeyMissingError as exc:
+            raise ModelKeyMissingError(str(exc)) from exc
         except (OllamaURLNotAllowedError, httpx.HTTPError) as exc:
             if configuration.provider is ModelProvider.OLLAMA:
                 raise _ollama_error(exc) from exc
