@@ -56,6 +56,28 @@ and this project uses Semantic Versioning.
 
 ### Fixed
 
+- After a reload the conversation that was open opens again; once
+  conversations lived in IndexedDB the app always opened the first one.
+  Conversations are written before the app reloads itself (for an update) and
+  when the page is hidden, so a just-finished answer is not lost.
+- Two open tabs no longer undo each other's unsaved edits, new conversations,
+  or deletions; a save that had to fall back to `localStorage` always wins over
+  the older IndexedDB copy.
+- "Clear all data" no longer stays on "Saving…"; retrying or stopping an
+  earlier question streams and shows its note in place; the keyboard stays in
+  the message box after the first question; a document cannot be deleted twice
+  at once; the message box says when an upload is running.
+- Setting `PARSRAG_ALLOWED_HOSTS` keeps localhost allowed, so the container
+  health check and the update script keep working.
+- A saved API connection starts while offline, and an API host that does not
+  resolve shows as unreachable instead of an error.
+- Saving an API without a key now shows its own message; malformed CSV files,
+  empty generated titles, oversized requests and bad session ids return clear
+  codes instead of internal errors; Word files saved online
+  (`word/document2.xml`) are accepted; reusing a document with the same
+  content as one already in the conversation is refused.
+- The update scripts work when the stack is stopped, do not stop on Docker
+  warnings in Windows PowerShell, and always install the release tag.
 - After the Settings window (or any dialog) closes with the mouse, the button
   that opened it no longer shows the keyboard focus ring.
 - An external model API can no longer be connected without an API key.

@@ -7,7 +7,7 @@ import { activeComposerTrigger, applyComposerCommand, COMMANDS, insertDocumentMe
 
 interface ComposerProps {
   value: string; onChange: (value: string) => void; onSendMessage: () => void;
-  onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean;
+  onStopGenerating: () => void; isGenerating: boolean; isBusy: boolean; isUploading?: boolean;
   activeMode: RAGMode; onChangeMode: (mode: RAGMode) => void;
   language: Language; onOpenDocuments: () => void; documentCount: number; focusToken: number;
   documentNames: string[]; onSelectMention: (name: string) => void; onOpenGuide: () => void;
@@ -153,7 +153,7 @@ export function Composer(props: ComposerProps) {
         </div>
       </div>
     </div>
-    <p className="composer-disclaimer">{props.isBusy && !isGenerating ? t.otherGenerating : t.disclaimer}</p>
+    <p className="composer-disclaimer">{isGenerating || !props.isBusy ? t.disclaimer : props.isUploading ? t.uploadingNotice : t.otherGenerating}</p>
   </div>;
 }
 

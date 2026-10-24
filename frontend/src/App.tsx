@@ -18,7 +18,7 @@ import { ApiError, ParsRagApiClient } from './services/api';
 import type { AppSettings, IngestionCapabilities, Message, ModelConfiguration, ModelConnectionState, QueryStage, ReleaseNote, UpdateStatus, ResponseVariant, Session, SessionDocument } from './types';
 import { translations } from './i18n/translations';
 import { queryErrorMessage, uploadErrorMessage } from './i18n/errors';
-import { answerGrounding, answerTo, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, placeAnswer, prepareTurnRegeneration, selectConversationBranch, STORAGE, validateUploads } from './core/state';
+import { answerGrounding, answerTo, suggestionKey, appendResponseVariant, buildQuery, createSession, DEFAULT_INGESTION_CAPABILITIES, fallbackConversationTitle, mergeRemoteDocuments, parseAnswer, placeAnswer, placeNote, prepareTurnRegeneration, selectConversationBranch, STORAGE, validateUploads } from './core/state';
 import { flushPendingDeletions, parsePendingDeletions } from './core/storage';
 import { isApplePlatform, resolveShortcut } from './core/shortcuts';
 import { createBackup, downloadText, mergeSessions, parseBackup } from './core/workspaceTransfer';
@@ -60,7 +60,7 @@ function writePendingDeletions(ids: string[]): void {
 }
 
 export function App() {
-  const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError } = usePersistentWorkspace();
+  const { settings, setSettings, sessions, setSessions, activeId, setActiveId, storageError, saveNow } = usePersistentWorkspace();
   const pwa = usePwa();
   const isMobile = useMediaQuery('(max-width: 760px)');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
@@ -72,7 +72,9 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ sessionId: string; text: string } | null>(null);
   const [queryProgress, setQueryProgress] = useState<{ sessionId: string; stage: QueryStage }>();
-  const [streamDraft, setStreamDraft] = useState<{ sessionId: string; messageId?: string; content: string; sourceCount?: number }>();
+  const [streamDraft, setStreamDraft] = useState<{ sessionId: string; messageId?: string; afterUserId?: string; content: string; sourceCount?: number }>();
+  const [deletingDocuments, setDeletingDocuments] = useState<ReadonlySet<string>>(new Set());
+  const suggestionRunRef = useRef<object | null>(null);
   const [suggesting, setSuggesting] = useState<string>();
   const [revealingMessageId, setRevealingMessageId] = useState<string>();
   const [modelRuntime, setModelRuntime] = useState<ModelConfiguration>();
@@ -136,14 +138,16 @@ export function App() {
         setConnection(status);
         if (status === 'online') {
           try {
-            const [configuration, capabilities, model] = await Promise.all([
+            const [configuration, capabilities] = await Promise.all([
               api.modelConfiguration(controller.signal), api.capabilities(controller.signal),
-              // The app can be ready while Ollama is stopped or the API refuses the key.
-              api.modelStatus(controller.signal).catch(() => null),
             ]);
             setModelRuntime(configuration);
             setIngestionCapabilities(capabilities.ingestion);
-            setModelState(model);
+            // The app can be ready while Ollama is stopped or the API refuses
+            // the key. The server waits up to 5 s for the model, so this waits
+            // longer; a check that still fails keeps the last known state.
+            const model = await api.modelStatus(AbortSignal.timeout(9000)).catch(() => undefined);
+            if (model !== undefined && healthRef.current === controller) setModelState(model);
             // Served from the server's daily check; offline it simply stays unknown.
             void api.updates(false, controller.signal).then(setUpdateStatus).catch(() => undefined);
           } catch { setModelRuntime(undefined); setModelState(null); }
@@ -184,13 +188,17 @@ export function App() {
     const session = () => sessionStorage;
     if (readStored(UPDATE_STORAGE.reloadedFor, session) === serverVersion) return;
     writeStored(UPDATE_STORAGE.reloadedFor, serverVersion, session);
-    window.location.reload();
-  }, [serverVersion, busy]);
+    // The answer that just finished may not be saved yet.
+    void saveNow().finally(() => window.location.reload());
+  }, [serverVersion, busy, saveNow]);
   // A new interface is ready in the background: switch to it when idle, so
   // nobody has to clear the cache. The page already runs it after an update.
   useEffect(() => {
-    if (pwa.updateReady && !busy) pwa.activateUpdate(serverVersion !== APP_VERSION);
-  }, [pwa.updateReady, busy, serverVersion]);
+    if (!pwa.updateReady || busy) return;
+    // Reload only for a server known to run another version; save first.
+    const reload = serverVersion !== undefined && serverVersion !== APP_VERSION;
+    void saveNow().finally(() => pwa.activateUpdate(reload));
+  }, [pwa.updateReady, busy, serverVersion, saveNow]);
   // After an update, show once what changed in every version since the last one seen.
   useEffect(() => {
     if (!serverVersion || serverVersion !== APP_VERSION) return;
@@ -231,11 +239,13 @@ export function App() {
     const sessionId = active.id;
     const files = active.documents.filter(doc => doc.status === 'indexed' && doc.enabled !== false).map(doc => doc.name);
     const controller = new AbortController();
+    const run = {};
+    suggestionRunRef.current = run;
     setSuggesting(sessionId);
     void api.suggestions(sessionId, settings.language, files, controller.signal).then(questions => {
       updateSession(sessionId, s => ({ ...s, suggestions: { key: activeSuggestionKey, questions } }));
     }).catch(() => { /* Generic starters remain when suggestions are unavailable. */ })
-      .finally(() => setSuggesting(current => current === sessionId ? undefined : current));
+      .finally(() => { if (suggestionRunRef.current === run) setSuggesting(undefined); });
     return () => controller.abort();
   }, [active.id, activeSuggestionKey, active.messages.length, connection, uploadingId, api, settings.language, updateSession]);
 
@@ -274,7 +284,9 @@ export function App() {
     const data = parseAnswer({ answer: partial, source_nodes: sourceNodes, cited: citedNumbers(partial, sourceNodes.length) });
     commitAnswer(sessionId, { id: crypto.randomUUID(), content: partial, citations: data.citations, sources: data.sources, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, parentUserId, assistantId);
   };
-  const addNote = (sessionId: string, content: string) => updateSession(sessionId, s => ({ ...s, messages: [...s.messages, { id: crypto.randomUUID(), role: 'system', content, timestamp: Date.now() }] }));
+  const addNote = (sessionId: string, content: string, userId: string) => updateSession(sessionId, s => ({
+    ...s, messages: placeNote(s.messages, { id: crypto.randomUUID(), role: 'system', content, timestamp: Date.now() }, userId),
+  }));
 
   const send = async (session: Session, prompt: string, target?: { userId: string; assistantId?: string; edit?: boolean }) => {
     if (!prompt.trim() || queryRef.current || uploadRef.current) return;
@@ -286,6 +298,9 @@ export function App() {
     }
     const prepared = target ? prepareTurnRegeneration(session.messages, target.userId, target.assistantId, prompt, Boolean(target.edit)) : null;
     const firstTurn = !target && session.messages.length === 0;
+    // The first question moves the message box from the welcome screen to the
+    // conversation; keep the keyboard in it.
+    if (firstTurn && document.activeElement?.id === 'message-input') setFocusToken(value => value + 1);
     const fallbackTitle = fallbackConversationTitle(prompt);
     const historySession = prepared ? { ...session, messages: prepared.history } : session;
     const payload = buildQuery(historySession, settings, prompt);
@@ -307,7 +322,7 @@ export function App() {
     let streamed = '';
     let streamedSources: unknown[] = [];
     let frame = 0;
-    const showDraft = () => { frame = 0; setStreamDraft({ sessionId: session.id, messageId: target?.assistantId, content: streamed, sourceCount: streamedSources.length }); };
+    const showDraft = () => { frame = 0; setStreamDraft({ sessionId: session.id, messageId: target?.assistantId, afterUserId: target && !target.assistantId ? target.userId : undefined, content: streamed, sourceCount: streamedSources.length }); };
     try {
       const raw = await api.queryStream({ ...payload, request_id: requestId }, controller.signal, event => {
         touch();
@@ -336,7 +351,7 @@ export function App() {
       if (controller.signal.aborted && reason === 'user') {
         // Keep what was already written; the reader asked to stop, not to discard.
         if (partial) commitPartial(session.id, partial, streamedSources, prompt, userMessage.id, target?.assistantId);
-        addNote(session.id, t.stopped);
+        addNote(session.id, t.stopped, userMessage.id);
         return;
       }
       if (controller.signal.aborted && reason !== 'timeout') return;
@@ -346,7 +361,7 @@ export function App() {
       if (partial) {
         // A timeout or a dropped connection keeps the text that arrived, with the reason after it.
         commitPartial(session.id, partial, streamedSources, prompt, userMessage.id, target?.assistantId);
-        addNote(session.id, content);
+        addNote(session.id, content, userMessage.id);
       } else {
         commitAnswer(session.id, { id: crypto.randomUUID(), content, error: true, timestamp: Date.now(), prompt: prompt.trim(), continuation: [] }, userMessage.id, target?.assistantId);
       }
@@ -413,13 +428,17 @@ export function App() {
   };
 
   const deleteDocument = async (name: string) => {
-    if (busy) return;
+    if (busy || deletingDocuments.has(name)) return;
+    const sessionId = active.id;
+    setDeletingDocuments(current => new Set(current).add(name));
     try {
-      await api.deleteDocument(active.id, name, AbortSignal.timeout(15000));
-      updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name), updatedAt: Date.now() }));
+      await api.deleteDocument(sessionId, name, AbortSignal.timeout(15000));
+      updateSession(sessionId, s => ({ ...s, documents: s.documents.filter(d => d.name !== name), updatedAt: Date.now() }));
     } catch (error: unknown) {
       const reason = error instanceof ApiError && error.code !== 'request_failed' ? uploadErrorMessage(error.code, settings.language) : undefined;
-      setUploadError({ sessionId: active.id, text: reason ?? t.documentDeleteFailed });
+      setUploadError({ sessionId, text: reason ?? t.documentDeleteFailed });
+    } finally {
+      setDeletingDocuments(current => { const next = new Set(current); next.delete(name); return next; });
     }
   };
 
@@ -498,7 +517,7 @@ export function App() {
   const selectedDocuments = active.documents.filter(d => d.status === 'indexed' && d.enabled !== false);
   const composer = <Composer key={active.id} value={active.draft ?? ''} onChange={draft => updateSession(active.id, s => ({ ...s, draft }))}
     onSendMessage={() => void send(active, active.draft ?? '')} onStopGenerating={stop}
-    isGenerating={generatingId === active.id} isBusy={busy} activeMode={active.ragMode}
+    isGenerating={generatingId === active.id} isBusy={busy} isUploading={Boolean(uploadingId)} activeMode={active.ragMode}
     onChangeMode={ragMode => updateSession(active.id, s => ({ ...s, ragMode }))}
     language={settings.language} onOpenDocuments={() => setDocumentsOpen(true)} documentCount={selectedDocuments.length} focusToken={focusToken}
     documentNames={active.documents.filter(doc => doc.status === 'indexed').map(doc => doc.name)}
@@ -563,7 +582,7 @@ export function App() {
       onUploadFiles={files => void upload(files)} language={settings.language} isUploading={busy} activeMode={active.ragMode}
       error={uploadError?.sessionId === active.id ? uploadError.text : null}
       onRemoveFailed={name => updateSession(active.id, s => ({ ...s, documents: s.documents.filter(d => d.name !== name || d.status !== 'error') }))}
-      onDeleteDocument={name => void deleteDocument(name)}
+      onDeleteDocument={name => void deleteDocument(name)} deletingDocuments={deletingDocuments}
       onToggleDocument={name => updateSession(active.id, s => {
         return { ...s, documents: s.documents.map(d => d.name === name ? { ...d, enabled: d.enabled === false } : d) };
       })} />

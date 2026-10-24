@@ -262,7 +262,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           {!clearConfirm ? <button className="button danger-outline" disabled={busy} onClick={() => setClearConfirm(true)}><Trash2 size={16} />{t.clearAllData}</button>
             : <div className="clear-confirm"><strong>{t.clearAllConfirm}</strong><div className="dialog-actions"><button className="button secondary" disabled={clearStatus === 'loading'} onClick={() => { setClearConfirm(false); setClearStatus('idle'); }}>{t.cancel}</button><button className="button danger" disabled={busy || clearStatus === 'loading'} onClick={() => {
               setClearStatus('loading');
-              void onClearAllData().then(onClose).catch(() => setClearStatus('error'));
+              void onClearAllData().then(() => { setClearStatus('idle'); setClearConfirm(false); onClose(); }).catch(() => setClearStatus('error'));
             }}>{clearStatus === 'loading' ? t.saving : t.clear}</button></div>{clearStatus === 'error' && <p className="inline-error" role="alert">{t.clearAllFailed}</p>}</div>}
         </div>
       </>}

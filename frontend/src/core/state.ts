@@ -342,6 +342,16 @@ export function mergeRemoteDocuments(current: SessionDocument[], remote: unknown
   return merged;
 }
 
+/** Add a note after the turn of question `userId` (after its answer, if any). */
+export function placeNote(messages: Message[], note: Message, userId: string): Message[] {
+  const answer = answerTo(messages, userId);
+  const anchor = messages.findIndex(message => message.id === (answer?.id ?? userId));
+  if (anchor < 0) return [...messages, note];
+  let at = anchor + 1;
+  while (messages[at]?.role === 'system') at += 1;
+  return [...messages.slice(0, at), note, ...messages.slice(at)];
+}
+
 /** Add an answer right after its question (the end, for a new question). */
 export function placeAnswer(messages: Message[], answer: Message): Message[] {
   const userIndex = answer.parentUserId ? messages.findIndex(message => message.id === answer.parentUserId) : -1;

@@ -578,7 +578,97 @@ Each item names where the problem is and what it breaks.
   06, and the missing `Reranker`, `RuntimeSettingsStore`, and
   `SuggestQuestions` in `ARCHITECTURE.md` and `docs/architecture/use-cases.md`.
 
+### Task 16.5: Project review, October 2026 (fixed)
+- [x] Backend:
+  - `PARSRAG_ALLOWED_HOSTS` no longer removes loopback (the container health
+    check and the update script use 127.0.0.1).
+  - The `.env` API key is sent only to its own host, also on the startup path
+    and in `/models/status`.
+  - A saved API connection starts without DNS (offline start).
+  - A keyless API whose host does not resolve reports `unreachable` instead
+    of 500.
+  - `api_key_missing` reaches the browser.
+  - The request ceiling follows the `.env` batch limit, not an override.
+  - A malformed CSV returns `corrupt_file`.
+  - An empty generated title returns `upstream_unavailable`.
+  - Word Online `word/document2.xml` files are accepted.
+  - 413 responses and malformed session ids carry their codes.
+  - The update check no longer holds its lock over the network.
+  - Reusing a document with identical content is refused.
+  - `filelock` is upgraded to 4.2.1 for CVE-2026-112940.
+- [x] Update scripts:
+  - PowerShell 5.1 no longer stops on stderr from probes.
+  - A stopped stack keeps its Compose files and profile.
+  - The scripts check out the release tag even on `main`.
+  - The ROCm Ollama image is pinned.
+- [x] Frontend:
+  - The open conversation is restored after a reload (it was lost once
+    conversations lived in IndexedDB).
+  - Saves are written before the app reloads itself and when the page is
+    hidden.
+  - "Clear all data" no longer stays stuck on "Saving…".
+  - A `localStorage` fallback save is always marked as newer.
+  - Another tab's save no longer undoes unsaved edits, new conversations, or
+    deletions.
+  - The model check has its own timeout.
+  - Retrying or stopping an earlier question streams and notes in place.
+  - Focus stays in the message box after the first question.
+  - The upload notice is correct.
+  - Streaming renders once per update.
+  - The suggestion loader is no longer cleared by a cancelled request.
+  - A document cannot be deleted twice at once.
+
+### Task 16.6: Frontend accessibility and trust (do first)
+- [ ] Muted text fails WCAG AA contrast in the light palettes: `--muted
+  #6d7a73` is 3.93:1 on `--sidebar` and 4.21:1 on `--canvas` (4.5:1
+  needed). Several labels are 8–10 px, and opacity on `.message-time` and
+  `.user-actions` lowers it further. Darken `--muted` (about `#5f6c65`, which
+  gives 4.81:1), drop text opacity, and set an 11 px floor (12 px for Persian
+  body text).
+- [ ] Screen readers announce a streaming answer in fragments: the message
+  list is `aria-live="polite"` and `ProgressiveMarkdown` re-renders every
+  frame. Turn the live region off while generating, announce stages and
+  "answer ready, N sources cited" through one hidden status region, and move
+  `QueryProgress` out of the log (WCAG 4.1.3).
+- [ ] The grounding badge counts every retrieved passage when the model cited
+  none ("Documents + model knowledge · 10 sources"). Count cited sources only;
+  with none, say "No citations" (`ChatFeed.tsx`, `GroundingBadge`).
+- [ ] On phones, Enter sends, and there is no Shift+Enter, so a question
+  cannot have several lines. On coarse pointers, Enter inserts a new line and
+  the button sends (`Composer.tsx`).
+
 ## Phase 17: Improvements
+
+### Task 17.0: Frontend experience (do first)
+High value and low risk; together they close the "first question fails with
+no clear next step" gap.
+- [ ] First run: replace the auto-starting 17-step tour with a three-step
+  checklist on the welcome screen, each step with live state and an action:
+  model connected (opens Settings on the Model tab), add a document, ask a
+  question. Keep the full tour as a link.
+- [ ] Make the model status card actionable: a "Fix" button that opens
+  Settings on the Model tab (`SettingsModal` gets an initial tab). For a
+  missing Ollama model, show a copyable `ollama pull <model>`; for a missing
+  key, focus the key field.
+- [ ] Turn dead-end answers into next steps. On `no_evidence`, offer "Ask
+  again in Hybrid" and "Open documents". On connection errors, offer "Check
+  connection" and "Open settings". Reword the timeout message: it means 60
+  seconds without any event, not a long question.
+- [ ] Uploads: show "queued" for files waiting their turn instead of several
+  bars at 0%. Show indexing progress on the Documents button and the attach
+  icon, and announce "N documents ready" when done.
+- [ ] Add files from anywhere: drop on the whole workspace, and paste images
+  or PDFs into the message box, with the same validation as the dialog.
+- [ ] "Copy with sources": copy an answer together with the sources its [n]
+  markers refer to. This is the first step of the Phase 18 answer export.
+- [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
+  button to code blocks. Moved up from Task 17.4.
+- [ ] Show the offline hint and poll faster while the backend is preparing.
+  Moved up from Task 17.4.
+- [ ] Frontend performance: memoize messages and markdown rendering, keep the
+  draft out of the sessions state (every keystroke re-runs the sidebar search
+  over all messages), and window long conversations. Moved up from Task 17.2.
+
 
 ### Task 17.1: Retrieval quality
 - [ ] Read images with a vision model during indexing (see Task 19.1); OCR
@@ -601,9 +691,7 @@ Each item names where the problem is and what it breaks.
 - [ ] Give BM25 an inverted index instead of scanning every chunk per query.
 - [x] OCR scanned PDF pages in parallel, as Office images already are, and skip
   the deskew search when the first reading is confident.
-- [ ] Frontend: memoize messages and markdown rendering, keep the draft out of
-  the sessions state, and window long conversations; typing and streaming slow
-  down in long chats.
+- [ ] Frontend performance: moved to Task 17.0.
 
 ### Task 17.3: Ingestion
 - [x] Parse CSV and TSV as tables so they get row records and whole-table
@@ -615,12 +703,38 @@ Each item names where the problem is and what it breaks.
   PowerPoint images.
 
 ### Task 17.4: Interface
-- [ ] Stop a streaming answer with Escape; cancel and retry uploads; add a copy
-  button to code blocks.
-- [ ] Show the offline hint, poll faster while the backend is preparing, and
-  check for new service-worker versions while the app stays open.
-- [ ] Call `navigator.storage.persist()`, flush pending saves on `pagehide`,
-  and keep a copy of stored data that fails to parse instead of overwriting it.
+- [x] Check for new service-worker versions while the app stays open (done
+  with the update check, 1.1.2). Escape, upload retry, code copy, and the
+  offline hint moved to Task 17.0.
+- [ ] Call `navigator.storage.persist()` and keep a copy of stored data that
+  fails to parse instead of overwriting it. Pending saves are already flushed
+  on `pagehide` (Task 16.5).
+- [ ] Citation preview: on hover, focus, or long-press, show a popover with
+  the file, location, highlighted excerpt, and image, plus "Open in sources".
+  Today a click jumps away from the sentence being checked.
+- [ ] In Hybrid answers, mark paragraphs without any [n] citation, with a
+  legend in the badge tooltip, so readers know what to verify.
+- [ ] Source images: drop the empty bands (`width:auto`) and open them in an
+  in-app viewer with zoom, instead of a new browser tab that leaves the
+  installed app.
+- [ ] Put backup, restore, clear data, the service address, and storage used
+  in a "Data & privacy" settings tab; today they sit under Model &
+  connection.
+- [ ] Undo a conversation delete: hide it at once with an "Undo" toast for
+  about 8 seconds, then delete on the server through the pending-deletion
+  queue.
+- [ ] Per-document "Summarize" and "Ask about this file" in the Documents
+  dialog, pre-filling the `@` mention and command.
+- [ ] Localization:
+  - `Intl` percent and megabyte formats (the English UI shows `٪`).
+  - A language-aware list separator.
+  - History groups for the last 7 and 30 days and by month, with Persian
+    month names.
+  - Move inline strings into `translations.ts`.
+- [ ] Reading size (S/M/L) in Appearance, and a tighter line height for
+  English answers (`line-height: 2.1` suits Persian only).
+- [ ] Show a character counter near the 12,000 limit and warn when a paste is
+  cut; Escape cancels a prompt edit.
 - [ ] Offer export and reset from the error screen, so stored data that breaks
   rendering does not crash every reload.
 - [ ] Remove dead code (`progressRef`, `revealingMessageId`, unused API calls,
@@ -635,7 +749,7 @@ Each item names where the problem is and what it breaks.
   `pip-compile`) so Dependabot can update Python dependencies and builds are
   reproducible; audit the packages inside the image.
 - [ ] Add the `docker-compose` ecosystem to Dependabot (Qdrant and Ollama
-  images) and pin `ollama/ollama:rocm` to a version.
+  images). The ROCm Ollama image is pinned (Task 16.5).
 - [ ] Install the same CPU PyTorch in CI as in the image; split PyTorch into
   its own Docker layer and use BuildKit pip caches.
 - [ ] Turn `.dockerignore` into an allowlist; local folders (`demo-video`,
@@ -653,6 +767,8 @@ Each item names where the problem is and what it breaks.
   `RUNTIME_SETTINGS`; replace wall-clock assertions in the regular-expression
   tests with growth checks; add an SSE disconnect test through the route.
 - [ ] Add a pre-commit configuration, ESLint, and frontend coverage.
+- [ ] Add `@axe-core/playwright` scans of the main screens in fa/en,
+  light/dark, and all palettes, so contrast and labelling regressions fail CI.
 - [ ] Add a GitHub ruleset that allows only squash merges into `main`, so each
   release stays one commit.
 - [ ] Refresh the landing-site screenshots (`ParsRAG-Landing`,
@@ -672,6 +788,13 @@ Each item names where the problem is and what it breaks.
 - [ ] Conversation search that shows the matching snippet and jumps to it.
 - [ ] In-app evaluation: run a labelled question set against the current model
   and settings and show the results.
+- [ ] "Flag this answer" with an optional correct answer or source, stored
+  locally and exportable as an evaluation set for the item above.
+- [ ] Pin conversations, with a Pinned group at the top of the history.
+- [ ] Evidence side panel on wide screens (1280 px and up), mirrored for RTL,
+  so an answer and its sources can be read side by side.
+- [ ] Optional Persian digits in answers (display only; code, math, tables,
+  and URLs unchanged, and copying keeps the original text).
 
 ## Phase 19: Long-Term Plans
 

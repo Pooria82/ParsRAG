@@ -213,3 +213,36 @@ test('closing Settings with the mouse leaves no focus ring on the Settings butto
   await expect(settings).toBeFocused();
   expect(await settings.evaluate(element => element.matches(':focus-visible'))).toBe(false);
 });
+
+test('a reload reopens the conversation that was open, also from IndexedDB', async ({ page }) => {
+  await open(page, [
+    { id: 'first', title: 'First talk', messages: [{ id: 'u1', role: 'user', content: 'One', timestamp: 1 }] },
+    { id: 'second', title: 'Second talk', messages: [{ id: 'u2', role: 'user', content: 'Two', timestamp: 1 }] },
+  ]);
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/sessions/*/files', route => route.fulfill({ json: [] }));
+  await page.goto('/');
+  // The first load moves conversations into IndexedDB; later loads read them from there.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('parsrag_sessions_v1'))).toBeNull();
+  await page.getByRole('button', { name: 'Second talk' }).click();
+  await expect(page.locator('.user-bubble')).toHaveText('Two');
+  await page.waitForTimeout(400);
+  await page.reload();
+  await expect(page.locator('.user-bubble')).toHaveText('Two');
+  await page.reload();
+  await expect(page.locator('.user-bubble')).toHaveText('Two');
+});
+
+test('after the first question the keyboard stays in the message box', async ({ page }) => {
+  await open(page);
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/conversations/title', route => route.fulfill({ json: { title: 'Hello' } }));
+  await page.route('**/query/stream', route => route.fulfill({ contentType: 'text/event-stream',
+    body: 'event: token\ndata: {"text":"Hi"}\n\nevent: done\ndata: {"answer":"Hi","source_nodes":[],"cited":[]}\n\n' }));
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Your message' });
+  await composer.fill('Hello there');
+  await composer.press('Enter');
+  await expect(page.locator('.message-assistant')).toContainText('Hi');
+  await expect(page.getByRole('textbox', { name: 'Your message' })).toBeFocused();
+});
