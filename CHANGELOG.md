@@ -46,12 +46,25 @@ and this project uses Semantic Versioning.
 
 ### Improved
 
+- The service status card shows the model clearly for any name: the model
+  in monospace with its variant as a tag (`gemma3` `4b`), its publisher and
+  the provider below (`google · API service`), an icon for local or API, and
+  the full id on hover.
 - Scanned PDF pages are recognized several at a time, like images in Word and
   PowerPoint, and near-certain OCR readings skip the skew search. On the
   96-image final report the text is unchanged.
 
 ### Fixed
 
+- After the Settings window (or any dialog) closes with the mouse, the button
+  that opened it no longer shows the keyboard focus ring.
+- An external model API can no longer be connected without an API key.
+  OpenRouter lists its models without a key, so saving the connection passed
+  and every question then failed with "internal error". Saving is now refused
+  with a message, the sidebar says "No API key is set" instead of "Service
+  ready", and a question names the missing key. The key form shows which host
+  the service holds a key for (a key is only sent to its own host; a key in
+  `.env` belongs to `MODEL_API_BASE_URL`).
 - "Service ready" no longer appears while the model cannot answer. A new
   `GET /models/status` checks the active model service (Ollama running with
   the selected model installed; an API reachable and accepting the key, at
@@ -157,6 +170,12 @@ and this project uses Semantic Versioning.
 
 ### Security
 
+- `filelock` (pulled in by PyTorch and Hugging Face) is upgraded to 4.2.1
+  for CVE-2026-112940, an arbitrary file overwrite.
+- At startup, a saved API connection to one host no longer receives the
+  `.env` key of another (`MODEL_API_KEY` belongs to `MODEL_API_BASE_URL`).
+  A connection saved for OpenRouter was given the Google AI Studio key from
+  `.env` and sent it to OpenRouter.
 - Model API requests re-check the host's addresses each time and do not
   follow redirects, so a DNS change or redirect cannot reach link-local
   (cloud metadata), multicast, or reserved addresses.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpCircle, Check, FileDown, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, RotateCw, Search, Settings2, Sun, Trash2 } from 'lucide-react';
+import { ArrowUpCircle, Check, Cloud, Cpu, FileDown, Loader2, MessageSquare, Moon, MoreHorizontal, Pencil, Plus, RotateCw, Search, Settings2, Sun, Trash2 } from 'lucide-react';
 import { conversationMarkdown, downloadText, exportFilename } from '../core/workspaceTransfer';
+import { modelNameParts } from '../core/modelName';
 import type { Language, ModelConfiguration, ModelConnectionState, Session, Theme } from '../types';
 import { translations } from '../i18n/translations';
 import { BrandMark } from './BrandMark';
@@ -36,6 +37,7 @@ export function Sidebar(props: SidebarProps) {
   };
   const modelProblem = props.connection !== 'online' || !props.modelState || props.modelState === 'ready' ? undefined
     : props.modelState === 'model_missing' ? t.modelMissing : props.modelState === 'auth_failed' ? t.modelAuthFailed
+      : props.modelState === 'key_missing' ? t.modelKeyMissing
       : props.modelRuntime?.provider === 'api' ? t.modelUnreachableApi : t.modelUnreachableOllama;
   const newChatShortcut = shortcutLabel('newChat', isApplePlatform(navigator.platform || navigator.userAgent));
   const [search, setSearch] = useState('');
@@ -97,10 +99,22 @@ export function Sidebar(props: SidebarProps) {
       {props.updateVersion && <button type="button" className="update-badge" onClick={props.onOpenUpdate}>
         <ArrowUpCircle size={15} /><span>{t.updateBadge.replace('{version}', props.updateVersion)}</span></button>}
       <div className="connection-status" data-tour="connection" data-status={modelProblem ? 'degraded' : props.connection}>
-        <span className="status-dot" /><span><strong>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? modelProblem ?? t.backendOnline : t.backendOffline}</strong>
-          {props.connection === 'online' && props.modelRuntime ? <small><bdi>{props.modelRuntime.provider === 'ollama' ? t.modelProviderOllama : t.modelProviderApi}</bdi><i aria-hidden="true">·</i><bdi dir="ltr">{props.modelRuntime.model_name}</bdi></small> : null}
-        </span>
-        {(props.connection === 'offline' || modelProblem || retrying) && <button className="retry-connection" onClick={retry} disabled={retrying} aria-busy={retrying || undefined} title={t.retryConnection} aria-label={t.retryConnection}><RotateCw size={15} className={retrying ? 'spin' : undefined} /></button>}
+        <div className="connection-head">
+          <span className="status-dot" aria-hidden="true" />
+          <strong>{props.connection === 'checking' ? t.backendChecking : props.connection === 'preparing' ? t.backendPreparing : props.connection === 'online' ? modelProblem ?? t.backendOnline : t.backendOffline}</strong>
+          {(props.connection === 'offline' || modelProblem || retrying) && <button className="retry-connection" onClick={retry} disabled={retrying} aria-busy={retrying || undefined} title={t.retryConnection} aria-label={t.retryConnection}><RotateCw size={14} className={retrying ? 'spin' : undefined} /></button>}
+        </div>
+        {props.connection === 'online' && props.modelRuntime && (() => {
+          const model = modelNameParts(props.modelRuntime.model_name);
+          const local = props.modelRuntime.provider === 'ollama';
+          return <div className="connection-model" title={props.modelRuntime.model_name}>
+            <span className="model-icon" aria-hidden="true">{local ? <Cpu size={15} /> : <Cloud size={15} />}</span>
+            <span className="model-text">
+              <span className="model-name"><bdi dir="ltr">{model.name}</bdi>{model.tag && <em dir="ltr">{model.tag}</em>}</span>
+              <small>{model.vendor && <><bdi dir="ltr">{model.vendor}</bdi><i aria-hidden="true">·</i></>}<span>{local ? t.modelProviderOllama : t.modelProviderShortApi}</span></small>
+            </span>
+          </div>;
+        })()}
       </div>
       <div className="sidebar-footer">
         <button className="settings-button" data-tour="settings" onClick={props.onOpenSettings}><Settings2 size={18} /><span>{t.settingsTitle}</span></button>

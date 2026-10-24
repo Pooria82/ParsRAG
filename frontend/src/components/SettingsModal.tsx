@@ -56,6 +56,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
   const [apiKey, setApiKey] = useState('');
   const [apiDisclosureAccepted, setApiDisclosureAccepted] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
+  const [keyHosts, setKeyHosts] = useState<string[] | null>(null);
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'saved' | 'error'>('idle');
   const [modelError, setModelError] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
         if (config.ollama_base_url && settings.ollamaBaseUrl === DEFAULT_SETTINGS.ollamaBaseUrl) setOllamaModelUrl(config.ollama_base_url);
       }
       else { setOllamaModelName(config.model_name); setOllamaModelUrl(config.base_url); }
-      setKeyConfigured(config.api_key_configured);
+      setKeyConfigured(config.api_key_configured); setKeyHosts(config.api_key_hosts ?? null);
       setApiDisclosureAccepted(config.disclosure_acknowledged);
       if (!guided) onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
         ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
@@ -105,6 +106,10 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
     }).catch(() => { /* Keep editable defaults when an older or offline service cannot expose configuration. */ });
     return () => controller.abort();
   }, [open, activeTab, modelApi, guided]);
+  // A key is only sent to the host it belongs to: say whether the typed address has one.
+  const apiHost = (() => { try { return new URL(apiModelUrl).hostname.toLowerCase(); } catch { return ''; } })();
+  const keyAvailable = keyHosts ? keyHosts.includes(apiHost) : keyConfigured;
+  const otherKeyHosts = keyHosts && !keyAvailable && keyHosts.length ? keyHosts.join(settings.language === 'fa' ? '، ' : ', ') : '';
   const settingsError = (error: unknown) => modelSettingsErrorMessage(error instanceof ApiError ? error.code : undefined, settings.language);
   const loadOllamaModels = async (quiet = false) => {
     if (!quiet) { setModelStatus('loading'); setModelError(null); }
@@ -207,7 +212,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           if (activeProvider === 'api' && !apiDisclosureAccepted) { setModelStatus('error'); setModelError(t.apiConsentRequired); return; }
           setModelStatus('loading'); setModelError(null);
           void modelApi.configureModel({ provider: activeProvider, model_name: modelName.trim(), base_url: modelUrl.trim(), disclosure_acknowledged: activeProvider === 'api' && apiDisclosureAccepted, ...(apiKey ? { api_key: apiKey } : {}) }).then(config => {
-            setKeyConfigured(config.api_key_configured); setApiKey(''); setModelStatus('saved');
+            setKeyConfigured(config.api_key_configured); setKeyHosts(config.api_key_hosts ?? null); setApiKey(''); setModelStatus('saved');
             onModelConfigured?.(config);
             onUpdateSettings({ selectedModel: config.model_name, ...(config.provider === 'api'
               ? { apiModelName: config.model_name, apiBaseUrl: config.base_url }
@@ -222,7 +227,7 @@ export function SettingsModal({ open = true, onClose, settings, onUpdateSettings
           <div className="setting-field" data-tour="settings-model-name"><label htmlFor="model-name">{t.modelName}</label>{activeProvider === 'ollama' && models.length > 0
             ? <ChoiceMenu<string> label={t.modelName} value={ollamaModelName} options={ollamaOptions} onChange={setOllamaModelName} disabled={modelStatus === 'loading'} />
             : <input key={'name-' + activeProvider} className="text-input model-field-swap localized-placeholder" id="model-name" dir="ltr" value={modelName} placeholder={t.modelNamePlaceholder} required onChange={event => setModelName(event.target.value)} />}</div>
-          {activeProvider === 'api' && <><div className="setting-field" data-tour="settings-api-key"><label htmlFor="api-key">{t.apiKey}</label><p className="credential-state" data-state={keyConfigured ? 'configured' : 'missing'} role="status">{keyConfigured ? <ShieldCheck size={15} /> : <KeyRound size={15} />}<span><strong>{keyConfigured ? t.apiKeyAvailable : t.apiKeyMissing}</strong><small>{keyConfigured ? t.apiKeyAvailableHint : t.apiKeyMissingHint}</small></span></p><input className="text-input localized-placeholder" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyConfigured ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
+          {activeProvider === 'api' && <><div className="setting-field" data-tour="settings-api-key"><label htmlFor="api-key">{t.apiKey}</label><p className="credential-state" data-state={keyAvailable ? 'configured' : 'missing'} role="status">{keyAvailable ? <ShieldCheck size={15} /> : <KeyRound size={15} />}<span><strong>{keyAvailable ? t.apiKeyAvailable : t.apiKeyMissing}</strong><small>{keyAvailable ? t.apiKeyAvailableHint : t.apiKeyMissingHint}{otherKeyHosts && <> {t.apiKeyOtherHost.replace('{hosts}', otherKeyHosts)}</>}</small></span></p><input className="text-input localized-placeholder" id="api-key" type="password" dir="ltr" value={apiKey} placeholder={keyAvailable ? '••••••••' : t.apiKeyOptional} onChange={event => setApiKey(event.target.value)} /><small>{t.apiKeyRuntimeOnly}</small></div>
             <label className="api-disclosure" data-tour="settings-api-disclosure"><input type="checkbox" checked={apiDisclosureAccepted} onChange={event => setApiDisclosureAccepted(event.target.checked)} /><span><strong>{t.remoteApiDisclosureTitle}</strong><small>{t.remoteApiDisclosure}</small></span></label></>}
           <div className="model-actions" data-tour="settings-model-actions">{activeProvider === 'ollama' && <button type="button" className="button secondary" onClick={() => void loadOllamaModels()} disabled={modelStatus === 'loading'}><RefreshCw size={15} />{t.findOllamaModels}</button>}<button className="button primary model-save" disabled={busy || modelStatus === 'loading' || !modelName.trim()}>{modelStatus === 'loading' ? t.saving : t.saveModel}</button></div>
           {modelStatus === 'saved' && <p className="success-note" role="status"><Check size={14} />{t.modelSaved}</p>}{modelStatus === 'error' && modelError && <p className="inline-error" role="alert">{modelError}</p>}

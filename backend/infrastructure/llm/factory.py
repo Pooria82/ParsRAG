@@ -187,15 +187,21 @@ def _environment_configuration() -> ModelConfigurationRequest:
 
 _configuration = load_model_configuration() or _environment_configuration()
 if _configuration.provider is ModelProvider.API:
+    # The .env key belongs to MODEL_API_BASE_URL; a saved connection to another
+    # host starts without a key instead of receiving it.
     _configuration = _configuration.model_copy(
         update={
-            "api_key": _api_key,
+            "api_key": _api_keys.get(_origin(_configuration.base_url)),
             "disclosure_acknowledged": (
                 _configuration.disclosure_acknowledged
                 or _environment_disclosure_acknowledged()
             ),
         }
     )
+
+
+class APIKeyMissingError(ValueError):
+    """An external model API was chosen with no key for its address."""
 
 
 def get_model_configuration() -> ModelConfigurationResponse:
@@ -206,6 +212,7 @@ def get_model_configuration() -> ModelConfigurationResponse:
             model_name=_configuration.model_name,
             base_url=_configuration.base_url,
             api_key_configured=bool(_api_key),
+            api_key_hosts=sorted({host for _, host, _ in _api_keys if host}),
             disclosure_acknowledged=_configuration.disclosure_acknowledged,
             ollama_base_url=default_ollama_base_url(),
         )
@@ -336,6 +343,12 @@ def configure_model(
             raise ValueError("External model API disclosure must be acknowledged.")
         origin = _origin(base_url)
         api_key = configuration.api_key or _api_keys.get(origin)
+        # Some APIs list their models without a key, so verifying would pass
+        # and every question fail. A key is never sent to another host.
+        if verify and not api_key and model_api_is_external(base_url):
+            raise APIKeyMissingError(
+                f"No API key for {urlsplit(base_url).hostname}; enter one."
+            )
         if verify:
             _verify_openai_compatible_connection(base_url, api_key)
         model_name = api_model_name(base_url, configuration.model_name)
@@ -466,6 +479,8 @@ def _check_connection(
             if wanted in installed or f"{wanted}:latest" in installed
             else "model_missing"
         )
+    if not api_key and model_api_is_external(configuration.base_url):
+        return "key_missing"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
         with guarded_http_client(5.0) as client:

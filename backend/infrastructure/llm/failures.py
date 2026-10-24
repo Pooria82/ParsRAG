@@ -23,6 +23,7 @@ MODEL_CLIENT_ERRORS: tuple[type[Exception], ...] = (
 # (HTTP status, code) pairs returned to the browser.
 MODEL_TIMEOUT = (504, "model_timeout")
 MODEL_AUTH = (502, "model_auth")
+MODEL_KEY_MISSING = (502, "model_key_missing")
 MODEL_RATE_LIMITED = (503, "model_rate_limited")
 MODEL_NOT_FOUND = (502, "model_not_found")
 MODEL_UNAVAILABLE = (502, "model_unavailable")
@@ -46,6 +47,9 @@ def _status_failure(status: int) -> tuple[int, str]:
 
 
 def _classify_one(error: BaseException) -> tuple[int, str] | None:
+    # The OpenAI client refuses to start without a key; the API was never asked.
+    if type(error) is openai.OpenAIError and "credentials" in str(error).lower():
+        return MODEL_KEY_MISSING
     if isinstance(
         error, openai.APITimeoutError | httpx.TimeoutException | TimeoutError
     ):

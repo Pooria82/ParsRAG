@@ -180,3 +180,36 @@ test('"Service ready" needs the model service too', async ({ page }) => {
   await expect(status).toContainText('Service ready');
   await expect(status).toHaveAttribute('data-status', 'online');
 });
+
+test('an API address without a key cannot be connected, and the sidebar says why', async ({ page }) => {
+  await open(page);
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.route('**/models/status', route => route.fulfill({ json: { provider: 'api', model_name: 'google/gemma-4-26b-a4b-it', status: 'key_missing' } }));
+  await page.route('**/models/configuration', route => route.request().method() === 'PUT'
+    ? route.fulfill({ status: 400, json: { detail: 'No API key for openrouter.ai; enter one.', code: 'api_key_missing' } })
+    : route.fulfill({ json: { provider: 'api', model_name: 'google/gemma-4-26b-a4b-it', base_url: 'https://openrouter.ai/api/v1',
+      api_key_configured: true, disclosure_acknowledged: true, api_key_hosts: ['generativelanguage.googleapis.com'] } }));
+  await page.goto('/');
+  await expect(page.locator('.connection-status')).toContainText('No API key is set; enter one in Settings');
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Model & connection' }).click();
+  // The service has a key, but for another host: this address has none.
+  const keyState = page.locator('.credential-state');
+  await expect(keyState).toHaveAttribute('data-state', 'missing');
+  await expect(keyState).toContainText('The service holds a key for generativelanguage.googleapis.com');
+  await page.getByRole('button', { name: 'Verify connection and apply' }).click();
+  await expect(page.getByText('There is no API key for this address, and it cannot be used without one.')).toBeVisible();
+});
+
+test('closing Settings with the mouse leaves no focus ring on the Settings button', async ({ page }) => {
+  await open(page);
+  await page.route('**/health/ready', route => route.fulfill({ json: { status: 'ready' } }));
+  await page.goto('/');
+  const settings = page.getByRole('button', { name: 'Settings' });
+  await settings.click();
+  await page.getByRole('dialog', { name: /Settings/ }).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('dialog', { name: /Settings/ })).toBeHidden();
+  await expect(settings).toBeFocused();
+  expect(await settings.evaluate(element => element.matches(':focus-visible'))).toBe(false);
+});

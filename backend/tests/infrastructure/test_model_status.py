@@ -81,7 +81,7 @@ def test_api_answers_map_to_a_status(
 
 
 def test_an_unreachable_api_is_reported(active: Activate) -> None:
-    active(ModelProvider.API, "google/gemma")
+    active(ModelProvider.API, "google/gemma", key="secret")
     client = MagicMock()
     client.__enter__.return_value.get.side_effect = httpx.ConnectTimeout("timeout")
     with patch.object(factory, "guarded_http_client", return_value=client):
@@ -114,3 +114,25 @@ def test_the_route_reports_the_status() -> None:
     ):
         body = TestClient(app).get("/models/status").json()
     assert body["status"] == "unreachable"
+
+
+def test_an_external_api_without_a_key_is_reported_without_asking_it(
+    active: Activate,
+) -> None:
+    """OpenRouter lists models without a key; questions would still fail."""
+    active(ModelProvider.API, "google/gemma")
+    with (
+        patch.object(factory, "model_api_is_external", return_value=True),
+        patch.object(factory, "guarded_http_client") as client,
+    ):
+        assert factory.model_connection_status().status == "key_missing"
+    client.assert_not_called()
+
+
+def test_a_missing_key_is_named_when_a_question_fails() -> None:
+    import openai
+
+    from backend.infrastructure.llm.failures import classify_model_failure
+
+    error = openai.OpenAIError("Missing credentials. Please pass an `api_key`.")
+    assert classify_model_failure(error) == (502, "model_key_missing")

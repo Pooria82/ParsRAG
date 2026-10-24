@@ -35,6 +35,8 @@ export interface ModelConfiguration {
   model_name: string;
   base_url: string;
   api_key_configured: boolean;
+  /** Hosts the service holds an API key for; a key is only sent to its own host. */
+  api_key_hosts?: string[];
   disclosure_acknowledged: boolean;
   /** The server's own Ollama URL, offered when switching from an API. */
   ollama_base_url?: string | null;
@@ -56,7 +58,7 @@ export interface UpdateStatus {
 export interface ReleaseNote { version: string; notes: string }
 
 /** Whether the active model service answers right now (`GET /models/status`). */
-export type ModelConnectionState = 'ready' | 'unreachable' | 'model_missing' | 'auth_failed';
+export type ModelConnectionState = 'ready' | 'unreachable' | 'model_missing' | 'auth_failed' | 'key_missing';
 
 export interface OllamaModel { name: string; size?: number | null }
 
