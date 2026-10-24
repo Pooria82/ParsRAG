@@ -187,9 +187,11 @@ def _environment_configuration() -> ModelConfigurationRequest:
 
 _configuration = load_model_configuration() or _environment_configuration()
 if _configuration.provider is ModelProvider.API:
+    # The .env key belongs to MODEL_API_BASE_URL; a saved connection to another
+    # host starts without a key instead of receiving it.
     _configuration = _configuration.model_copy(
         update={
-            "api_key": _api_key,
+            "api_key": _api_keys.get(_origin(_configuration.base_url)),
             "disclosure_acknowledged": (
                 _configuration.disclosure_acknowledged
                 or _environment_disclosure_acknowledged()

@@ -170,6 +170,10 @@ and this project uses Semantic Versioning.
 
 ### Security
 
+- At startup, a saved API connection to one host no longer receives the
+  `.env` key of another (`MODEL_API_KEY` belongs to `MODEL_API_BASE_URL`).
+  A connection saved for OpenRouter was given the Google AI Studio key from
+  `.env` and sent it to OpenRouter.
 - Model API requests re-check the host's addresses each time and do not
   follow redirects, so a DNS change or redirect cannot reach link-local
   (cloud metadata), multicast, or reserved addresses.
