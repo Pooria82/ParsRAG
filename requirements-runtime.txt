@@ -6,7 +6,7 @@ httpx>=0.28.1
 llama-index-core>=0.14.25,<0.15.0
 llama-index-llms-ollama
 llama-index-embeddings-huggingface
-qdrant-client>=1.19.1
+qdrant-client>=1.20.0
 pymupdf>=2.0
 pydantic>=2.14.1
 flashrank>=0.2.10
